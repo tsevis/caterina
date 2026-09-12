@@ -110,7 +110,8 @@ struct LiveEndToEndTests {
         #expect(report.saved == 3)
         #expect(report.failures.isEmpty)
 
-        let files = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        let everything = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        let files = everything.filter { $0 != Credits.filename }
         #expect(files.count == 3)
         #expect(!files.contains { $0.hasSuffix(".part") })
         // Every id appears in a filename, which is what stops two photos with
@@ -123,6 +124,37 @@ struct LiveEndToEndTests {
             let data = try Data(contentsOf: folder.appendingPathComponent(file))
             #expect(data.count > 1000)
             #expect(data.prefix(2) == Data([0xFF, 0xD8]))
+        }
+
+        // Every photograph is credited, with a real photographer and a real
+        // licence — the thing the splash promises and the folder has to keep.
+        let credits = try String(
+            contentsOf: folder.appendingPathComponent(Credits.filename), encoding: .utf8)
+        let rows = credits.split(separator: "\n")
+        #expect(rows.count == 4)  // header plus three
+        for photo in wanted {
+            #expect(credits.contains(photo.id))
+            #expect(credits.contains("https://www.flickr.com/photos/"))
+        }
+        #expect(!credits.contains("Unknown"), "a photographer came back unnamed")
+        #expect(!credits.contains("Not stated by Flickr"),
+                "a licence came back unstated")
+    }
+
+    /// Every URL Flickr hands out has to survive the host allow-list, or the
+    /// grid draws placeholders and downloads fail.
+    @Test func everyURLFlickrServesIsOneThisBuildWillFetch() async throws {
+        let model = try model()
+        model.setInput("bridge", for: .search)
+        model.submit(.search)
+        try await settle(model, .search)
+
+        let photos = model.workspace[.search].photos
+        #expect(!photos.isEmpty)
+        for photo in photos {
+            #expect(photo.gridThumbnailURL() != nil,
+                    "photo \(photo.id) has no thumbnail this build will fetch")
+            #expect(photo.photographer != nil)
         }
     }
 
