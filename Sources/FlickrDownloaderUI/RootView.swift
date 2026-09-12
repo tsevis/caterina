@@ -46,6 +46,10 @@ public struct RootView: View {
             // The splash first; whatever should happen after launch happens
             // when it closes, so the order is program order rather than a race
             // between two `.task` modifiers.
+            // Last session's previews and drag promises, which nothing could
+            // delete at the time.
+            TemporaryFiles.sweep()
+
             about.showOnLaunchIfWanted {
                 if !model.hasAPIKey { model.isShowingOnboarding = true }
             }
