@@ -106,7 +106,7 @@ struct PaginationBar: View {
                 // serves about four thousand of them; paging past that repeats
                 // photos. Saying so beats letting it look like a bug.
                 Image(systemName: "info.circle")
-                    .foregroundStyle(Theme.inkTertiary)
+                    .foregroundStyle(Theme.markText)
                     .help(Pagination.explanation)
                     .accessibilityLabel(Pagination.explanation)
             }
@@ -121,17 +121,18 @@ struct PaginationBar: View {
                           + "They are left out rather than shown as blanks.")
             }
 
-            Picker("Per page", selection: Binding(
-                get: { state.perPage },
-                set: onPerPage
-            )) {
+            // A menu of choices rather than a `Picker` over a `Binding`: the
+            // binding's setter has to be `@Sendable`, and this one closes over
+            // a main-actor model, so the picker form is a concurrency warning
+            // dressed up as a control.
+            Menu("\(state.perPage) per page") {
                 ForEach(Self.pageSizes, id: \.self) { size in
-                    Text("\(size) per page").tag(size)
+                    Button("\(size) per page") { onPerPage(size) }
                 }
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
+            .menuStyle(.borderlessButton)
             .fixedSize()
+            .accessibilityLabel("Photos per page")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

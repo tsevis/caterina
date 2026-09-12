@@ -23,6 +23,10 @@ struct FlickrDownloaderApp: App {
         }
         .defaultSize(width: 1180, height: 780)
         .windowResizability(.contentMinSize)
+        // One bar across the top rather than a title bar with a toolbar under
+        // it: the window is a grid of pictures and the chrome should take as
+        // little of it as the HIG allows.
+        .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appInfo) {

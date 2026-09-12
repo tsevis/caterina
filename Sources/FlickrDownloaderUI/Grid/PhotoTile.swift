@@ -9,7 +9,7 @@ public struct PhotoTile: View {
 
     @State private var image: NSImage?
     @State private var didFail = false
-    @Environment(\.isFocused) private var isFocused
+    @State private var isHovering = false
 
     public init(photo: Photo, isSelected: Bool) {
         self.photo = photo
@@ -37,9 +37,13 @@ public struct PhotoTile: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.Metrics.cornerRadius))
         .overlay {
             RoundedRectangle(cornerRadius: Theme.Metrics.cornerRadius)
-                .strokeBorder(isSelected ? Color.accentColor : Theme.hairline,
-                              lineWidth: isSelected ? 3 : 1)
+                .strokeBorder(border, lineWidth: isSelected ? 3 : 1)
         }
+        // A pointer over a tile should say so before it is clicked; the lift is
+        // small because a grid of them all moving at once is a fairground.
+        .scaleEffect(isHovering && !isSelected ? 1.015 : 1)
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .onHover { isHovering = $0 }
         .overlay(alignment: .bottomLeading) { licenceBadge }
         .contentShape(RoundedRectangle(cornerRadius: Theme.Metrics.cornerRadius))
         // `.task(id:)` is the cancellation: when the tile is recycled onto a
@@ -52,14 +56,20 @@ public struct PhotoTile: View {
         .help(photo.title.isEmpty ? "Untitled" : photo.title)
     }
 
+    private var border: Color {
+        if isSelected { return .accentColor }
+        return isHovering ? Color.accentColor.opacity(0.55) : Theme.hairline
+    }
+
     @ViewBuilder
     private var licenceBadge: some View {
         if let licence = photo.license, licence != .allRightsReserved {
             Text(licence.allowsCommercialUse ? "CC" : "CC-NC")
                 .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(Theme.markInk)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
-                .background(.thinMaterial, in: Capsule())
+                .background(Theme.mark, in: Capsule())
                 .padding(5)
                 .accessibilityHidden(true)
         }
