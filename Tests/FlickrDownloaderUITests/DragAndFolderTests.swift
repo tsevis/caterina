@@ -124,3 +124,27 @@ import FlickrKit
         #expect(file.pathExtension == "png")
     }
 }
+
+/// The `.webloc` guard.
+///
+/// Dropping a remote URL on the Finder makes a `.webloc` — an internet
+/// shortcut — rather than a photograph, and the only thing standing between
+/// this app and that outcome is which representations the item provider
+/// registers. It promises a *file* and nothing else on purpose. Registering a
+/// URL beside it, which is a one-line convenience someone will reach for, is
+/// enough to bring the shortcut back, because the Finder prefers the URL.
+@Suite struct PhotoDragRepresentationTests {
+
+    private let photo = Photo(id: "51234567890", title: "Harbour at dusk",
+                              variants: [.original: "https://live.staticflickr.com/1/x_o.jpg"])
+
+    @Test func theProviderPromisesAFileAndNeverAURL() {
+        let provider = PhotoDrag.provider(for: photo, variant: .original)
+        let registered = provider.registeredTypeIdentifiers
+
+        #expect(registered.contains(UTType.jpeg.identifier))
+        for shortcut in [UTType.url.identifier, UTType.fileURL.identifier, "com.apple.web-internet-location"] {
+            #expect(!registered.contains(shortcut), "registered \(shortcut): the Finder would write a .webloc")
+        }
+    }
+}
