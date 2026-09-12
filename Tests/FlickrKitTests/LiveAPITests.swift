@@ -103,3 +103,34 @@ struct LiveAPITests {
         }
     }
 }
+
+/// The first leg of sign-in, against the live OAuth endpoint.
+///
+/// Separate from the REST checks because it proves something different: that
+/// Flickr accepts *this build's* callback URL. A custom scheme is only honoured
+/// when the app record at Flickr carries it, and the failure mode otherwise is
+/// an `oauth_problem` here rather than anything visible in the REST API.
+@Suite(.enabled(if: LiveCredentials.value != nil))
+struct LiveSignInTests {
+
+    @Test func flickrIssuesARequestTokenForTheCallbackThisBuildSends() async throws {
+        let credentials = try #require(LiveCredentials.value)
+        let url = try OAuthFlow.requestTokenURL(credentials: credentials)
+
+        // The signature is the thing under test as much as the callback: a `+`
+        // where a `%20` belongs comes back 401 here and nowhere else.
+        let (data, response) = try await URLSession.shared.data(from: url)
+        let body = try #require(String(data: data, encoding: .utf8))
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        #expect(status == 200, "Flickr answered HTTP \(status): \(body)")
+
+        let token = try OAuthFlow.temporaryToken(from: body)
+        #expect(!token.token.isEmpty)
+        #expect(!token.secret.isEmpty)
+        #expect(body.contains("oauth_callback_confirmed=true"))
+
+        // The page the user would then be sent to.
+        let authorize = try OAuthFlow.authorizationURL(token: token.token)
+        #expect(authorize.absoluteString.contains("perms=read"))
+    }
+}
