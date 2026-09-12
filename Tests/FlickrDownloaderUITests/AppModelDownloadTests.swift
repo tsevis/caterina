@@ -26,7 +26,13 @@ import FlickrKit
     private func loadSearch(_ model: AppModel) async throws {
         model.setInput("boats", for: .search)
         model.submit(.search)
-        try await Task.sleep(for: .milliseconds(60))
+        try await waitUntil("the search to load") {
+            model.workspace[.search].status != .loading
+        }
+    }
+
+    private func finished(_ model: AppModel) async throws {
+        try await waitUntil("the download to finish") { model.download.report != nil }
     }
 
     private func files(in directory: URL) throws -> [String] {
@@ -42,7 +48,7 @@ import FlickrKit
         model.select(["1", "3"], in: .search)
 
         model.startDownload(from: .search, to: folder, variant: .medium)
-        try await Task.sleep(for: .milliseconds(120))
+        try await finished(model)
 
         #expect(model.download.report?.saved == 2)
         #expect(try files(in: folder).count == 2)
@@ -68,7 +74,7 @@ import FlickrKit
         model.select(["1", "2"], in: .search)
 
         model.startDownload(from: .search, to: folder, variant: .medium)
-        try await Task.sleep(for: .milliseconds(40))
+        try await waitUntil("the download to start") { model.download.isRunning }
         #expect(model.download.isRunning)
         #expect(model.download.total == 2)
 
@@ -77,7 +83,7 @@ import FlickrKit
         #expect(model.download.total == 2)
 
         model.cancelDownload()
-        try await Task.sleep(for: .milliseconds(60))
+        try await finished(model)
     }
 
     /// Closing mid-download cancels, waits, and keeps the count.
@@ -88,7 +94,12 @@ import FlickrKit
         model.select(["1", "2", "3"], in: .search)
 
         model.startDownload(from: .search, to: folder, variant: .medium)
-        try await Task.sleep(for: .milliseconds(80))
+        // Wait for the first photo to be on disk, so what is cancelled is the
+        // second one mid-transfer rather than the batch before it started.
+        try await waitUntil("the first photo to land") {
+            (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
+                .contains { !$0.hasSuffix(".part") } == true
+        }
         await model.finishDownloadBeforeClosing()
 
         let report = try #require(model.download.report)
@@ -104,7 +115,7 @@ import FlickrKit
         model.select(["1"], in: .search)
 
         model.startDownload(from: .search, to: folder, variant: .medium)
-        try await Task.sleep(for: .milliseconds(120))
+        try await finished(model)
         #expect(model.download.report != nil)
 
         model.dismissDownloadReport()

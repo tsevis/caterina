@@ -20,10 +20,14 @@ import FlickrKit
                  settleTime: .milliseconds(5))
     }
 
-    private func settle() async throws {
-        // Long enough for the load task to run and write back; the transport
-        // never touches the network, so this is scheduling, not waiting.
-        try await Task.sleep(for: .milliseconds(60))
+    /// Waits for a source to stop loading. Not a fixed interval: the transport
+    /// never touches the network, so what is being waited on is scheduling, and
+    /// how long that takes depends on what else the machine is doing.
+    private func settle(_ model: AppModel,
+                        _ source: PhotoSource = .search) async throws {
+        try await waitUntil("\(source) to finish loading") {
+            model.workspace[source].status != .loading
+        }
     }
 
     // MARK: - One source's state is its own
@@ -34,14 +38,14 @@ import FlickrKit
 
         model.setInput("boats", for: .search)
         model.submit(.search)
-        try await settle()
+        try await settle(model)
         model.nextPage(in: .search)
-        try await settle()
+        try await settle(model)
         model.select(["1", "3"], in: .search)
 
         model.setInput("12345@N00", for: .user)
         model.submit(.user)
-        try await settle()
+        try await settle(model, .user)
 
         #expect(model.workspace[.search].selection == ["1", "3"])
         #expect(model.workspace[.search].page == 2)
@@ -55,12 +59,12 @@ import FlickrKit
 
         model.setInput("boats", for: .search)
         model.submit(.search)
-        try await settle()
+        try await settle(model)
         model.select(["2"], in: .search)
 
         model.setInput("12345@N00", for: .user)
         model.submit(.user)
-        try await settle()
+        try await settle(model, .user)
         model.select(["1"], in: .user)
 
         #expect(model.workspace[.search].selectedPhotos.map(\.id) == ["2"])
@@ -75,10 +79,11 @@ import FlickrKit
 
         model.setInput("boats", for: .search)
         model.submit(.search)
-        try await settle()
+        try await settle(model)
         model.nextPage(in: .search)
+        try await settle(model)
         model.nextPage(in: .search)
-        try await settle()
+        try await settle(model)
         #expect(model.workspace[.search].page > 1)
 
         model.setInput("harbours", for: .search)
@@ -92,13 +97,18 @@ import FlickrKit
 
         model.setInput("boats", for: .search)
         model.submit(.search)
-        try await settle()
+        try await settle(model)
         model.nextPage(in: .search)
-        try await settle()
+        try await settle(model)
 
+        // The inspector debounces, so the reload is a request that has not
+        // been made yet: wait for another one to arrive, then look at it.
+        let before = await transport.callCount
         model.setFilters(SearchFilters(licenses: [.by]), for: .search)
         #expect(model.workspace[.search].page == 1)
-        try await settle()
+        try await waitUntil("the debounced reload to reach the transport") {
+            await transport.callCount > before
+        }
         #expect(await transport.lastQueryItems["license"] == "4")
     }
 
@@ -118,7 +128,12 @@ import FlickrKit
         model.setInput("second", for: .search)
         model.submit(.search)
 
-        try await Task.sleep(for: .milliseconds(400))
+        try await waitUntil("the second reply") {
+            model.workspace[.search].status == .ready
+        }
+        #expect(model.workspace[.search].photos.map(\.id) == ["current"])
+        // And the slow one, arriving afterwards, still must not land.
+        try await Task.sleep(for: .milliseconds(300))
         #expect(model.workspace[.search].photos.map(\.id) == ["current"])
     }
 
@@ -129,14 +144,14 @@ import FlickrKit
         let model = model(busy)
         model.setInput("x", for: .search)
         model.submit(.search)
-        try await Task.sleep(for: .milliseconds(200))
+        try await settle(model)
         #expect(model.workspace[.search].status.isTransient)
 
         let gone = FakeTransport(body: #"{"stat":"fail","code":1,"message":"Photo not found"}"#)
         let other = self.model(gone)
         other.setInput("x", for: .search)
         other.submit(.search)
-        try await settle()
+        try await settle(other)
         #expect(other.workspace[.search].status.error?.isTransient == false)
     }
 
@@ -144,7 +159,7 @@ import FlickrKit
         let model = AppModel(vault: CredentialsVault(store: MemoryStore(seeded: true)),
                              transport: FakeTransport(body: Fixtures.page(ids: ["1"])))
         model.submit(.you)
-        try await settle()
+        try await settle(model, .you)
         #expect(model.workspace[.you].status.error != nil)
     }
 
@@ -164,7 +179,7 @@ import FlickrKit
                              transport: FakeTransport(body: Fixtures.page(ids: ["1"])))
 
         model.submit(.you)
-        try await settle()
+        try await settle(model, .you)
         #expect(!model.workspace[.you].photos.isEmpty)
 
         try model.signOut()
@@ -181,6 +196,8 @@ actor FakeTransport: HTTPTransport {
     private let secondBody: String?
     private let delayFirstBy: Duration?
     private(set) var requested: [URL] = []
+
+    var callCount: Int { requested.count }
 
     init(body: String, secondBody: String? = nil, delayFirstBy: Duration? = nil) {
         self.body = body
