@@ -36,7 +36,7 @@ struct DownloadSheet: View {
                 Text(destination?.path ?? "Choose a folder…")
                     .accessibilityLabel(destination.map { "Saving to \($0.lastPathComponent)" }
                         ?? "No folder chosen")
-                    .foregroundStyle(destination == nil ? Theme.inkTertiary : Theme.ink)
+                    .foregroundStyle(destination == nil ? Theme.inkSecondary : Theme.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()

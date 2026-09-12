@@ -50,8 +50,14 @@ public enum Theme {
     // MARK: - Type
 
     public static let ink = Color(nsColor: .labelColor)
-    public static let inkSecondary = Color(nsColor: .secondaryLabelColor)
-    public static let inkTertiary = Color(nsColor: .tertiaryLabelColor)
+
+    /// **Not `secondaryLabelColor`.** Measured against the window background,
+    /// Apple's is 3.82:1 in light — under the 4.5:1 that supporting text has to
+    /// clear — and `tertiaryLabelColor` is 1.86:1, which is not legible text by
+    /// any standard. Every word this application shows carries meaning, so the
+    /// supporting ink is defined here and `ThemeContrastTests` holds it to the
+    /// figure in both appearances.
+    public static let inkSecondary = dynamic(light: 0x4A4A4A, dark: 0xABABAB)
 
     // MARK: - Metrics
 

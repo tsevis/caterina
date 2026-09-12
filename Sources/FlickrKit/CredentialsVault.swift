@@ -79,20 +79,68 @@ public struct KeychainSecretStore: SecretStore {
     }
 }
 
+/// Everything the application keeps secret, as one value.
+public struct StoredCredentials: Sendable, Equatable, Codable {
+    public var apiKey: String
+    public var apiSecret: String
+    public var token: String?
+    public var tokenSecret: String?
+    public var nsid: String?
+    public var username: String?
+
+    public init(apiKey: String, apiSecret: String, token: String? = nil,
+                tokenSecret: String? = nil, nsid: String? = nil, username: String? = nil) {
+        self.apiKey = apiKey
+        self.apiSecret = apiSecret
+        self.token = token
+        self.tokenSecret = tokenSecret
+        self.nsid = nsid
+        self.username = username
+    }
+
+    public var hasAPIKey: Bool { !apiKey.trimmed.isEmpty && !apiSecret.trimmed.isEmpty }
+    public var isSignedIn: Bool { !(token ?? "").isEmpty }
+
+    public var oauth: OAuth1.Credentials {
+        OAuth1.Credentials(consumerKey: apiKey, consumerSecret: apiSecret,
+                           token: token.flatMap { $0.isEmpty ? nil : $0 },
+                           tokenSecret: tokenSecret.flatMap { $0.isEmpty ? nil : $0 })
+    }
+
+    public var account: CredentialsVault.StoredAccount? {
+        guard isSignedIn else { return nil }
+        return CredentialsVault.StoredAccount(nsid: nsid ?? "", username: username ?? "")
+    }
+
+    public func signedOut() -> StoredCredentials {
+        StoredCredentials(apiKey: apiKey, apiSecret: apiSecret)
+    }
+}
+
 /// The application's credentials, and the only route to them.
+///
+/// **One Keychain item, not six.** Each item is its own access-control entry,
+/// so a vault spread across `api-key`, `api-secret`, `oauth-token` and the rest
+/// asked the user to unlock the Keychain once *per field* — four or five
+/// prompts in a row, every time the app's signature changed. Everything is one
+/// JSON document under one account now, so there is one prompt at most.
 public struct CredentialsVault: Sendable {
     private enum Key {
-        static let apiKey = "api-key"
-        static let apiSecret = "api-secret"
-        static let token = "oauth-token"
-        static let tokenSecret = "oauth-token-secret"
-        static let nsid = "user-nsid"
-        static let username = "username"
+        static let credentials = "credentials"
+        /// What the six-item layout used, kept only so an existing install can
+        /// be carried across once and then forgotten.
+        static let legacy = ["api-key", "api-secret", "oauth-token",
+                             "oauth-token-secret", "user-nsid", "username"]
     }
 
     public struct StoredAccount: Sendable, Equatable {
         public let nsid: String
         public let username: String
+
+        public init(nsid: String, username: String) {
+            self.nsid = nsid
+            self.username = username
+        }
     }
 
     private let store: any SecretStore
@@ -101,63 +149,51 @@ public struct CredentialsVault: Sendable {
         self.store = store
     }
 
-    public var hasAPIKey: Bool {
-        !(store.string(for: Key.apiKey) ?? "").isEmpty
-            && !(store.string(for: Key.apiSecret) ?? "").isEmpty
+    /// Read everything, in one go. Callers are expected to do this **once** and
+    /// hold on to the result: reading from a SwiftUI view body put a Keychain
+    /// prompt on screen every time the view was re-evaluated.
+    public func load() -> StoredCredentials? {
+        if let document = store.string(for: Key.credentials),
+           let stored = try? JSONDecoder().decode(StoredCredentials.self,
+                                                  from: Data(document.utf8)) {
+            return stored.hasAPIKey ? stored : nil
+        }
+        return migrateFromSeparateItems()
     }
 
-    public var isSignedIn: Bool {
-        !(store.string(for: Key.token) ?? "").isEmpty
-    }
-
-    /// Nil when there is no API key yet — which is the state the onboarding
-    /// sheet exists for.
-    public func credentials() -> OAuth1.Credentials? {
-        guard let key = store.string(for: Key.apiKey), !key.isEmpty,
-              let secret = store.string(for: Key.apiSecret), !secret.isEmpty
-        else { return nil }
-
-        let token = store.string(for: Key.token).flatMap { $0.isEmpty ? nil : $0 }
-        let tokenSecret = store.string(for: Key.tokenSecret).flatMap { $0.isEmpty ? nil : $0 }
-        return OAuth1.Credentials(consumerKey: key, consumerSecret: secret,
-                                  token: token, tokenSecret: tokenSecret)
-    }
-
-    public func account() -> StoredAccount? {
-        guard isSignedIn else { return nil }
-        return StoredAccount(nsid: store.string(for: Key.nsid) ?? "",
-                             username: store.string(for: Key.username) ?? "")
-    }
-
-    public func saveAPIKey(key: String, secret: String) throws {
-        let key = key.trimmed
-        let secret = secret.trimmed
-        guard !key.isEmpty, !secret.isEmpty else {
+    public func save(_ credentials: StoredCredentials) throws {
+        guard credentials.hasAPIKey else {
             throw FlickrError.invalidInput("Both the API key and the secret are needed.")
         }
-        try store.set(key, for: Key.apiKey)
-        try store.set(secret, for: Key.apiSecret)
-    }
-
-    public func saveAccount(token: String, secret: String,
-                            nsid: String, username: String) throws {
-        try store.set(token, for: Key.token)
-        try store.set(secret, for: Key.tokenSecret)
-        try store.set(nsid, for: Key.nsid)
-        try store.set(username, for: Key.username)
-    }
-
-    /// Signing out removes the token from the Keychain, not only from the
-    /// window: the next launch reads the Keychain.
-    public func signOut() throws {
-        for key in [Key.token, Key.tokenSecret, Key.nsid, Key.username] {
-            try store.remove(key)
+        let data = try JSONEncoder().encode(credentials)
+        guard let document = String(data: data, encoding: .utf8) else {
+            throw FlickrError.invalidInput("Could not store the credentials.")
         }
+        try store.set(document, for: Key.credentials)
     }
 
     public func forgetEverything() throws {
-        try signOut()
-        try store.remove(Key.apiKey)
-        try store.remove(Key.apiSecret)
+        try store.remove(Key.credentials)
+        for key in Key.legacy { try? store.remove(key) }
+    }
+
+    /// Carry an install from the six-item layout, once.
+    private func migrateFromSeparateItems() -> StoredCredentials? {
+        guard let key = store.string(for: "api-key"), !key.isEmpty,
+              let secret = store.string(for: "api-secret"), !secret.isEmpty
+        else { return nil }
+
+        let carried = StoredCredentials(
+            apiKey: key, apiSecret: secret,
+            token: store.string(for: "oauth-token"),
+            tokenSecret: store.string(for: "oauth-token-secret"),
+            nsid: store.string(for: "user-nsid"),
+            username: store.string(for: "username"))
+
+        // Best effort: if the write fails the app still works, it just asks
+        // again next launch.
+        try? save(carried)
+        for key in Key.legacy { try? store.remove(key) }
+        return carried
     }
 }

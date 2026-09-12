@@ -33,6 +33,9 @@ public final class AppModel {
     public var downloadVariant: PhotoVariant = .defaultDownload
 
     private let vault: CredentialsVault
+    /// The credentials, in memory. The Keychain is touched on launch, on save
+    /// and on sign-out — never on a redraw.
+    private var stored: StoredCredentials?
     private let transport: any HTTPTransport
     private let policy: RetryPolicy
     /// How long to let the user keep ticking before asking Flickr again.
@@ -63,14 +66,20 @@ public final class AppModel {
         self.policy = policy
         self.settleTime = settleTime
         self.engine = engine
-        self.client = FlickrClient(credentials: vault.credentials() ?? .empty,
+        // **Read once.** These used to be read from view bodies, so SwiftUI
+        // re-evaluating a view asked the Keychain again — and the Keychain
+        // asks the user. Everything is held in memory from here and written
+        // back only when it changes.
+        let stored = vault.load()
+        self.stored = stored
+        self.client = FlickrClient(credentials: stored?.oauth ?? .empty,
                                    transport: transport, policy: policy)
-        self.account = vault.account()
-        self.isShowingOnboarding = !vault.hasAPIKey
+        self.account = stored?.account
+        self.isShowingOnboarding = !(stored?.hasAPIKey ?? false)
     }
 
-    public var hasAPIKey: Bool { vault.hasAPIKey }
-    public var isSignedIn: Bool { vault.isSignedIn }
+    public var hasAPIKey: Bool { stored?.hasAPIKey ?? false }
+    public var isSignedIn: Bool { stored?.isSignedIn ?? false }
     public var activeSource: PhotoSource { workspace.active }
     public var state: SectionState { workspace.activeState }
 
@@ -369,19 +378,34 @@ public final class AppModel {
     /// error message with it, so a failed sign-in was silent. The view dismisses
     /// itself when it is actually finished.
     public func saveAPIKey(key: String, secret: String) throws {
-        try vault.saveAPIKey(key: key, secret: secret)
+        var next = stored ?? StoredCredentials(apiKey: "", apiSecret: "")
+        next.apiKey = key.trimmed
+        next.apiSecret = secret.trimmed
+        try vault.save(next)
+        stored = next
         refreshClient()
     }
 
     public func signedIn(_ account: OAuthFlow.Account) throws {
-        try vault.saveAccount(token: account.token, secret: account.tokenSecret,
-                              nsid: account.nsid, username: account.username)
+        guard var next = stored else {
+            throw FlickrError.invalidInput("Enter an API key before signing in.")
+        }
+        next.token = account.token
+        next.tokenSecret = account.tokenSecret
+        next.nsid = account.nsid
+        next.username = account.username
+        try vault.save(next)
+        stored = next
         refreshClient()
-        self.account = vault.account()
+        self.account = next.account
     }
 
     public func signOut() throws {
-        try vault.signOut()
+        if let stored {
+            let next = stored.signedOut()
+            try vault.save(next)
+            self.stored = next
+        }
         account = nil
         refreshClient()
         // **Cancel first.** Pressing Reload on You and then signing out left a
@@ -392,13 +416,13 @@ public final class AppModel {
         workspace = workspace.updating(.you) { _ in SectionState(source: .you) }
     }
 
-    public func credentials() -> OAuth1.Credentials? { vault.credentials() }
+    public func credentials() -> OAuth1.Credentials? { stored?.oauth }
 
     /// Hand the existing actor its new credentials rather than building a
     /// second one: a request already in flight keeps the client it started
     /// with, and there is one place the credentials live.
     private func refreshClient() {
-        let credentials = vault.credentials() ?? .empty
+        let credentials = stored?.oauth ?? .empty
         Task { [client] in await client.update(credentials: credentials) }
     }
 }

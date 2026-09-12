@@ -129,7 +129,7 @@ struct PaginationBar: View {
             if let notice = state.skippedNotice {
                 Label(notice, systemImage: "exclamationmark.triangle")
                     .font(.caption)
-                    .foregroundStyle(Theme.inkTertiary)
+                    .foregroundStyle(Theme.inkSecondary)
                     .help("Flickr sent entries this version could not read. "
                           + "They are left out rather than shown as blanks.")
             }

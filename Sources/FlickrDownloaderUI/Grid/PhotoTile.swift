@@ -124,7 +124,7 @@ struct TileArtwork: View {
             } else if didFail {
                 Image(systemName: "photo.badge.exclamationmark")
                     .font(.title2)
-                    .foregroundStyle(Theme.inkTertiary)
+                    .foregroundStyle(Theme.inkSecondary)
             } else {
                 ProgressView().controlSize(.small)
             }

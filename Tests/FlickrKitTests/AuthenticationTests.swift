@@ -119,64 +119,139 @@ import Testing
     // MARK: - Storage
 
     @Test func credentialsAreReadBackExactlyAsStored() throws {
-        let store = InMemorySecretStore()
-        let vault = CredentialsVault(store: store)
+        let vault = CredentialsVault(store: InMemorySecretStore())
+        try vault.save(StoredCredentials(apiKey: "abc", apiSecret: "def",
+                                         token: "tok", tokenSecret: "toksec",
+                                         nsid: "1@N1", username: "me"))
 
-        try vault.saveAPIKey(key: "abc", secret: "def")
-        try vault.saveAccount(token: "tok", secret: "toksec", nsid: "1@N1", username: "me")
-
-        let credentials = try #require(vault.credentials())
-        #expect(credentials.consumerKey == "abc")
-        #expect(credentials.consumerSecret == "def")
-        #expect(credentials.token == "tok")
-        #expect(credentials.tokenSecret == "toksec")
-        #expect(vault.account()?.username == "me")
+        let stored = try #require(vault.load())
+        #expect(stored.oauth.consumerKey == "abc")
+        #expect(stored.oauth.consumerSecret == "def")
+        #expect(stored.oauth.token == "tok")
+        #expect(stored.oauth.tokenSecret == "toksec")
+        #expect(stored.account?.username == "me")
     }
 
     @Test func thereAreNoCredentialsBeforeAnyAreStored() {
-        let vault = CredentialsVault(store: InMemorySecretStore())
-        #expect(vault.credentials() == nil)
-        #expect(!vault.hasAPIKey)
-        #expect(!vault.isSignedIn)
+        #expect(CredentialsVault(store: InMemorySecretStore()).load() == nil)
     }
 
     @Test func anAPIKeyWithoutATokenIsEnoughToSearch() throws {
         let vault = CredentialsVault(store: InMemorySecretStore())
-        try vault.saveAPIKey(key: "abc", secret: "def")
-        #expect(vault.hasAPIKey)
-        #expect(!vault.isSignedIn)
-        #expect(vault.credentials()?.token == nil)
+        try vault.save(StoredCredentials(apiKey: "abc", apiSecret: "def"))
+
+        let stored = try #require(vault.load())
+        #expect(stored.hasAPIKey)
+        #expect(!stored.isSignedIn)
+        #expect(stored.oauth.token == nil)
+        #expect(stored.account == nil)
     }
 
     /// Signing out has to remove the token from the Keychain, not just from the
     /// window — the next launch reads the Keychain, not the window.
     @Test func signingOutClearsTheTokenButKeepsTheAPIKey() throws {
         let vault = CredentialsVault(store: InMemorySecretStore())
-        try vault.saveAPIKey(key: "abc", secret: "def")
-        try vault.saveAccount(token: "tok", secret: "toksec", nsid: "1@N1", username: "me")
+        let full = StoredCredentials(apiKey: "abc", apiSecret: "def", token: "tok",
+                                     tokenSecret: "toksec", nsid: "1@N1", username: "me")
+        try vault.save(full)
+        try vault.save(full.signedOut())
 
-        try vault.signOut()
-        #expect(!vault.isSignedIn)
-        #expect(vault.hasAPIKey)
-        #expect(vault.account() == nil)
-        #expect(vault.credentials()?.token == nil)
+        let stored = try #require(vault.load())
+        #expect(!stored.isSignedIn)
+        #expect(stored.hasAPIKey)
+        #expect(stored.account == nil)
+        #expect(stored.oauth.token == nil)
     }
 
     @Test func forgettingEverythingLeavesNothingBehind() throws {
         let store = InMemorySecretStore()
         let vault = CredentialsVault(store: store)
-        try vault.saveAPIKey(key: "abc", secret: "def")
-        try vault.saveAccount(token: "t", secret: "s", nsid: "1@N1", username: "me")
+        try vault.save(StoredCredentials(apiKey: "abc", apiSecret: "def", token: "t"))
 
         try vault.forgetEverything()
         #expect(store.isEmpty)
-        #expect(vault.credentials() == nil)
+        #expect(vault.load() == nil)
     }
 
     @Test func aBlankAPIKeyIsRefusedRatherThanStored() {
         let vault = CredentialsVault(store: InMemorySecretStore())
-        #expect(throws: FlickrError.self) { try vault.saveAPIKey(key: "  ", secret: "def") }
-        #expect(throws: FlickrError.self) { try vault.saveAPIKey(key: "abc", secret: "") }
+        #expect(throws: FlickrError.self) {
+            try vault.save(StoredCredentials(apiKey: "  ", apiSecret: "def"))
+        }
+        #expect(throws: FlickrError.self) {
+            try vault.save(StoredCredentials(apiKey: "abc", apiSecret: ""))
+        }
+    }
+
+    // MARK: - One prompt, not six
+
+    /// **The symptom this layout exists to remove.** Every Keychain item is its
+    /// own access-control entry, so six items meant the user was asked to
+    /// unlock the Keychain up to six times in a row.
+    @Test func everythingIsReadFromASingleKeychainItem() throws {
+        let store = CountingSecretStore()
+        let vault = CredentialsVault(store: store)
+        try vault.save(StoredCredentials(apiKey: "abc", apiSecret: "def",
+                                         token: "t", tokenSecret: "s",
+                                         nsid: "1@N1", username: "me"))
+        store.reads = 0
+
+        _ = vault.load()
+        #expect(store.reads == 1)
+        #expect(store.written.count == 1)
+    }
+
+    /// An install made by the six-item version keeps working, once.
+    @Test func anOlderInstallIsCarriedAcrossAndTidiedUp() throws {
+        let store = InMemorySecretStore()
+        for (key, value) in ["api-key": "abc", "api-secret": "def",
+                             "oauth-token": "tok", "oauth-token-secret": "toksec",
+                             "user-nsid": "1@N1", "username": "me"] {
+            try store.set(value, for: key)
+        }
+
+        let vault = CredentialsVault(store: store)
+        let carried = try #require(vault.load())
+        #expect(carried.oauth.consumerKey == "abc")
+        #expect(carried.account?.username == "me")
+
+        // And the old items are gone, so it never happens twice.
+        #expect(store.string(for: "api-key") == nil)
+        #expect(store.string(for: "oauth-token") == nil)
+        #expect(store.string(for: "credentials") != nil)
+    }
+}
+
+/// Counts what it is asked for, which is the point of the single-item layout.
+final class CountingSecretStore: SecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String: String] = [:]
+    private var readCount = 0
+
+    var reads: Int {
+        get { lock.lock(); defer { lock.unlock() }; return readCount }
+        set { lock.lock(); readCount = newValue; lock.unlock() }
+    }
+
+    var written: [String: String] {
+        lock.lock(); defer { lock.unlock() }
+        return values
+    }
+
+    func string(for key: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        readCount += 1
+        return values[key]
+    }
+
+    func set(_ value: String, for key: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        values[key] = value
+    }
+
+    func remove(_ key: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        values.removeValue(forKey: key)
     }
 }
 
