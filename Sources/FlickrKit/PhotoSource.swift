@@ -64,8 +64,9 @@ public struct SectionState: Sendable, Equatable {
     public let query: PhotoQuery?
     public let filters: SearchFilters
     public let photos: [Photo]
-    /// Photo ids. Always a subset of `photos`.
-    public let selection: Set<String>
+    /// What is selected, and where a ⇧-click would measure from. Always a
+    /// subset of `photos`.
+    public let selection: GridSelection
     public let page: Int
     public let totalPages: Int
     public let perPage: Int
@@ -80,7 +81,8 @@ public struct SectionState: Sendable, Equatable {
 
     public init(source: PhotoSource, input: String = "", query: PhotoQuery? = nil,
                 filters: SearchFilters = SearchFilters(), photos: [Photo] = [],
-                selection: Set<String> = [], page: Int = 1, totalPages: Int = 1,
+                selection: GridSelection = GridSelection(), page: Int = 1,
+                totalPages: Int = 1,
                 perPage: Int = PhotoRequest.defaultPerPage, total: Int = 0,
                 status: SectionStatus = .idle, isPageCountClamped: Bool = false,
                 skippedEntries: Int = 0) {
@@ -111,14 +113,14 @@ public struct SectionState: Sendable, Equatable {
     /// button while the new query's first page was still loading, and pressing
     /// it fetched page 2 of results that had not arrived.
     public func beginning(query: PhotoQuery) -> SectionState {
-        copy(query: query, photos: [], selection: [], page: 1, totalPages: 1,
+        copy(query: query, photos: [], selection: GridSelection(), page: 1, totalPages: 1,
              total: 0, status: .loading, isPageCountClamped: false, skippedEntries: 0)
     }
 
     /// Looking something up — a username, a group — before there is a query
     /// to run. The source is busy but has nothing to page through yet.
     public func resolving() -> SectionState {
-        copy(query: .some(nil), photos: [], selection: [], page: 1, totalPages: 1,
+        copy(query: .some(nil), photos: [], selection: GridSelection(), page: 1, totalPages: 1,
              total: 0, status: .loading, isPageCountClamped: false, skippedEntries: 0)
     }
 
@@ -132,7 +134,7 @@ public struct SectionState: Sendable, Equatable {
 
     /// Changing the filters changes the query, so it starts again at page 1.
     public func with(filters: SearchFilters) -> SectionState {
-        copy(filters: filters, selection: [], page: 1)
+        copy(filters: filters, selection: GridSelection(), page: 1)
     }
 
     /// Changing the page size keeps the *position*, which is not the same as
@@ -160,12 +162,11 @@ public struct SectionState: Sendable, Equatable {
     public func loaded(_ result: PhotoPage) -> SectionState {
         let reachable = Pagination.reachablePages(reported: result.pages,
                                                   perPage: result.perPage)
-        let ids = Set(result.photos.map(\.id))
         return copy(photos: result.photos,
                     // A selected photo that is no longer on screen cannot be
                     // downloaded; keeping it is how the count came to disagree
                     // with the grid.
-                    selection: selection.intersection(ids),
+                    selection: selection.keeping(to: result.photos.map(\.id)),
                     page: min(max(1, result.page), reachable),
                     totalPages: reachable,
                     perPage: result.perPage,
@@ -180,34 +181,51 @@ public struct SectionState: Sendable, Equatable {
     /// user was — but no pages ahead of it: "Page 4 of 160" under an error
     /// screen with no photos is a claim about results that are not there.
     public func failed(_ error: FlickrError) -> SectionState {
-        copy(photos: [], selection: [], totalPages: page,
+        copy(photos: [], selection: GridSelection(), totalPages: page,
              status: .failed(error))
     }
 
     // MARK: - Selection
 
+    /// A click, with whatever modifiers were held. The rules live in
+    /// `GridSelection`, where they can be checked without a mouse.
+    public func clicking(_ photoID: String, modifiers: ClickModifiers) -> SectionState {
+        copy(selection: selection.clicking(photoID, modifiers: modifiers, in: order))
+    }
+
+    /// What a marquee covered.
+    public func sweeping(_ ids: Set<String>) -> SectionState {
+        copy(selection: selection.sweeping(ids, in: order))
+    }
+
+    /// An arrow key, by one photo or by a row.
+    public func movingSelection(by offset: Int) -> SectionState {
+        copy(selection: selection.moving(by: offset, in: order))
+    }
+
     public func toggling(_ photoID: String) -> SectionState {
-        var next = selection
-        if next.contains(photoID) { next.remove(photoID) } else { next.insert(photoID) }
-        return copy(selection: next.intersection(Set(photos.map(\.id))))
+        clicking(photoID, modifiers: .command)
     }
 
     public func selecting(_ ids: Set<String>) -> SectionState {
-        copy(selection: ids.intersection(Set(photos.map(\.id))))
+        copy(selection: selection.sweeping(ids, in: order))
     }
 
     public func selectingAll() -> SectionState {
-        copy(selection: Set(photos.map(\.id)))
+        copy(selection: selection.selectingAll(in: order))
     }
 
     public func clearingSelection() -> SectionState {
-        copy(selection: [])
+        copy(selection: selection.clearing())
     }
+
+    /// The photo ids in the order the grid shows them.
+    private var order: [String] { photos.map(\.id) }
 
     /// The selected photos, in the order the grid shows them — so a download's
     /// progress runs top to bottom rather than in hash order.
     public var selectedPhotos: [Photo] {
-        photos.filter { selection.contains($0.id) }
+        photos.filter { selection.ids.contains($0.id) }
     }
 
     public var canGoBack: Bool { page > 1 }
@@ -217,7 +235,7 @@ public struct SectionState: Sendable, Equatable {
 
     private func copy(input: String? = nil, query: PhotoQuery?? = nil,
                       filters: SearchFilters? = nil, photos: [Photo]? = nil,
-                      selection: Set<String>? = nil, page: Int? = nil,
+                      selection: GridSelection? = nil, page: Int? = nil,
                       totalPages: Int? = nil, perPage: Int? = nil,
                       total: Int? = nil, status: SectionStatus? = nil,
                       isPageCountClamped: Bool? = nil,

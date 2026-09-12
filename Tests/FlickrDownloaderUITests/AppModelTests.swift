@@ -47,7 +47,7 @@ import FlickrKit
         model.submit(.user)
         try await settle(model, .user)
 
-        #expect(model.workspace[.search].selection == ["1", "3"])
+        #expect(model.workspace[.search].selection.ids == ["1", "3"])
         #expect(model.workspace[.search].page == 2)
         #expect(model.workspace[.user].page == 1)
         #expect(model.workspace[.user].selection.isEmpty)

@@ -71,24 +71,9 @@ struct DownloadSheet: View {
         .onAppear { destination = restoredFolder() }
     }
 
-    private func restoredFolder() -> URL? {
-        guard !lastFolder.isEmpty else { return nil }
-        var isStale = false
-        guard let url = try? URL(resolvingBookmarkData: lastFolder,
-                                 options: [.withSecurityScope],
-                                 relativeTo: nil,
-                                 bookmarkDataIsStale: &isStale),
-              !isStale,
-              FileManager.default.fileExists(atPath: url.path)
-        else { return nil }
-        return url
-    }
+    private func restoredFolder() -> URL? { DownloadFolder.restored(from: lastFolder) }
 
-    private func remember(_ url: URL) {
-        lastFolder = (try? url.bookmarkData(options: [.withSecurityScope],
-                                            includingResourceValuesForKeys: nil,
-                                            relativeTo: nil)) ?? Data()
-    }
+    private func remember(_ url: URL) { lastFolder = DownloadFolder.bookmark(for: url) }
 
     private func chooseFolder() {
         let panel = NSOpenPanel()

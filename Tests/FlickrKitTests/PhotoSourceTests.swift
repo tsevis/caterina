@@ -34,7 +34,7 @@ import Testing
             $0.beginning(query: .groupPool(groupID: "9@N1")).loaded(page(["8", "9"], page: 3))
         }
 
-        #expect(workspace[.search].selection == ["1", "2"])
+        #expect(workspace[.search].selection.ids == ["1", "2"])
         #expect(workspace[.search].page == 1)
         #expect(workspace[.groups].page == 3)
         #expect(workspace[.groups].selection.isEmpty)
@@ -165,7 +165,7 @@ import Testing
             .beginning(query: .search(text: "x")).loaded(page(["1", "2", "3"]))
             .selecting(["1", "3"])
             .paging(to: 2).loaded(page(["3", "4"], page: 2))
-        #expect(state.selection == ["3"])
+        #expect(state.selection.ids == ["3"])
     }
 
     @Test func selectingAllSelectsWhatIsOnScreen() {
@@ -177,7 +177,7 @@ import Testing
 
     @Test func togglingIsReversible() {
         let loaded = SectionState(source: .search).loaded(page(["1", "2"]))
-        #expect(loaded.toggling("1").selection == ["1"])
+        #expect(loaded.toggling("1").selection.ids == ["1"])
         #expect(loaded.toggling("1").toggling("1").selection.isEmpty)
     }
 

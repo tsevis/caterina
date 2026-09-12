@@ -17,8 +17,10 @@ public struct SourceDetailView: View {
             Group {
                 if case .ready = state.status {
                     PhotoGridView(photos: state.photos,
-                                  selection: state.selection,
-                                  onSelect: { model.select($0, in: source) },
+                                  selection: state.selection.ids,
+                                  onClick: { model.click($0, modifiers: $1, in: source) },
+                                  onSweep: { model.sweep($0, in: source) },
+                                  onMove: { model.moveSelection(by: $0, in: source) },
                                   onPreview: { model.preview($0) },
                                   dragVariant: model.downloadVariant)
                 } else {

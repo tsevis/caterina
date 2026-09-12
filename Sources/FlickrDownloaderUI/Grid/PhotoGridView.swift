@@ -12,11 +12,13 @@ import FlickrKit
 public struct PhotoGridView: View {
     public let photos: [Photo]
     public let selection: Set<String>
-    public let onSelect: (Set<String>) -> Void
+    /// A click and what was held with it. The *meaning* of the click is
+    /// `GridSelection`'s business, not this view's.
+    public let onClick: (String, ClickModifiers) -> Void
+    public let onSweep: (Set<String>) -> Void
+    public let onMove: (Int) -> Void
     public let onPreview: (Photo) -> Void
 
-    /// Where ⇧-click measures from, and where the arrow keys are.
-    @State private var anchor: String?
     /// What the download sheet's size picker is set to, so a dragged photo is
     /// the same file a downloaded one would be.
     let dragVariant: PhotoVariant
@@ -24,12 +26,16 @@ public struct PhotoGridView: View {
     @State private var frames: [String: CGRect] = [:]
 
     public init(photos: [Photo], selection: Set<String>,
-                onSelect: @escaping (Set<String>) -> Void,
+                onClick: @escaping (String, ClickModifiers) -> Void,
+                onSweep: @escaping (Set<String>) -> Void,
+                onMove: @escaping (Int) -> Void,
                 onPreview: @escaping (Photo) -> Void,
                 dragVariant: PhotoVariant = .defaultDownload) {
         self.photos = photos
         self.selection = selection
-        self.onSelect = onSelect
+        self.onClick = onClick
+        self.onSweep = onSweep
+        self.onMove = onMove
         self.onPreview = onPreview
         self.dragVariant = dragVariant
     }
@@ -78,12 +84,12 @@ public struct PhotoGridView: View {
                     // beside it ran two handlers for every modified click —
                     // each computing its answer from the same stale selection,
                     // and the last writer won.
-                    .onTapGesture { click(photo, modifiers: NSEvent.modifierFlags) }
+                    .onTapGesture { onClick(photo.id, Self.modifiers()) }
                     .onDrag {
                         // Dragging an unselected photo drags that one; dragging
                         // a selected one drags the selection, which is what
                         // every Mac list does.
-                        if !selection.contains(photo.id) { click(photo, modifiers: []) }
+                        if !selection.contains(photo.id) { onClick(photo.id, []) }
                         return PhotoDrag.provider(for: photo, variant: dragVariant)
                     }
                     .contextMenu { menu(for: photo) }
@@ -96,29 +102,18 @@ public struct PhotoGridView: View {
 
     // MARK: - Clicks
 
-    /// Click replaces, ⌘-click toggles, ⇧-click extends from the anchor.
-    private func click(_ photo: Photo, modifiers: NSEvent.ModifierFlags) {
-        if modifiers.contains(.command) {
-            anchor = photo.id
-            var next = selection
-            if next.contains(photo.id) { next.remove(photo.id) } else { next.insert(photo.id) }
-            onSelect(next)
-            return
-        }
-
-        if modifiers.contains(.shift),
-           let anchor,
-           let start = photos.firstIndex(where: { $0.id == anchor }),
-           let end = photos.firstIndex(where: { $0.id == photo.id }) {
-            // The anchor stays where it was, so a second ⇧-click re-measures
-            // from the same place rather than from the last one.
-            let range = start <= end ? start...end : end...start
-            onSelect(selection.union(photos[range].map(\.id)))
-            return
-        }
-
-        anchor = photo.id
-        onSelect([photo.id])
+    /// What the keyboard is holding right now.
+    ///
+    /// Read from `NSEvent` at the moment of the tap rather than taken from
+    /// three gesture recognisers: a plain `.onTapGesture` also fires on a
+    /// ⌘-click, so modifier gestures beside it ran two handlers for every
+    /// modified click, each computing its answer from the same stale selection.
+    private static func modifiers() -> ClickModifiers {
+        var held: ClickModifiers = []
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.command) { held.insert(.command) }
+        if flags.contains(.shift) { held.insert(.shift) }
+        return held
     }
 
     @ViewBuilder
@@ -133,26 +128,14 @@ public struct PhotoGridView: View {
     // MARK: - Keyboard
 
     private var focused: Photo? {
-        if let anchor, let photo = photos.first(where: { $0.id == anchor }) { return photo }
-        return photos.first { selection.contains($0.id) }
+        photos.first { selection.contains($0.id) }
     }
 
-    /// How many tiles are on a row, measured from where they actually are.
-    ///
-    /// The grid's columns are adaptive, so the number depends on the window's
-    /// width — computing it from the tile frames means the arrow keys follow
-    /// the rows the user can see rather than a number fixed in code.
-    private var columnCount: Int {
-        guard let top = frames.values.map(\.minY).min() else { return 1 }
-        return max(1, frames.values.filter { abs($0.minY - top) < 1 }.count)
-    }
+    private var columnCount: Int { Marquee.columnCount(in: frames) }
 
     private func move(by offset: Int) -> KeyPress.Result {
         guard !photos.isEmpty else { return .ignored }
-        let current = focused.flatMap { photo in photos.firstIndex { $0.id == photo.id } } ?? 0
-        let next = min(max(0, current + offset), photos.count - 1)
-        guard next != current || focused == nil else { return .handled }
-        click(photos[next], modifiers: [])
+        onMove(offset)
         return .handled
     }
 
@@ -162,14 +145,7 @@ public struct PhotoGridView: View {
         var start: CGPoint
         var current: CGPoint
 
-        /// Rebuilt from the two live corners every time. The previous version
-        /// unioned the new point into the *old* rectangle, so the selection
-        /// only ever grew: sweeping out to twenty tiles and back to three left
-        /// twenty selected under a rectangle drawn around three.
-        var rect: CGRect {
-            CGRect(x: min(start.x, current.x), y: min(start.y, current.y),
-                   width: abs(start.x - current.x), height: abs(start.y - current.y))
-        }
+        var rect: CGRect { Marquee.rect(from: start, to: current) }
     }
 
     /// The surface behind the tiles takes the drag, so a drag that begins on a
@@ -183,7 +159,7 @@ public struct PhotoGridView: View {
                         let state = MarqueeState(start: value.startLocation,
                                                  current: value.location)
                         marquee = state
-                        onSelect(swept(in: state.rect))
+                        onSweep(swept(in: state.rect))
                     }
                     .onEnded { _ in marquee = nil }
             )
@@ -202,7 +178,7 @@ public struct PhotoGridView: View {
     }
 
     private func swept(in rect: CGRect) -> Set<String> {
-        Set(frames.filter { $0.value.intersects(rect) }.keys)
+        Marquee.covered(frames, by: rect)
     }
 
     private func frameReader(for id: String) -> some View {

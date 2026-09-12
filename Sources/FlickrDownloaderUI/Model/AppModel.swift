@@ -243,6 +243,19 @@ public final class AppModel {
 
     // MARK: - Selection
 
+    public func click(_ photoID: String, modifiers: ClickModifiers,
+                      in source: PhotoSource) {
+        workspace = workspace.updating(source) { $0.clicking(photoID, modifiers: modifiers) }
+    }
+
+    public func sweep(_ ids: Set<String>, in source: PhotoSource) {
+        workspace = workspace.updating(source) { $0.sweeping(ids) }
+    }
+
+    public func moveSelection(by offset: Int, in source: PhotoSource) {
+        workspace = workspace.updating(source) { $0.movingSelection(by: offset) }
+    }
+
     public func toggle(_ photoID: String, in source: PhotoSource) {
         workspace = workspace.updating(source) { $0.toggling(photoID) }
     }
@@ -275,8 +288,13 @@ public final class AppModel {
         previewTask = Task { [weak self] in
             guard let (data, _) = try? await URLSession.shared.data(from: url),
                   !Task.isCancelled else { return }
-            let file = FileManager.default.temporaryDirectory.appendingPathComponent(
-                "quicklook-\(photo.id).\(Filenames.fileExtension(for: address))")
+            // **Named by the same rules as a download.** A photo id comes from
+            // Flickr, and `appendingPathComponent` does not stop one containing
+            // slashes from walking out of the temporary directory —
+            // `Filenames` already refuses that, and is tested for it.
+            let file = Filenames.destination(
+                in: FileManager.default.temporaryDirectory,
+                title: "Quick Look", photoID: photo.id, url: address)
             guard (try? data.write(to: file)) != nil, !Task.isCancelled else { return }
             self?.previewURL = file
         }
