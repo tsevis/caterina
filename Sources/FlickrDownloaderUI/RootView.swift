@@ -58,15 +58,16 @@ public struct RootView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
+        ToolbarItemGroup {
+            // Beside the buttons it describes. In `.navigation` it shared a
+            // slot with the window title and never appeared.
             Text(selectionSummary)
                 .font(.callout)
                 .monospacedDigit()
                 .foregroundStyle(Theme.inkSecondary)
-                .accessibilityLabel(selectionSummary)
-        }
+                .accessibilityLabel(selectionSummary.isEmpty
+                    ? "Nothing selected" : selectionSummary)
 
-        ToolbarItemGroup {
             Button {
                 model.selectAll(in: model.activeSource)
             } label: {

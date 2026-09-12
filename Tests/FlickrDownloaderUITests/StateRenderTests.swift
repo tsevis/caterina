@@ -103,3 +103,65 @@ import FlickrKit
         #expect(isNotBlank(bitmap))
     }
 }
+
+/// A photo must not decide how big its tile is.
+///
+/// Reported from the running app: a landscape photo in a group's pool spilled
+/// out of its column and drew over the tile beside it, while square-ish photos
+/// behaved. The cause was the image being a `ZStack` child, where
+/// `.scaledToFill()` reports the size it wants to fill at and the stack grows
+/// to match.
+///
+/// The measurement is the view's *own* size — `NSHostingView.fittingSize` —
+/// not a size handed to it by a `.frame()`. The first version of this test
+/// wrapped the tile in a frame and so could not fail: it measured the frame.
+@MainActor
+@Suite struct TileSizingTests {
+
+    /// A deliberately extreme letterbox: 1200 × 200.
+    private func wideImage() -> NSImage {
+        let image = NSImage(size: NSSize(width: 1200, height: 200))
+        image.lockFocus()
+        NSColor.black.setFill()
+        NSRect(x: 0, y: 0, width: 1200, height: 200).fill()
+        image.unlockFocus()
+        return image
+    }
+
+    private func tallImage() -> NSImage {
+        let image = NSImage(size: NSSize(width: 200, height: 1400))
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(x: 0, y: 0, width: 200, height: 1400).fill()
+        image.unlockFocus()
+        return image
+    }
+
+    /// What the view asks for when nothing is imposing a size on it.
+    private func naturalSize<V: View>(_ view: V) -> CGSize {
+        NSHostingView(rootView: view).fittingSize
+    }
+
+    private func tile(_ image: NSImage?) -> some View {
+        PhotoTileLayout { TileArtwork(image: image, didFail: false) }
+    }
+
+    /// The invariant: whatever is inside, the tile wants the same size.
+    @Test func aTilesSizeDoesNotDependOnThePhotoInIt() {
+        let empty = naturalSize(tile(nil))
+        let wide = naturalSize(tile(wideImage()))
+        let tall = naturalSize(tile(tallImage()))
+
+        #expect(wide == empty)
+        #expect(tall == empty)
+    }
+
+    /// And it is square, so an adaptive column cannot be widened by one photo.
+    @Test func aTileIsSquareWhateverShapeThePhotoIs() {
+        for image in [nil, wideImage(), tallImage()] {
+            let size = naturalSize(tile(image).frame(width: 140))
+            #expect(size.width == size.height,
+                    "\(size) is not square")
+        }
+    }
+}

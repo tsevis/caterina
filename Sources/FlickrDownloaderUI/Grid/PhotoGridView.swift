@@ -49,6 +49,12 @@ public struct PhotoGridView: View {
         }
         .onPreferenceChange(TileFramePreference.self) { frames = $0 }
         .focusable()
+        // The ring the system draws for this goes around the *scroll content*,
+        // which is one row tall when there are two photos — a blue rectangle
+        // across the window with the tiles sitting inside it. What is focused
+        // in a grid is a photo, and the accent border on the selected tile is
+        // already saying so.
+        .focusEffectDisabled()
         .onKeyPress(.space) {
             guard let photo = focused else { return .ignored }
             onPreview(photo)
