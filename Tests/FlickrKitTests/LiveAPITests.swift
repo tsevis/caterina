@@ -79,8 +79,27 @@ struct LiveAPITests {
         #expect(page.photos.allSatisfy { $0.license == .publicDomainMark })
     }
 
-    @Test func aGroupResolvesByItsExactName() async throws {
+    /// The path most people take: paste the group's URL.
+    @Test func aGroupResolvesFromItsURL() async throws {
+        let group = try await client()
+            .resolveGroup(from: "https://www.flickr.com/groups/blackandwhite/")
+        #expect(group.nsid == "16978849@N00")
+        #expect(group.name == "Black and White")
+    }
+
+    /// The same group, typed as a name. `flickr.groups.search` does not return
+    /// it — its first answer is "Black and White Unlimited" — so this only
+    /// works because a spaced name is also tried as a slug.
+    @Test func aGroupNameWithSpacesResolvesThroughItsSlug() async throws {
         let group = try await client().resolveGroup(from: "Black and White")
-        #expect(!group.nsid.isEmpty)
+        #expect(group.nsid == "16978849@N00")
+    }
+
+    /// And a name that belongs to no group is refused rather than answered
+    /// with whichever group the fuzzy search liked best.
+    @Test func aNameThatMatchesNoGroupExactlyIsRefused() async throws {
+        await #expect(throws: FlickrError.self) {
+            _ = try await client().resolveGroup(from: "Black and White Photographs Of Things")
+        }
     }
 }

@@ -243,6 +243,9 @@ import Testing
     /// loaded as though it were the group asked for.
     @Test func aFuzzySearchResultIsOnlyAcceptedOnAnExactNameMatch() async throws {
         let transport = ScriptedTransport([
+            // "Night Photography" as a slug, then "NightPhotography" — neither
+            // is a group URL — before the name search is consulted.
+            .body(Fixtures.failure(code: 1, message: "Group not found")),
             .body(Fixtures.failure(code: 1, message: "Group not found")),
             .body("""
             {"groups":{"group":[{"nsid":"1@N1","name":"Night Photography Addicts"},
@@ -257,10 +260,68 @@ import Testing
     @Test func noExactGroupMatchIsReportedRatherThanGuessed() async throws {
         let transport = ScriptedTransport([
             .body(Fixtures.failure(code: 1, message: "Group not found")),
+            .body(Fixtures.failure(code: 1, message: "Group not found")),
             .body(#"{"groups":{"group":[{"nsid":"1@N1","name":"Something Else"}]},"stat":"ok"}"#),
         ])
         await #expect(throws: FlickrError.self) {
             _ = try await client(transport).resolveGroup(from: "Night Photography")
         }
+    }
+}
+
+/// Resolving a group by a name that is really a slug.
+///
+/// Measured against the live API: `flickr.groups.search` for "black and white"
+/// returns eight groups, the first of which is "Black and White Unlimited" —
+/// while `flickr.urls.lookupGroup` on `/groups/blackandwhite/` finds the group
+/// actually named "Black and White". The name search never surfaces it, so
+/// refusing at that point told the user a group does not exist when it does.
+@Suite struct GroupSlugResolutionTests {
+
+    private func client(_ transport: ScriptedTransport) -> FlickrClient {
+        FlickrClient(credentials: Fixtures.credentials, transport: transport,
+                     sleep: { _ in })
+    }
+
+    @Test func aNameWithSpacesIsAlsoTriedWithoutThem() async throws {
+        let transport = ScriptedTransport([
+            // "Black and White" as a slug: Flickr has no such URL.
+            .body(Fixtures.failure(code: 1, message: "Group not found")),
+            // "blackandwhite" as a slug: it does.
+            .body(#"{"group":{"id":"16978849@N00"},"stat":"ok"}"#),
+            .body(#"{"group":{"id":"16978849@N00","name":{"_content":"Black and White"}},"stat":"ok"}"#),
+        ])
+        let group = try await client(transport).resolveGroup(from: "Black and White")
+        #expect(group.nsid == "16978849@N00")
+        #expect(group.name == "Black and White")
+    }
+
+    /// The despaced slug is still an *exact* route — but the group living at
+    /// that URL has to be the one that was asked for, or this would be guessing
+    /// by another name.
+    @Test func aDespacedSlugNamingSomethingElseIsNotAccepted() async throws {
+        let transport = ScriptedTransport([
+            .body(Fixtures.failure(code: 1, message: "Group not found")),
+            .body(#"{"group":{"id":"99@N99"},"stat":"ok"}"#),
+            // The slug resolves, but to a group of another name entirely.
+            .body(#"{"group":{"id":"99@N99","name":{"_content":"Something Else"}},"stat":"ok"}"#),
+            // …so the fuzzy search is still consulted, and still finds nothing.
+            .body(#"{"groups":{"group":[]},"stat":"ok"}"#),
+        ])
+        await #expect(throws: FlickrError.self) {
+            _ = try await client(transport).resolveGroup(from: "Black and White")
+        }
+    }
+
+    @Test func aNameWithoutSpacesIsNotLookedUpTwice() async throws {
+        let transport = ScriptedTransport([
+            .body(Fixtures.failure(code: 1, message: "Group not found")),
+            .body(#"{"groups":{"group":[{"nsid":"1@N1","name":"Nightshots"}]},"stat":"ok"}"#),
+            .body(#"{"group":{"id":"1@N1","name":{"_content":"Nightshots"}},"stat":"ok"}"#),
+        ])
+        let group = try await client(transport).resolveGroup(from: "Nightshots")
+        #expect(group.nsid == "1@N1")
+        // lookupGroup, groups.search, getInfo — no second slug attempt.
+        #expect(await transport.callCount == 3)
     }
 }

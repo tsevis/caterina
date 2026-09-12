@@ -109,6 +109,20 @@ public actor FlickrClient {
             return try await groupInfo(nsid: nsid)
         }
 
+        // A name with spaces is usually a slug with the spaces taken out.
+        // Measured against the live API: `groups.search` for "black and white"
+        // answers with "Black and White Unlimited" first and never returns the
+        // group actually called "Black and White" — but `/groups/blackandwhite/`
+        // resolves straight to it. This is still an exact route: a slug names
+        // one URL. The name it resolves to is checked all the same, so it
+        // cannot become fuzzy matching under another name.
+        let despaced = identifier.components(separatedBy: .whitespaces).joined()
+        if despaced != identifier, !despaced.isEmpty,
+           let nsid = try await lookUpGroupSlug(despaced) {
+            let group = try await groupInfo(nsid: nsid)
+            if GroupResolver.namesMatch(group.name, identifier) { return group }
+        }
+
         let candidates = try await searchGroups(named: identifier)
         guard let nsid = GroupResolver.exactMatch(in: candidates, identifier: identifier) else {
             throw FlickrError.notFound(

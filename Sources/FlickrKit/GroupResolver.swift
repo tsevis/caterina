@@ -68,6 +68,16 @@ public enum GroupResolver {
             : .groupSearch(groupID: groupID, text: trimmed)
     }
 
+    /// Whether two group names are the same name.
+    ///
+    /// Flickr sends names HTML-escaped — `Black &amp; White Done Right !.` is a
+    /// real one — so comparing the raw strings compares the escaping as much as
+    /// the name.
+    public static func namesMatch(_ one: String, _ other: String) -> Bool {
+        let left = comparable(one)
+        return !left.isEmpty && left == comparable(other)
+    }
+
     /// Normalise a group name for comparison: unescaped, spaceless, casefolded.
     private static func comparable(_ name: String) -> String {
         unescapingHTML(name)

@@ -8,8 +8,9 @@ SCHEME    := FlickrDownloader
 DERIVED   := .build/xcode
 APP       := $(DERIVED)/Build/Products/Release/FlickrDownloader.app
 SIGN      := ../sign-and-notarize.sh
+ENTS      := App/FlickrDownloader/FlickrDownloader.entitlements
 
-.PHONY: all build test coverage lint project app run sign clean
+.PHONY: all build test coverage lint project app run sign sign-only clean
 
 all: lint test app
 
@@ -47,8 +48,16 @@ run: app
 	open $(APP)
 
 ## Developer ID signature, notarisation, stapled DMG. Not --python.
+##
+## `--entitlements` is not optional here: `codesign --force` without it
+## re-signs with none at all, and this app is sandboxed. The script verifies
+## they survived.
 sign: app
-	$(SIGN) $(APP)
+	$(SIGN) --entitlements $(ENTS) $(APP)
+
+## Everything `sign` does except talking to Apple.
+sign-only: app
+	$(SIGN) --entitlements $(ENTS) --sign-only $(APP)
 
 clean:
 	rm -rf .build $(PROJECT)
