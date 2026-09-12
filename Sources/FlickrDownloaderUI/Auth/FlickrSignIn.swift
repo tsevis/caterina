@@ -71,41 +71,57 @@ public enum FlickrSignIn {
                                   anchor: ASPresentationAnchor) async throws -> URL {
         let url = try OAuthFlow.authorizationURL(token: token)
         let presenter = Presenter(anchor: anchor)
+        let holder = SessionHolder()
 
         return try await withCheckedThrowingContinuation { continuation in
-            // **Held for the length of the flow.** Nothing else refers to the
-            // session once `authorize` returns: the box is captured by the
-            // completion handler, so the session stays alive until it fires and
-            // is released with the closure afterwards.
-            let box = SessionBox()
-            let session = ASWebAuthenticationSession(
-                url: url, callbackURLScheme: OAuthFlow.callbackScheme
-            ) { callback, error in
-                if let callback {
-                    continuation.resume(returning: callback)
-                } else if let error = error as? ASWebAuthenticationSessionError,
-                          error.code == .canceledLogin {
-                    continuation.resume(throwing: FlickrError.invalidInput("Sign-in was cancelled."))
-                } else {
-                    continuation.resume(throwing: FlickrError.transport(
-                        error?.localizedDescription ?? "The sign-in window closed unexpectedly."))
-                }
-                // Held until the callback fires; released after it.
-                box.session = nil
-                _ = presenter
+            // **This closure must not be main-actor isolated.**
+            // `ASWebAuthenticationSession` calls it on a background queue, and
+            // Swift 6 checks: a handler that touches main-actor state from
+            // there traps in `dispatch_assert_queue` and takes the process with
+            // it. That is not theoretical — it crashed twice, on the callback
+            // coming back from Flickr, at the moment sign-in would have
+            // succeeded.
+            //
+            // Marking it `@Sendable` is what keeps it that way: the compiler
+            // now refuses any capture that would re-introduce the isolation,
+            // so this cannot regress quietly. It resumes the continuation and
+            // nothing else; everything main-actor happens on the far side of
+            // the `await`.
+            let handler: @Sendable (URL?, (any Error)?) -> Void = { callback, error in
+                // Captured so the session and its presenter outlive this call;
+                // never read, so no isolation is inherited.
+                _ = holder
+
+                continuation.resume(with: outcome(callback: callback, error: error))
             }
-            box.session = session
+
+            let session = ASWebAuthenticationSession(
+                url: url, callbackURLScheme: OAuthFlow.callbackScheme,
+                completionHandler: handler)
             session.presentationContextProvider = presenter
             // A fresh session every time: reusing the browser's Flickr cookie
             // would sign in whoever last used this Mac's browser, silently.
             session.prefersEphemeralWebBrowserSession = true
+            holder.keep(session: session, presenter: presenter)
             session.start()
         }
     }
 
-    /// Keeps the session alive for exactly as long as the flow runs.
-    private final class SessionBox {
-        var session: ASWebAuthenticationSession?
+    /// What the browser's answer means.
+    ///
+    /// `nonisolated` and separate from the handler so it can be called — and
+    /// tested — from whatever queue `AuthenticationServices` happens to use.
+    nonisolated static func outcome(callback: URL?,
+                                    error: (any Error)?) -> Result<URL, any Error> {
+        if let callback { return .success(callback) }
+
+        if let error = error as? ASWebAuthenticationSessionError,
+           error.code == .canceledLogin {
+            // Closing the window is a decision, not a failure.
+            return .failure(FlickrError.invalidInput("Sign-in was cancelled."))
+        }
+        return .failure(FlickrError.transport(
+            error?.localizedDescription ?? "The sign-in window closed unexpectedly."))
     }
 
     /// Tells the system which window the sheet belongs to.
@@ -116,5 +132,21 @@ public enum FlickrSignIn {
         func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
             anchor
         }
+    }
+}
+
+/// Keeps the session and its presenter alive for the length of the flow.
+///
+/// **Declared outside `FlickrSignIn`, deliberately.** Nested inside a
+/// `@MainActor` type it would be main-actor isolated, and the completion
+/// handler that captures it would inherit that isolation — which is the crash
+/// this file's comment describes. At file scope it is isolated to nothing.
+private final class SessionHolder: @unchecked Sendable {
+    private var session: ASWebAuthenticationSession?
+    private var presenter: AnyObject?
+
+    func keep(session: ASWebAuthenticationSession, presenter: AnyObject) {
+        self.session = session
+        self.presenter = presenter
     }
 }
