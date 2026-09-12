@@ -41,35 +41,52 @@ public struct PhotoGridView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            // One coordinate space for the whole content, declared *above* both
-            // the tiles that report their frames and the surface that reads the
-            // drag. They were in different spaces before, so a sweep two rows
-            // down the scroll selected tiles two rows up.
-            ZStack(alignment: .topLeading) {
-                sweepSurface
-                grid
-                marqueeRectangle
+        GeometryReader { proxy in
+            ScrollView {
+                content(viewport: proxy.size.height)
             }
-            .coordinateSpace(name: Self.space)
+            .onPreferenceChange(TileFramePreference.self) { frames = $0 }
+            .focusable()
+            // The ring the system draws for this goes around the *scroll
+            // content*, which is one row tall when there are two photos — a
+            // blue rectangle across the window with the tiles sitting inside
+            // it. What is focused in a grid is a photo, and the accent border
+            // on the selected tile is already saying so.
+            .focusEffectDisabled()
+            .onKeyPress(.space) {
+                guard let photo = focused else { return .ignored }
+                onPreview(photo)
+                return .handled
+            }
+            .onKeyPress(.leftArrow) { move(by: -1) }
+            .onKeyPress(.rightArrow) { move(by: 1) }
+            .onKeyPress(.upArrow) { move(by: -columnCount) }
+            .onKeyPress(.downArrow) { move(by: columnCount) }
         }
-        .onPreferenceChange(TileFramePreference.self) { frames = $0 }
-        .focusable()
-        // The ring the system draws for this goes around the *scroll content*,
-        // which is one row tall when there are two photos — a blue rectangle
-        // across the window with the tiles sitting inside it. What is focused
-        // in a grid is a photo, and the accent border on the selected tile is
-        // already saying so.
-        .focusEffectDisabled()
-        .onKeyPress(.space) {
-            guard let photo = focused else { return .ignored }
-            onPreview(photo)
-            return .handled
+    }
+
+    /// The scroll content.
+    ///
+    /// One coordinate space for the whole of it, declared *above* both the tiles
+    /// that report their frames and the surface that reads the drag. They were
+    /// in different spaces before, so a sweep two rows down the scroll selected
+    /// tiles two rows up.
+    ///
+    /// The viewport's height is a *floor*, not a height. The sweep surface is a
+    /// `Color.clear` behind the tiles and a stack is only as tall as its tallest
+    /// child, so three photos in a tall window left everything below the first
+    /// row belonging to the `ScrollView` — and a marquee begun there, which is
+    /// the obvious place to begin one, reached nothing. A fixed height would
+    /// have fixed that and truncated every page taller than the window instead.
+    @ViewBuilder
+    func content(viewport: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            sweepSurface
+            grid
+            marqueeRectangle
         }
-        .onKeyPress(.leftArrow) { move(by: -1) }
-        .onKeyPress(.rightArrow) { move(by: 1) }
-        .onKeyPress(.upArrow) { move(by: -columnCount) }
-        .onKeyPress(.downArrow) { move(by: columnCount) }
+        .frame(maxWidth: .infinity, minHeight: viewport, alignment: .topLeading)
+        .coordinateSpace(name: Self.space)
     }
 
     private var grid: some View {
