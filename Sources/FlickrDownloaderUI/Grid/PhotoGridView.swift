@@ -14,18 +14,23 @@ public struct PhotoGridView: View {
     public let onSelect: (Set<String>) -> Void
     public let onPreview: (Photo) -> Void
 
-    /// Where ⇧-click measures from.
+    /// Where ⇧-click measures from, and where the arrow keys are.
     @State private var anchor: String?
+    /// What the download sheet's size picker is set to, so a dragged photo is
+    /// the same file a downloaded one would be.
+    let dragVariant: PhotoVariant
     @State private var marquee: MarqueeState?
     @State private var frames: [String: CGRect] = [:]
 
     public init(photos: [Photo], selection: Set<String>,
                 onSelect: @escaping (Set<String>) -> Void,
-                onPreview: @escaping (Photo) -> Void) {
+                onPreview: @escaping (Photo) -> Void,
+                dragVariant: PhotoVariant = .defaultDownload) {
         self.photos = photos
         self.selection = selection
         self.onSelect = onSelect
         self.onPreview = onPreview
+        self.dragVariant = dragVariant
     }
 
     public var body: some View {
@@ -38,6 +43,13 @@ public struct PhotoGridView: View {
                         PhotoTile(photo: photo, isSelected: selection.contains(photo.id))
                             .background(frameReader(for: photo.id))
                             .onTapGesture { click(photo) }
+                            .onDrag {
+                                // Dragging an unselected photo drags that one;
+                                // dragging a selected one drags the selection,
+                                // which is what every Mac list does.
+                                if !selection.contains(photo.id) { click(photo) }
+                                return PhotoDrag.provider(for: photo, variant: dragVariant)
+                            }
                             .simultaneousGesture(TapGesture().modifiers(.command)
                                 .onEnded { commandClick(photo) })
                             .simultaneousGesture(TapGesture().modifiers(.shift)
@@ -54,12 +66,14 @@ public struct PhotoGridView: View {
         .onPreferenceChange(TileFramePreference.self) { frames = $0 }
         .focusable()
         .onKeyPress(.space) {
-            if let photo = photos.first(where: { selection.contains($0.id) }) {
-                onPreview(photo)
-                return .handled
-            }
-            return .ignored
+            guard let photo = focused else { return .ignored }
+            onPreview(photo)
+            return .handled
         }
+        .onKeyPress(.leftArrow) { move(by: -1) }
+        .onKeyPress(.rightArrow) { move(by: 1) }
+        .onKeyPress(.upArrow) { move(by: -columnCount) }
+        .onKeyPress(.downArrow) { move(by: columnCount) }
     }
 
     private static let space = "photo-grid"
@@ -97,6 +111,32 @@ public struct PhotoGridView: View {
            let url = URL(string: address) {
             Link("Open in Browser", destination: url)
         }
+    }
+
+    // MARK: - Keyboard
+
+    private var focused: Photo? {
+        if let anchor, let photo = photos.first(where: { $0.id == anchor }) { return photo }
+        return photos.first { selection.contains($0.id) }
+    }
+
+    /// How many tiles are on a row, measured from where they actually are.
+    ///
+    /// The grid's columns are adaptive, so the number depends on the window's
+    /// width — computing it from the tile frames means the arrow keys follow
+    /// the rows the user can see rather than a number fixed in code.
+    private var columnCount: Int {
+        guard let top = frames.values.map(\.minY).min() else { return 1 }
+        return max(1, frames.values.filter { abs($0.minY - top) < 1 }.count)
+    }
+
+    private func move(by offset: Int) -> KeyPress.Result {
+        guard !photos.isEmpty else { return .ignored }
+        let current = focused.flatMap { photo in photos.firstIndex { $0.id == photo.id } } ?? 0
+        let next = min(max(0, current + offset), photos.count - 1)
+        guard next != current || focused == nil else { return .handled }
+        click(photos[next])
+        return .handled
     }
 
     // MARK: - Marquee

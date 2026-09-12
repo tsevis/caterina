@@ -19,7 +19,8 @@ public struct SourceDetailView: View {
                     PhotoGridView(photos: state.photos,
                                   selection: state.selection,
                                   onSelect: { model.select($0, in: source) },
-                                  onPreview: { model.preview($0) })
+                                  onPreview: { model.preview($0) },
+                                  dragVariant: model.downloadVariant)
                 } else {
                     SourceStateView(source: source, status: state.status) {
                         model.submit(source)
