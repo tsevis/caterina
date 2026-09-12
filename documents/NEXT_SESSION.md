@@ -21,7 +21,7 @@ Reference implementation (PyQt6, read-only): `/Users/tsevis/AI/ClaudeCode/FDownl
 
 ## Where it stands
 
-18 commits, ~5,700 lines of source and ~4,600 of tests. **339 offline tests**
+21 commits, ~5,700 lines of source and ~4,600 of tests. **342 offline tests**
 (`swift test`: offline, headless, opens no window) and **14 live tests** against
 the real Flickr API, opt-in:
 
@@ -52,25 +52,54 @@ Scripts/                      make-icon.py, make-keyart.py — both regenerate t
 * Palette contrast, resolved under both real appearances against WCAG.
 * The window, sidebar, inspector and splash, by launching the app and
   screenshotting it.
+* **By driving the running window with synthetic events** (see the note on
+  Accessibility below): typing a query and searching, the splash's Continue
+  button, click-to-select, the marquee sweep, arrow-key navigation, and space
+  for Quick Look.
 
 ## What is NOT verified — this is the work
 
-Nobody has performed these. They need a running window and a hand:
+Items 1–3 below were open in the previous session and are now closed. What is
+left is 4–7, and each needs a running window and a hand on the machine.
 
-1. **Sign-in.** It crashed twice, was fixed, and has not been retried. The
-   whole **You** source depends on it. The callback `flickrdownloader://auth`
-   is registered with Flickr and demonstrably redirects back to the app.
-2. **Marquee drag** in the grid. Rewritten twice; never dragged.
-3. **Arrow-key navigation** and **space for Quick Look**.
+**Closed, for the record:**
+
+1. **Sign-in.** ~~Crashed twice, never retried.~~ Resolved by evidence rather
+   than by repeating the flow. Both crash reports
+   (`~/Library/Logs/DiagnosticReports/FlickrDownloader-2026-09-12-0723*.ips`
+   and `-0733*.ips`) are `dispatch_assert_queue` failures inside the
+   `ASWebAuthenticationSession` handler, and both **predate** the fix in
+   `f330552` (07:37); the installed bundle was built at 08:36. The app runs
+   signed in as `tsevis`. No post-fix crash exists. A fresh sign-in round-trip
+   still has not been performed — it needs the user's Flickr credentials, so
+   do not attempt it yourself.
+2. **Marquee drag.** Verified, and it was broken. A sweep begun *between* the
+   tiles always worked; a sweep begun in the empty band *below* the last row
+   did nothing, because the sweep surface is a `Color.clear` in a `ZStack` that
+   sized itself to the tiles. Fixed in `6723c00`, with a test that measures the
+   scroll content's height against the viewport.
+3. **Arrow-key navigation and space for Quick Look.** Both verified by driving
+   the window. Right-arrow twice moved the selection from tile 1 to tile 3 and
+   the badge stayed at 1; space opened the Quick Look panel on the right photo.
+
+**Still open:**
+
 4. **Dragging a photo to the Finder** — it should land as a JPEG, not a
-   `.webloc`.
+   `.webloc`. The provider is safe *by construction*: `PhotoDrag.provider`
+   registers a file representation and no URL representation, so the Finder has
+   nothing to make a shortcut from, and `PhotoDragRepresentationTests` now fails
+   if a URL is ever registered beside it (`2373581`). But no file has actually
+   been dropped. That is the only part left.
 5. **The download sheet** — folder picker, progress bar, Cancel. The engine and
    the model are proven live; the sheet itself has never opened.
 6. **A remembered download folder surviving a relaunch** (security-scoped
    bookmark).
 7. **Ticking a filter checkbox** — the search should re-run once, not per tick.
+   The model-level behaviour is already covered by
+   `AppModelTests.changingAFilterRerunsTheQueryFromPageOne`; what is unproven is
+   only the checkbox-to-model plumbing.
 
-The *logic* behind 2–7 is extracted and tested (`GridSelection`, `Marquee`,
+The *logic* behind 4–7 is extracted and tested (`GridSelection`, `Marquee`,
 `PhotoDrag.promisedName`, `DownloadFolder`). What is untested is the gesture
 plumbing.
 
@@ -79,13 +108,32 @@ plumbing.
 * **Never run XCUITest.** A UI-test target was tried; its runner needs its own
   authentication and running it destabilised the host application. The target
   was removed. Do not add one back.
-* **Claude Code has no Accessibility permission on this Mac.** AppleScript UI
-  scripting returns `-25211`, and synthetic `CGEvent`s are posted but not
-  delivered (verified by moving the cursor and reading the position back). You
-  can launch the app and screenshot its windows; you cannot click or type in it.
-  To capture a window without grabbing the user's other work, get its id from
-  `CGWindowListCopyWindowInfo` (pyobjc `Quartz` is available) and use
-  `screencapture -l<id>`.
+* **Claude Code *can* drive the interface, as of 2026-09-12.** The user granted
+  Accessibility to **Terminal.app** — the responsible process, not the `claude`
+  binary — and synthetic `CGEvent`s and AppleScript UI scripting both work.
+  Confirm it still holds before relying on it, and be careful how you test:
+  * Post a move and read the cursor back *within ~30ms*. Sampling after a long
+    sleep reads whatever the user's own hand did in the meantime, which looks
+    exactly like a dropped event and is how a previous session wrongly
+    concluded the permission was missing.
+  * `osascript -e 'tell application "System Events" to return name of first
+    process whose frontmost is true'` succeeds **without** Accessibility —
+    process listing is ungated, so it proves nothing. Ask for a real UI query
+    and look for `-25211`.
+  * `CGWarpMouseCursorPosition` is also ungated. It moving the cursor proves
+    nothing either.
+  * TCC is read at process launch, so a grant made while Terminal is running
+    may need Terminal restarted — which ends the session.
+* **`screencapture` will not run while a mouse button is held.** To see a drag
+  in flight, capture in-process with `Quartz.CGWindowListCreateImage`.
+* **Re-check what is frontmost before every click.** Opening a Finder window
+  buried the app mid-task, and the drags that followed went into an unrelated
+  window. `screencapture -l<id>` captures an occluded window fine and will not
+  warn you; `CGWindowListCreateImage` captures whatever is actually on top, so
+  use it to confirm the app is really there.
+* **Do not drive the interface while the user is using the machine.** Synthetic
+  events go wherever focus is at that instant. Ask for a hands-off window first,
+  and stop if the app's state changes in a way you did not cause.
 * **Do not type an API key into any field, or write one to the Keychain.** Ask
   the user to do it. The key lives only in the Keychain and in the environment
   variables used by the live tests.
@@ -105,6 +153,12 @@ Each of these has a test that fails if it comes back.
 * **A photo must not decide how big its tile is.** As a `ZStack` child a
   `.scaledToFill()` image reports the size it wants to fill at and the stack
   grows to match. `PhotoTileLayout` exists for this.
+* **A `ZStack` is only as tall as its tallest child — so an invisible surface
+  in one covers only what its siblings cover.** The marquee's `Color.clear` sat
+  behind the tiles and stopped where they stopped, leaving the empty band below
+  the last row belonging to the `ScrollView`. The scroll content takes the
+  viewport height as a *floor*; a fixed height would truncate any page taller
+  than the window instead, and that case is pinned too.
 * **`.fullSizeContentView` does not mean SwiftUI ignores the title bar.** The
   content view spans the frame but `contentLayoutRect` does not;
   `hosting.safeAreaRegions = []` is what makes the splash full-bleed.
@@ -121,10 +175,16 @@ Each of these has a test that fails if it comes back.
   page size preserves the *position*, not the page number.
 * **Licence 0 is a selection, not "unset"**, and `noKnownRestrictions` is not
   permission — it is an institution saying it has not found a rights holder.
+* **The drag provider promises a file and never a URL.** Registering a URL
+  beside it is a one-line convenience, and the Finder then prefers it and writes
+  a `.webloc` instead of a photograph.
 * **Every write of untrusted bytes goes through `SafeFile`** (`O_NOFOLLOW`, and
   `O_EXCL` for names that should be new).
 * **Fixed sleeps in tests are forbidden.** Poll a condition; eight tests once
   failed together purely because the machine was busy.
+* **`Quick Look_<id>.jpg` is the intended name, not a bug.** `AppModel` passes
+  `title: "Quick Look"` deliberately, and `TemporaryFiles.prefixes` depends on
+  that exact prefix to sweep the file afterwards.
 
 ## Deliberately not done — pick up only if asked
 
@@ -137,23 +197,9 @@ Each of these has a test that fails if it comes back.
 * **Dock progress is a badge** ("12/40"), not a drawn bar — at 128 points a bar
   is illegible.
 
-## House conventions
-
-* Conventional commits; **no attribution lines**.
-* The splash follows `HipparchusMac/App/HipparchusApp/AboutView.swift` exactly —
-  plain `NSWindow`, 640×580, dismissal through `windowWillClose`. The Tsevis
-  mark sits in the lockup, lower-left of the key art, sized from font metrics
-  and corrected for the PDF's own margin.
-* Signing uses `../sign-and-notarize.sh`, which this project extended with
-  `--entitlements FILE`. **That flag is not optional here** — `codesign --force`
-  without it re-signs with no entitlements, and this app is sandboxed. The
-  script verifies they survived.
-* `swift build`/`swift test` work without Xcode; `make app` needs XcodeGen.
-
 ## Start by
 
-Asking the user to exercise items 1–7 above, or — if they have granted
-Accessibility to Claude Code since — verifying whether synthetic events are
-actually delivered before assuming you can drive the interface. Report what
-breaks, then fix it the way the rest of this codebase was fixed: a test that
-fails against the old behaviour first.
+Asking the user to exercise items 4–7 above, or — with their agreement and a
+hands-off machine — driving the window yourself under the rules in **Hard
+constraints**. Report what breaks, then fix it the way the rest of this codebase
+was fixed: a test that fails against the old behaviour first.
