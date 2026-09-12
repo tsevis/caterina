@@ -270,7 +270,7 @@ final class MemoryStore: SecretStore, @unchecked Sendable {
 enum Fixtures {
     static func page(ids: [String], page: Int = 1, pages: Int = 1) -> String {
         let photos = ids.map {
-            #"{"id":"\#($0)","title":"Photo \#($0)","url_m":"https://example.com/\#($0).jpg"}"#
+            #"{"id":"\#($0)","title":"Photo \#($0)","url_m":"https://live.staticflickr.com/\#($0).jpg"}"#
         }.joined(separator: ",")
         return """
         {"photos":{"page":\(page),"pages":\(pages),"perpage":25,"total":\(ids.count),\

@@ -134,3 +134,35 @@ struct LiveSignInTests {
         #expect(authorize.absoluteString.contains("perms=read"))
     }
 }
+
+/// The licence table, against Flickr's own.
+///
+/// **This is the check the comment in `Licenses.swift` used to claim and did
+/// not have.** The ids were carried over from the reference application and the
+/// 4.0 set was never verified against anything; a mismatch would have this app
+/// sending `license=11`, labelling the results, badging them as reusable, and
+/// nothing anywhere able to notice.
+@Suite(.enabled(if: LiveCredentials.value != nil))
+struct LiveLicenceTests {
+
+    @Test func everyLicenceMatchesFlickrsOwnTableExactly() async throws {
+        let credentials = try #require(LiveCredentials.value)
+        let published = try await FlickrClient(credentials: credentials).licenses()
+
+        #expect(published.count == License.allCases.count,
+                "Flickr publishes \(published.count) licences, this build knows \(License.allCases.count)")
+
+        for licence in License.allCases {
+            let name = try #require(published[licence.rawValue],
+                                    "Flickr no longer publishes licence \(licence.rawValue)")
+            #expect(name == licence.label,
+                    "licence \(licence.rawValue): Flickr says “\(name)”, this build says “\(licence.label)”")
+        }
+
+        // And nothing Flickr publishes is missing from the enum — a new licence
+        // would otherwise decode as nil and show as "?" on every tile.
+        for id in published.keys {
+            #expect(License(rawValue: id) != nil, "Flickr has added licence \(id)")
+        }
+    }
+}

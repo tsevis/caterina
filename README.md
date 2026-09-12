@@ -98,6 +98,30 @@ Each of these was a defect in the reference application, and each has a test.
 * **Flickr serves about 4000 results.** The reachable page count is clamped to
   that, with the reason shown, rather than letting you page into duplicates.
 
+## What it writes, and what it keeps
+
+* **A `Credits.csv` beside every download**, naming the photographer, the
+  licence, a link to the terms, and the photo's page on Flickr. Creative Commons
+  licences ask for attribution; a folder of JPEGs cannot give it.
+* **Credentials in the Keychain**, as one item, marked *this device only* so
+  they never ride an iCloud sync onto another Mac. Sign Out removes the token
+  and keeps the API key.
+* **A bounded thumbnail cache** in the app's container, and the folder you last
+  downloaded into, as a security-scoped bookmark. Nothing else is stored, and
+  nothing is sent anywhere but Flickr — there is no analytics, no telemetry and
+  no crash reporting in this app.
+
+## Known limitation: the sign-in callback
+
+Sign-in returns through the custom URL scheme `flickrdownloader://auth`. macOS
+has no ownership model for custom schemes — any app can register the same one,
+and which app receives the redirect is not guaranteed. Two things limit what
+that is worth to an attacker: the callback's request token is checked against
+the one this window asked for, and the API key is yours rather than embedded in
+the app, so an intercepted verifier cannot be exchanged without your secret. The
+real fix is a Universal Link on a domain with an `apple-app-site-association`
+file, which needs a domain; until then, this is the trade-off.
+
 ## Licence and credit
 
 Photographs, titles and licence information come from the Flickr API and belong

@@ -35,8 +35,11 @@ import FlickrKit
         try await waitUntil("the download to finish") { model.download.report != nil }
     }
 
+    /// The photographs, without the credits file written beside them.
     private func files(in directory: URL) throws -> [String] {
-        try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
+        try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0 != Credits.filename }
+            .sorted()
     }
 
     /// The button downloads what *this* source has selected, whatever else has
@@ -53,6 +56,8 @@ import FlickrKit
         #expect(model.download.report?.saved == 2)
         #expect(try files(in: folder).count == 2)
         #expect(try files(in: folder).allSatisfy { !$0.hasSuffix(".part") })
+        #expect(FileManager.default.fileExists(
+            atPath: folder.appendingPathComponent(Credits.filename).path))
     }
 
     @Test func nothingSelectedIsNotADownload() async throws {
@@ -69,7 +74,7 @@ import FlickrKit
     /// its report, and the bar would read a count from the wrong download.
     @Test func aSecondDownloadCannotStartOverARunningOne() async throws {
         let folder = try directory()
-        let model = model(stalling: ["https://example.com/1.jpg"])
+        let model = model(stalling: ["https://live.staticflickr.com/1.jpg"])
         try await loadSearch(model)
         model.select(["1", "2"], in: .search)
 
@@ -89,7 +94,7 @@ import FlickrKit
     /// Closing mid-download cancels, waits, and keeps the count.
     @Test func quittingMidDownloadKeepsTheReportAndLeavesNoPartialFile() async throws {
         let folder = try directory()
-        let model = model(stalling: ["https://example.com/2.jpg"])
+        let model = model(stalling: ["https://live.staticflickr.com/2.jpg"])
         try await loadSearch(model)
         model.select(["1", "2", "3"], in: .search)
 

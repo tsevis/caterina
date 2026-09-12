@@ -73,7 +73,7 @@ enum Fixtures {
     static func page(ids: [String], page: Int = 1, pages: Int = 1,
                      perPage: Int = 25, total: Int? = nil) -> String {
         let photos = ids.map {
-            #"{"id":"\#($0)","title":"Photo \#($0)","url_o":"https://example.com/\#($0)_o.jpg","url_m":"https://example.com/\#($0)_m.jpg"}"#
+            #"{"id":"\#($0)","title":"Photo \#($0)","url_o":"https://live.staticflickr.com/\#($0)_o.jpg","url_m":"https://live.staticflickr.com/\#($0)_m.jpg"}"#
         }.joined(separator: ",")
         return """
         {"photos":{"page":\(page),"pages":\(pages),"perpage":\(perPage),\

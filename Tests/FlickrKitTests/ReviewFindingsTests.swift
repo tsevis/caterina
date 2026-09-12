@@ -8,7 +8,7 @@ import Testing
 
     private func photo(_ variants: PhotoVariant...) -> Photo {
         Photo(id: "1", variants: Dictionary(uniqueKeysWithValues:
-            variants.map { ($0, "https://example.com/\($0.rawValue).jpg") }))
+            variants.map { ($0, "https://live.staticflickr.com/\($0.rawValue).jpg") }))
     }
 
     // MARK: - A fallback downgrades; it does not upgrade
@@ -57,14 +57,14 @@ import Testing
         let page = try FlickrResponse.photoPage(from: Data("""
         {"photos":{"page":1,"pages":1,"perpage":25,"total":1,"photo":[
           {"id":"1","url_o":"file:///etc/passwd","url_l":"http://example.com/l.jpg",
-           "url_m":"https://example.com/m.jpg","url_s":"javascript:alert(1)"}
+           "url_m":"https://live.staticflickr.com/m.jpg","url_s":"javascript:alert(1)"}
         ]},"stat":"ok"}
         """.utf8))
         let photo = try #require(page.photos.first)
         #expect(photo.url(for: .original) == nil)
         #expect(photo.url(for: .large) == nil)
         #expect(photo.url(for: .small) == nil)
-        #expect(photo.url(for: .medium) == "https://example.com/m.jpg")
+        #expect(photo.url(for: .medium) == "https://live.staticflickr.com/m.jpg")
     }
 
     // MARK: - Page size keeps the position without inventing a page
@@ -138,5 +138,89 @@ import Testing
         #expect(SizeBucket.large.label.contains("1024"))
         #expect(SizeBucket.medium.label.contains("1023"))
         #expect(SizeBucket.large.variants.contains(.large))
+    }
+}
+
+/// Findings from the adversarial security audit, each pinned before it was
+/// fixed.
+@Suite struct SecurityFindingsTests {
+
+    // MARK: - A reply does not get to name its own host
+
+    @Test func onlyFlickrsOwnHostsAreFetchedFrom() throws {
+        let page = try FlickrResponse.photoPage(from: Data("""
+        {"photos":{"page":1,"pages":1,"perpage":25,"total":1,"photo":[
+          {"id":"1",
+           "url_o":"https://evil.example.com/o.jpg",
+           "url_l":"https://staticflickr.com.evil.test/l.jpg",
+           "url_m":"https://live.staticflickr.com/1/m.jpg",
+           "url_s":"https://www.flickr.com/s.jpg"}
+        ]},"stat":"ok"}
+        """.utf8))
+        let photo = try #require(page.photos.first)
+
+        #expect(photo.url(for: .original) == nil)
+        // A host that merely *ends with* something Flickr-shaped is not Flickr.
+        #expect(photo.url(for: .large) == nil)
+        #expect(photo.url(for: .medium) != nil)
+        #expect(photo.url(for: .small) != nil)
+    }
+
+    // MARK: - Writing where something may be waiting
+
+    /// The finding: Quick Look wrote to a fully predictable path — Flickr photo
+    /// ids are public — with a plain `Data.write(to:)`. A hostile local process
+    /// could pre-plant a symlink there and have the app overwrite whatever it
+    /// pointed at.
+    @Test func aWriteRefusesToFollowASymlink() throws {
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("safefile-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        let victim = folder.appendingPathComponent("victim.txt")
+        try Data("original".utf8).write(to: victim)
+        let planted = folder.appendingPathComponent("predictable.jpg")
+        try FileManager.default.createSymbolicLink(at: planted, withDestinationURL: victim)
+
+        #expect(throws: (any Error).self) {
+            try SafeFile.write(Data("attacker bytes".utf8), to: planted)
+        }
+        #expect(try String(contentsOf: victim, encoding: .utf8) == "original")
+    }
+
+    @Test func anExclusiveWriteRefusesAFileThatIsAlreadyThere() throws {
+        let folder = try SafeFile.uniqueDirectory(
+            in: URL(fileURLWithPath: NSTemporaryDirectory()), prefix: "safefile-")
+        let file = folder.appendingPathComponent("once.jpg")
+
+        try SafeFile.write(Data("first".utf8), to: file)
+        #expect(throws: (any Error).self) {
+            try SafeFile.write(Data("second".utf8), to: file)
+        }
+        #expect(try String(contentsOf: file, encoding: .utf8) == "first")
+    }
+
+    /// A `.part` file left by a crashed run has to be overwritable, which is
+    /// why the download path is the one that truncates.
+    @Test func aTruncatingWriteReplacesItsOwnLeftovers() throws {
+        let folder = try SafeFile.uniqueDirectory(
+            in: URL(fileURLWithPath: NSTemporaryDirectory()), prefix: "safefile-")
+        let file = folder.appendingPathComponent("stale.part")
+        try SafeFile.write(Data("stale".utf8), to: file)
+
+        let handle = try SafeFile.openTruncating(at: file)
+        try handle.write(contentsOf: Data("fresh".utf8))
+        try handle.close()
+        #expect(try String(contentsOf: file, encoding: .utf8) == "fresh")
+    }
+
+    @Test func aUniqueDirectoryIsPrivateAndUnpredictable() throws {
+        let parent = URL(fileURLWithPath: NSTemporaryDirectory())
+        let first = try SafeFile.uniqueDirectory(in: parent, prefix: "drag-")
+        let second = try SafeFile.uniqueDirectory(in: parent, prefix: "drag-")
+        #expect(first != second)
+
+        let mode = try FileManager.default.attributesOfItem(atPath: first.path)[.posixPermissions]
+        #expect(mode as? Int == 0o700)
     }
 }

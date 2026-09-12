@@ -77,13 +77,32 @@ struct StubChunkTransport: ChunkTransport {
                        variants: [PhotoVariant: String]? = nil) -> Photo {
         Photo(id: id, title: title ?? "Photo \(id)",
               variants: variants ?? [
-                .medium: "https://example.com/\(id)_m.jpg",
-                .original: "https://example.com/\(id)_o.jpg",
+                .medium: "https://live.staticflickr.com/\(id)_m.jpg",
+                .original: "https://live.staticflickr.com/\(id)_o.jpg",
               ])
     }
 
+    /// The photographs, without the credits file that is written beside them.
+    /// Waits for a condition rather than for a number of milliseconds.
+    private func waitFor(_ description: String, within seconds: Double = 10,
+                         _ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            if condition() { return }
+            try await Task.sleep(for: .milliseconds(15))
+        }
+        Issue.record("timed out waiting for \(description)")
+    }
+
     private func files(in directory: URL) throws -> [String] {
-        try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
+        try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0 != Credits.filename }
+            .sorted()
+    }
+
+    private func credits(in directory: URL) -> String? {
+        try? String(contentsOf: directory.appendingPathComponent(Credits.filename),
+                    encoding: .utf8)
     }
 
     // MARK: - The ordinary case
@@ -98,13 +117,17 @@ struct StubChunkTransport: ChunkTransport {
         #expect(report.requested == 3)
         #expect(!report.wasCancelled)
         #expect(try files(in: folder).count == 3)
+        // And every one of them is credited.
+        let written = try #require(credits(in: folder))
+        #expect(written.split(separator: "\n").count == 4)  // header plus three
+        #expect(report.creditsProblem == nil)
     }
 
     /// The count the user is shown has to be the number of files that exist.
     @Test func theReportedCountEqualsTheFilesOnDisk() async throws {
         let folder = try directory()
         let engine = DownloadEngine(transport: StubChunkTransport(
-            failing: ["https://example.com/2_o.jpg"]))
+            failing: ["https://live.staticflickr.com/2_o.jpg"]))
         let report = await engine.download([photo("1"), photo("2"), photo("3")],
                                            to: folder, variant: .original)
 
@@ -149,7 +172,7 @@ struct StubChunkTransport: ChunkTransport {
     @Test func aTransportFailureDoesNotAbortTheBatch() async throws {
         let folder = try directory()
         let engine = DownloadEngine(transport: StubChunkTransport(
-            failing: ["https://example.com/1_o.jpg"]))
+            failing: ["https://live.staticflickr.com/1_o.jpg"]))
         let report = await engine.download([photo("1"), photo("2")],
                                            to: folder, variant: .original)
 
@@ -174,11 +197,13 @@ struct StubChunkTransport: ChunkTransport {
     @Test func aMidstreamFailureLeavesNoPartialFile() async throws {
         let folder = try directory()
         let engine = DownloadEngine(transport: StubChunkTransport(
-            failingMidstream: ["https://example.com/1_o.jpg"]))
+            failingMidstream: ["https://live.staticflickr.com/1_o.jpg"]))
         let report = await engine.download([photo("1")], to: folder, variant: .original)
 
         #expect(report.saved == 0)
         #expect(try files(in: folder).isEmpty)
+        // Nothing saved, so nothing to credit.
+        #expect(credits(in: folder) == nil)
     }
 
     /// A photo with no downloadable URL is a result the user should see, not a
@@ -217,14 +242,17 @@ struct StubChunkTransport: ChunkTransport {
     @Test func cancellingMidBatchSavesWhatWasFinishedAndNothingElse() async throws {
         let folder = try directory()
         let engine = DownloadEngine(transport: StubChunkTransport(
-            stalling: ["https://example.com/2_o.jpg"]))
+            stalling: ["https://live.staticflickr.com/2_o.jpg"]))
 
         let task = Task {
             await engine.download([photo("1"), photo("2"), photo("3")],
                                   to: folder, variant: .original)
         }
-        // Let the first photo finish and the second begin.
-        try await Task.sleep(for: .milliseconds(120))
+        // Wait for the first photo to actually land, rather than guessing how
+        // long that takes: a fixed interval fails whenever the machine is busy.
+        try await waitFor("the first photo to be saved") {
+            (try? files(in: folder))?.contains { !$0.hasSuffix(".part") } == true
+        }
         task.cancel()
         let report = await task.value
 
@@ -233,13 +261,16 @@ struct StubChunkTransport: ChunkTransport {
         #expect(report.requested == 3)
         #expect(report.summary == "Saved 1 of 3")
         #expect(try files(in: folder) == ["Photo 1_1.jpg"])
+        // One photograph saved before a cancel needs crediting just as much as
+        // forty would have.
+        #expect(credits(in: folder)?.contains("Photo 1_1.jpg") == true)
         #expect(try !files(in: folder).contains { $0.hasSuffix(".part") })
     }
 
     @Test func cancellingBeforeTheFirstPhotoDownloadsNothing() async throws {
         let folder = try directory()
         let engine = DownloadEngine(transport: StubChunkTransport(
-            stalling: ["https://example.com/1_o.jpg"]))
+            stalling: ["https://live.staticflickr.com/1_o.jpg"]))
 
         let task = Task {
             await engine.download([photo("1"), photo("2")], to: folder, variant: .original)
@@ -256,7 +287,7 @@ struct StubChunkTransport: ChunkTransport {
     @Test func theReportIsStillReturnedAfterCancellation() async throws {
         let folder = try directory()
         let engine = DownloadEngine(transport: StubChunkTransport(
-            stalling: ["https://example.com/1_o.jpg"]))
+            stalling: ["https://live.staticflickr.com/1_o.jpg"]))
         let task = Task {
             await engine.download([photo("1")], to: folder, variant: .original)
         }
@@ -270,15 +301,15 @@ struct StubChunkTransport: ChunkTransport {
 
     @Test func theRequestedSizeIsPreferred() {
         let photo = photo("1")
-        #expect(photo.downloadURL(preferring: .medium) == "https://example.com/1_m.jpg")
-        #expect(photo.downloadURL(preferring: .original) == "https://example.com/1_o.jpg")
+        #expect(photo.downloadURL(preferring: .medium) == "https://live.staticflickr.com/1_m.jpg")
+        #expect(photo.downloadURL(preferring: .original) == "https://live.staticflickr.com/1_o.jpg")
     }
 
     /// Largest first, so a fallback never downgrades more than it must.
     @Test func anAbsentSizeFallsBackToTheLargestThatExists() {
-        let photo = photo("1", variants: [.medium: "https://example.com/m.jpg",
-                                          .small: "https://example.com/s.jpg"])
-        #expect(photo.downloadURL(preferring: .original) == "https://example.com/m.jpg")
+        let photo = photo("1", variants: [.medium: "https://live.staticflickr.com/m.jpg",
+                                          .small: "https://live.staticflickr.com/s.jpg"])
+        #expect(photo.downloadURL(preferring: .original) == "https://live.staticflickr.com/m.jpg")
     }
 
     @Test func aPhotoWithNoVariantsHasNoDownloadURL() {

@@ -85,7 +85,7 @@ import FlickrKit
     @Test(arguments: [false, true])
     func aTileDrawsItsFrameAndItsSelection(isSelected: Bool) throws {
         let photo = Photo(id: "1", title: "Harbour at dusk", license: .by,
-                          variants: [.small320: "https://example.invalid/1.jpg"])
+                          variants: [.small320: "https://live.staticflickr.com/1.jpg"])
         let bitmap = try write(
             PhotoTile(photo: photo, isSelected: isSelected).padding(20),
             "tile-\(isSelected ? "selected" : "plain")",

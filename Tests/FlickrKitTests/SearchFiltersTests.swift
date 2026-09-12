@@ -37,9 +37,11 @@ import Testing
         #expect(Set(License.allCases.map(\.label)).count == 17)
     }
 
+    /// Checked against what `flickr.photos.licenses.getInfo` actually returns —
+    /// see `LiveAPITests`, which fails if Flickr and this table disagree.
     @Test(arguments: [
-        ("All Rights Reserved", "0"), ("Attribution License", "4"),
-        ("Public Domain Mark", "10"), ("Attribution-NonCommercial-NoDerivs 4.0", "16"),
+        ("All Rights Reserved", "0"), ("CC BY 2.0", "4"),
+        ("Public Domain Mark", "10"), ("CC BY-NC-ND 4.0", "16"),
     ])
     func individualLicencesMapToFlickrIDs(label: String, id: String) {
         #expect(License.allCases.first { $0.label == label }?.rawValue == id)
@@ -51,18 +53,60 @@ import Testing
         #expect(modern.allSatisfy { $0.number >= 11 })
     }
 
-    @Test func commercialUseIsNotGuessedFromTheLabel() {
-        #expect(License.by.allowsCommercialUse)
-        #expect(!License.byNc4.allowsCommercialUse)
-        #expect(!License.allRightsReserved.allowsCommercialUse)
-        #expect(License.publicDomainMark.allowsCommercialUse)
+    /// **The finding this replaces:** "No known copyright restrictions" is a
+    /// Flickr Commons institution saying it has not *found* a rights holder. It
+    /// was being reported as commercially reusable, which is how somebody ends
+    /// up using a photograph in a paid campaign that they had no right to.
+    @Test func rightsThatWereNeverGrantedAreNotReportedAsPermission() {
+        #expect(License.noKnownRestrictions.reuse == .unclear)
+        #expect(License.allRightsReserved.reuse == .reserved)
+        #expect(License.by.reuse == .permitted)
+        #expect(License.byNc4.reuse == .nonCommercialOnly)
+        #expect(License.publicDomainMark.reuse == .permitted)
+    }
+
+    /// A No-Derivatives photo is freely reusable and may not be altered, which
+    /// one flag could not say.
+    @Test func noDerivativesLicencesSaySo() {
+        for licence in [License.byNd, .byNd4, .byNcNd, .byNcNd4] {
+            #expect(!licence.allowsDerivatives, "\(licence.label) allows derivatives")
+        }
+        #expect(License.by.allowsDerivatives)
+        #expect(License.publicDomainDedication.allowsDerivatives)
+    }
+
+    @Test func everyCreativeCommonsLicenceAsksForCredit() {
+        for licence in License.allCases where licence.label.hasPrefix("CC BY") {
+            #expect(licence.requiresAttribution, "\(licence.label) does not ask for credit")
+        }
+        // A public domain mark does not, and neither does a reserved one.
+        #expect(!License.publicDomainMark.requiresAttribution)
+        #expect(!License.allRightsReserved.requiresAttribution)
+    }
+
+    /// No two licences may share a badge: the whole point is that a person can
+    /// tell them apart on a thumbnail.
+    @Test func everyLicenceHasItsOwnMeaningfulBadge() {
+        let badges = License.allCases.map(\.badge)
+        #expect(badges.allSatisfy { !$0.isEmpty })
+        // The 2.0 and 4.0 versions of one licence share a badge deliberately;
+        // otherwise every badge is distinct.
+        #expect(Set(badges).count == 11)
+    }
+
+    @Test func everyLicenceButAllRightsReservedPointsAtItsTerms() {
+        #expect(License.allRightsReserved.termsURL == nil)
+        for licence in License.allCases where licence != .allRightsReserved {
+            let url = try? #require(licence.termsURL)
+            #expect(url?.hasPrefix("https://") == true, "\(licence.label)")
+        }
     }
 
     // MARK: - Size buckets
 
     private func photo(_ variants: PhotoVariant...) -> Photo {
         Photo(id: "1", variants: Dictionary(uniqueKeysWithValues:
-            variants.map { ($0, "https://example.com/\($0.rawValue).jpg") }))
+            variants.map { ($0, "https://live.staticflickr.com/\($0.rawValue).jpg") }))
     }
 
     @Test(arguments: [

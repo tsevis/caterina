@@ -53,7 +53,10 @@ public struct KeychainSecretStore: SecretStore {
         if status == errSecItemNotFound {
             var insert = base
             insert[kSecValueData as String] = data
-            insert[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
+            // `ThisDeviceOnly`: a Flickr read token and an API secret have no
+            // business riding an iCloud Keychain sync or a device-migration
+            // backup onto another Mac.
+            insert[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             let added = SecItemAdd(insert as CFDictionary, nil)
             guard added == errSecSuccess else { throw Self.error(added) }
             return

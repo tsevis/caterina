@@ -155,11 +155,11 @@ import Testing
     @Test func aVariantURLThatIsNotAStringIsIgnored() throws {
         let page = try decodePage("""
         {"photos":{"page":1,"pages":1,"perpage":25,"total":1,
-         "photo":[{"id":"1","url_o":42,"url_m":"https://example.com/m.jpg"}]},"stat":"ok"}
+         "photo":[{"id":"1","url_o":42,"url_m":"https://live.staticflickr.com/m.jpg"}]},"stat":"ok"}
         """)
         let photo = try #require(page.photos.first)
         #expect(photo.url(for: .original) == nil)
-        #expect(photo.url(for: .medium) == "https://example.com/m.jpg")
+        #expect(photo.url(for: .medium) == "https://live.staticflickr.com/m.jpg")
     }
 
     // MARK: - The failure envelope

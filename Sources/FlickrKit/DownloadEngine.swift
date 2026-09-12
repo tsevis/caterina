@@ -95,11 +95,15 @@ public struct DownloadReport: Sendable, Equatable {
     public let outcomes: [DownloadOutcome]
     public let requested: Int
     public let wasCancelled: Bool
+    /// Set only when the photographs saved but their credits did not.
+    public let creditsProblem: String?
 
-    public init(outcomes: [DownloadOutcome], requested: Int, wasCancelled: Bool) {
+    public init(outcomes: [DownloadOutcome], requested: Int, wasCancelled: Bool,
+                creditsProblem: String? = nil) {
         self.outcomes = outcomes
         self.requested = requested
         self.wasCancelled = wasCancelled
+        self.creditsProblem = creditsProblem
     }
 
     public var saved: Int { outcomes.filter(\.isSaved).count }
@@ -124,9 +128,11 @@ public actor DownloadEngine {
     }
 
     public func download(_ photos: [Photo], to directory: URL, variant: PhotoVariant,
+                         writingCredits: Bool = true,
                          onProgress: @Sendable (DownloadProgress) -> Void = { _ in }
     ) async -> DownloadReport {
         var outcomes: [DownloadOutcome] = []
+        var saved: [(String, Photo)] = []
 
         // The folder was chosen in a panel and is about to be written to for
         // as long as the batch takes. A symlink here would redirect every file
@@ -139,23 +145,46 @@ public actor DownloadEngine {
 
         for photo in photos {
             if Task.isCancelled {
-                return DownloadReport(outcomes: outcomes, requested: photos.count,
-                                      wasCancelled: true)
+                return finish(outcomes: outcomes, saved: saved, requested: photos.count,
+                              cancelled: true, directory: directory,
+                              writingCredits: writingCredits)
             }
 
             guard let outcome = await save(photo, to: directory, variant: variant) else {
                 // Cancelled mid-transfer: the partial file is already gone.
-                return DownloadReport(outcomes: outcomes, requested: photos.count,
-                                      wasCancelled: true)
+                return finish(outcomes: outcomes, saved: saved, requested: photos.count,
+                              cancelled: true, directory: directory,
+                              writingCredits: writingCredits)
             }
 
             outcomes.append(outcome)
+            if let path = outcome.path {
+                saved.append((path.lastPathComponent, photo))
+            }
             onProgress(DownloadProgress(completed: outcomes.count,
                                         total: photos.count, outcome: outcome))
         }
 
-        return DownloadReport(outcomes: outcomes, requested: photos.count,
-                              wasCancelled: Task.isCancelled)
+        return finish(outcomes: outcomes, saved: saved, requested: photos.count,
+                      cancelled: Task.isCancelled, directory: directory,
+                      writingCredits: writingCredits)
+    }
+
+    /// Write the credits for whatever actually landed, and report.
+    ///
+    /// Called on every way out, cancellation included: eight photographs saved
+    /// before a cancel are eight photographs that need crediting just as much
+    /// as forty would have.
+    private func finish(outcomes: [DownloadOutcome], saved: [(String, Photo)],
+                        requested: Int, cancelled: Bool, directory: URL,
+                        writingCredits: Bool) -> DownloadReport {
+        var problem: String?
+        if writingCredits, !saved.isEmpty {
+            problem = Credits.write(saved.map { Credit(file: $0.0, photo: $0.1) },
+                                    into: directory)
+        }
+        return DownloadReport(outcomes: outcomes, requested: requested,
+                              wasCancelled: cancelled, creditsProblem: problem)
     }
 
     /// One photo. `nil` means the user cancelled while it was in flight.
@@ -174,7 +203,14 @@ public actor DownloadEngine {
 
         var handle: FileHandle
         do {
-            handle = try Self.openRefusingSymlinks(at: partial)
+            // Re-checked per photo, not once per batch: `O_NOFOLLOW` refuses a
+            // symlink as the *last* path component, and says nothing about the
+            // containing directory being swapped for one part-way through a
+            // download that may run for minutes.
+            if let refusal = Self.refusal(for: directory) {
+                return DownloadOutcome(photoID: photo.id, failure: refusal)
+            }
+            handle = try SafeFile.openTruncating(at: partial)
         } catch {
             return DownloadOutcome(photoID: photo.id, failure: Self.describe(error))
         }
@@ -227,19 +263,6 @@ public actor DownloadEngine {
             return "That is not a folder that can be written to."
         }
         return nil
-    }
-
-    /// Open for writing, refusing to follow a symlink at that name.
-    ///
-    /// The save directory may be shared and the temp name is predictable, so a
-    /// pre-planted symlink must not redirect the write to another file.
-    private static func openRefusingSymlinks(at url: URL) throws -> FileHandle {
-        let descriptor = open(url.path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600)
-        guard descriptor >= 0 else {
-            throw FlickrError.transport(
-                "Could not write to \(url.lastPathComponent): \(String(cString: strerror(errno)))")
-        }
-        return FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
     }
 
     private static func removeQuietly(_ url: URL) {

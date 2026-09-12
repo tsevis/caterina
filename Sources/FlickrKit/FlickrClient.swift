@@ -170,6 +170,20 @@ public actor FlickrClient {
         return try FlickrResponse.groupInfo(from: data)
     }
 
+    /// Flickr's own licence table.
+    ///
+    /// Not used to draw anything — `License` is an enum for a reason — but to
+    /// check that enum against the source of truth. Getting a licence wrong has
+    /// legal consequences for whoever trusts the badge.
+    public func licenses() async throws -> [String: String] {
+        let data = try await send([
+            OAuthParameter(name: "method", value: "flickr.photos.licenses.getInfo"),
+            OAuthParameter(name: "format", value: "json"),
+            OAuthParameter(name: "nojsoncallback", value: "1"),
+        ])
+        return try FlickrResponse.licenses(from: data)
+    }
+
     // MARK: - Sending, with retries
 
     /// Send `parameters`, retrying only what retrying can fix.

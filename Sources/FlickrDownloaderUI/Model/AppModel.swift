@@ -297,14 +297,18 @@ public final class AppModel {
         previewTask = Task { [weak self] in
             guard let (data, _) = try? await URLSession.shared.data(from: url),
                   !Task.isCancelled else { return }
-            // **Named by the same rules as a download.** A photo id comes from
-            // Flickr, and `appendingPathComponent` does not stop one containing
-            // slashes from walking out of the temporary directory —
-            // `Filenames` already refuses that, and is tested for it.
-            let file = Filenames.destination(
-                in: FileManager.default.temporaryDirectory,
-                title: "Quick Look", photoID: photo.id, url: address)
-            guard (try? data.write(to: file)) != nil, !Task.isCancelled else { return }
+            // **A fresh directory, and a write that refuses a symlink.**
+            // The old path was entirely predictable — Flickr photo ids are
+            // public — and written with a plain `Data.write(to:)`, so a hostile
+            // process running as the same user could pre-plant a symlink at
+            // that name and have this overwrite whatever it pointed at.
+            guard let folder = try? SafeFile.uniqueDirectory(
+                    in: FileManager.default.temporaryDirectory, prefix: "Quick Look_")
+            else { return }
+            let file = Filenames.destination(in: folder, title: "Quick Look",
+                                             photoID: photo.id, url: address)
+            guard (try? SafeFile.write(data, to: file)) != nil,
+                  !Task.isCancelled else { return }
             self?.previewURL = file
         }
     }

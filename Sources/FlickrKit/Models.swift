@@ -65,8 +65,12 @@ public enum PhotoVariant: String, CaseIterable, Sendable, Hashable, Identifiable
     public static let defaultDownload: PhotoVariant = .large
 
     /// What every listing request asks Flickr to include.
+    /// `owner_name` is asked for so a download can be credited: an NSID is not
+    /// a photographer's name, and without it a folder of Creative Commons
+    /// photographs cannot be attributed without re-finding every one by hand.
     public static let extrasParameter: String =
-        (allCases.map(\.rawValue) + ["license", "owner"]).joined(separator: ",")
+        (allCases.map(\.rawValue) + ["license", "owner", "owner_name"])
+            .joined(separator: ",")
 }
 
 // MARK: - A photo
@@ -75,20 +79,53 @@ public struct Photo: Sendable, Equatable, Hashable, Identifiable {
     public let id: String
     public let title: String
     public let owner: String?
+    /// The photographer's display name. Asked for in `extras`, because an NSID
+    /// is not a credit.
+    public let ownerName: String?
     public let license: License?
     /// Only the variants Flickr actually published for this photo.
     public let variants: [PhotoVariant: String]
 
     public init(id: String, title: String = "", owner: String? = nil,
-                license: License? = nil, variants: [PhotoVariant: String] = [:]) {
+                ownerName: String? = nil, license: License? = nil,
+                variants: [PhotoVariant: String] = [:]) {
         self.id = id
         self.title = title
         self.owner = owner
+        self.ownerName = ownerName
         self.license = license
         self.variants = variants
     }
 
+    /// Where Flickr serves photographs from.
+    ///
+    /// Defence in depth: the scheme check already refuses `file:` and `data:`,
+    /// and it takes a broken TLS connection to get a tampered reply this far.
+    /// But a reply does not get to name an arbitrary host either, and the live
+    /// tests download real photographs — so if Flickr ever serves from
+    /// somewhere new, a test fails rather than a user's downloads silently
+    /// stopping.
+    public static let servingHosts = ["staticflickr.com", "flickr.com"]
+
     public func url(for variant: PhotoVariant) -> String? { variants[variant] }
+
+    /// The photo's page on Flickr — where the photographer, the licence and the
+    /// terms actually are.
+    ///
+    /// Not the bare JPEG on the CDN: a credit has to point at something a
+    /// person can read, and "Open in Browser" opening an image file told nobody
+    /// anything about who made it.
+    public var pageURL: String? {
+        guard let owner, !owner.isEmpty else { return nil }
+        return "https://www.flickr.com/photos/\(owner)/\(id)"
+    }
+
+    /// Who to credit, in the order a credit would name them.
+    public var photographer: String? {
+        if let ownerName, !ownerName.isEmpty { return ownerName }
+        if let owner, !owner.isEmpty { return owner }
+        return nil
+    }
 
     /// The URL to download for `variant`.
     ///
@@ -272,6 +309,7 @@ public enum FlickrResponse {
                 id: id,
                 title: Self.text(container, "title") ?? "",
                 owner: Self.text(container, "owner"),
+                ownerName: Self.text(container, "ownername"),
                 license: Self.text(container, "license").flatMap(License.named),
                 variants: variants)
         }
@@ -287,10 +325,10 @@ public enum FlickrResponse {
         static func isPublishedPhotoURL(_ address: String) -> Bool {
             guard !address.isEmpty,
                   let url = URL(string: address),
-                  let scheme = url.scheme?.lowercased(),
-                  url.host?.isEmpty == false
+                  url.scheme?.lowercased() == "https",
+                  let host = url.host?.lowercased(), !host.isEmpty
             else { return false }
-            return scheme == "https"
+            return Photo.servingHosts.contains { host == $0 || host.hasSuffix("." + $0) }
         }
 
         /// A field Flickr documents as a string and sometimes sends as a number.
@@ -383,16 +421,34 @@ extension FlickrResponse {
         }
     }
 
+    /// `flickr.photos.licenses.getInfo` — id to name.
+    public static func licenses(from data: Data) throws -> [String: String] {
+        try throwIfFailed(data)
+        guard let envelope = try? JSONDecoder().decode(LicensesEnvelope.self, from: data) else {
+            throw FlickrError.malformedResponse("Flickr sent an unreadable licence list.")
+        }
+        let entries = (envelope.licenses?.license ?? []).compactMap(\.value)
+        return Dictionary(entries.compactMap { entry -> (String, String)? in
+            guard let id = entry.id?.text, let name = entry.name else { return nil }
+            return (id, name)
+        }, uniquingKeysWith: { first, _ in first })
+    }
+
     // MARK: Shapes
 
     /// Flickr wraps some strings in `{"_content": "…"}` and sends others bare.
     struct Wrapped: Decodable {
         let text: String?
         init(from decoder: Decoder) throws {
-            if let single = try? decoder.singleValueContainer(),
-               let bare = try? single.decode(String.self) {
-                text = bare
-                return
+            if let single = try? decoder.singleValueContainer() {
+                if let bare = try? single.decode(String.self) {
+                    text = bare
+                    return
+                }
+                if let number = try? single.decode(Int.self) {
+                    text = String(number)
+                    return
+                }
             }
             let keyed = try? decoder.container(keyedBy: DynamicKey.self)
             if let keyed, let key = DynamicKey(stringValue: "_content") {
@@ -418,6 +474,18 @@ extension FlickrResponse {
             let groupname: Wrapped?
         }
         let group: Group?
+    }
+
+    struct LicensesEnvelope: Decodable {
+        struct Entry: Decodable {
+            /// Flickr sends the id as a number here and as a string elsewhere.
+            let id: Wrapped?
+            let name: String?
+        }
+        struct Container: Decodable {
+            let license: [Lenient<Entry>]?
+        }
+        let licenses: Container?
     }
 
     struct GroupsEnvelope: Decodable {

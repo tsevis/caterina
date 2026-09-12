@@ -119,9 +119,11 @@ public struct PhotoGridView: View {
     @ViewBuilder
     private func menu(for photo: Photo) -> some View {
         Button("Quick Look") { onPreview(photo) }
-        if let address = photo.downloadURL(preferring: .original),
-           let url = URL(string: address) {
-            Link("Open in Browser", destination: url)
+        // The photo's *page*, not the bare JPEG on the CDN: the photographer,
+        // the licence and the terms are on the page, and an image file says
+        // nothing about any of them.
+        if let address = photo.pageURL, let url = URL(string: address) {
+            Link("Show on Flickr", destination: url)
         }
     }
 

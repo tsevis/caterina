@@ -51,24 +51,50 @@ public struct PhotoTile: View {
         return isHovering ? Color.accentColor.opacity(0.55) : Theme.hairline
     }
 
+    /// **Every photo gets a badge, and no two licences share one.**
+    /// Collapsing sixteen licences into "CC" and "CC-NC" told someone holding a
+    /// No-Derivatives photograph the same thing it told someone holding a CC0
+    /// one, and showed nothing at all for All Rights Reserved — which is not
+    /// the same as a photo whose licence Flickr never stated.
     @ViewBuilder
     private var licenceBadge: some View {
-        if let licence = photo.license, licence != .allRightsReserved {
-            Text(licence.allowsCommercialUse ? "CC" : "CC-NC")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(Theme.markInk)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Theme.mark, in: Capsule())
-                .padding(5)
-                .accessibilityHidden(true)
+        Text(photo.license?.badge ?? "?")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(badgeInk)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(badgeGround, in: Capsule())
+            .padding(5)
+            .help(photo.license?.label ?? "Flickr did not state a licence for this photo.")
+            .accessibilityHidden(true)
+    }
+
+    /// Reusable is the app's own amber; everything else is a material, so the
+    /// eye is drawn to what can be used rather than to what cannot.
+    private var badgeGround: AnyShapeStyle {
+        switch photo.license?.reuse {
+        case .permitted: return AnyShapeStyle(Theme.mark)
+        default: return AnyShapeStyle(.thinMaterial)
         }
+    }
+
+    private var badgeInk: Color {
+        photo.license?.reuse == .permitted ? Theme.markInk : Theme.ink
     }
 
     private var accessibilityLabel: String {
         let title = photo.title.isEmpty ? "Untitled photo" : photo.title
-        let licence = photo.license?.label ?? "licence not stated"
-        return "\(title). \(licence)."
+        guard let licence = photo.license else {
+            return "\(title). Flickr did not state a licence."
+        }
+        let reuse: String
+        switch licence.reuse {
+        case .permitted: reuse = "reusable"
+        case .nonCommercialOnly: reuse = "non-commercial use only"
+        case .reserved: reuse = "all rights reserved"
+        case .unclear: reuse = "rights not cleared"
+        }
+        return "\(title). \(licence.label), \(reuse)."
     }
 
     private func load() async {

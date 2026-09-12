@@ -35,15 +35,15 @@ import FlickrKit
     /// naming a file with a slash in it.
     @Test func aHostileTitleCannotBecomeAPath() {
         let name = PhotoDrag.promisedName(for: photo("../../etc/passwd"),
-                                          url: "https://example.com/a.jpg")
+                                          url: "https://live.staticflickr.com/a.jpg")
         #expect(!name.contains("/"))
         #expect(!name.contains(".."))
     }
 
     @Test func theTypePromisedMatchesTheExtensionChosen() {
-        for (address, expected) in [("https://example.com/a.jpg", UTType.jpeg),
-                                    ("https://example.com/a.png", .png),
-                                    ("https://example.com/a.gif", .gif)] {
+        for (address, expected) in [("https://live.staticflickr.com/a.jpg", UTType.jpeg),
+                                    ("https://live.staticflickr.com/a.png", .png),
+                                    ("https://live.staticflickr.com/a.gif", .gif)] {
             #expect(PhotoDrag.promisedType(for: address) == expected)
         }
     }
@@ -51,7 +51,7 @@ import FlickrKit
     /// An extension outside the allow-list becomes a JPEG in the filename, so
     /// the promised type has to agree rather than promising something else.
     @Test func anUnknownExtensionPromisesTheTypeTheFileWillActuallyHave() {
-        let address = "https://example.com/a.webp"
+        let address = "https://live.staticflickr.com/a.webp"
         #expect(Filenames.fileExtension(for: address) == "jpg")
         #expect(PhotoDrag.promisedType(for: address) == .jpeg)
     }
@@ -110,7 +110,7 @@ import FlickrKit
         for id in ["../../evil", "/etc/passwd", "a/b/c", ".."] {
             let file = Filenames.destination(in: temporary, title: "Quick Look",
                                              photoID: id,
-                                             url: "https://example.com/a.jpg")
+                                             url: "https://live.staticflickr.com/a.jpg")
             #expect(file.deletingLastPathComponent().standardizedFileURL
                 == temporary.standardizedFileURL,
                 "\(id) escaped to \(file.path)")
@@ -120,7 +120,7 @@ import FlickrKit
     @Test func thePreviewKeepsTheExtensionTheImageActuallyHas() {
         let file = Filenames.destination(in: FileManager.default.temporaryDirectory,
                                          title: "Quick Look", photoID: "1",
-                                         url: "https://example.com/a.png")
+                                         url: "https://live.staticflickr.com/a.png")
         #expect(file.pathExtension == "png")
     }
 }

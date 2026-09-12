@@ -173,8 +173,8 @@ import Testing
     @Test func theSizeFilterIsAppliedToTheResultsNotSent() async throws {
         let transport = ScriptedTransport(always: """
         {"photos":{"page":1,"pages":1,"perpage":25,"total":2,"photo":[
-          {"id":"big","url_o":"https://example.com/o.jpg"},
-          {"id":"small","url_sq":"https://example.com/sq.jpg"}
+          {"id":"big","url_o":"https://live.staticflickr.com/o.jpg"},
+          {"id":"small","url_sq":"https://live.staticflickr.com/sq.jpg"}
         ]},"stat":"ok"}
         """)
         let page = try await client(transport).photos(

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 
 import FlickrKit
 
@@ -57,11 +58,38 @@ public actor ThumbnailStore {
         if let cached = images[address] { return cached }
         guard let url = URL(string: address),
               let (data, _) = try? await session.data(from: url),
-              let image = NSImage(data: data)
+              let image = Self.thumbnail(from: data)
         else { return nil }
 
         remember(image, for: address)
         return image
+    }
+
+    /// The largest a thumbnail is ever drawn, and therefore the largest it is
+    /// ever decoded.
+    public static let maximumPixels = 1024
+
+    /// Decode to a bounded size rather than to whatever the file claims.
+    ///
+    /// **`NSImage(data:)` will allocate whatever the image says it needs.** A
+    /// small file can declare enormous dimensions — a decompression bomb — and
+    /// these files come from any Flickr user, reachable through a search or a
+    /// group pool. The cache bounds how many thumbnails are kept and how many
+    /// bytes are held on disk; neither bounds the decoded bitmap. `ImageIO`
+    /// decodes straight to the size actually wanted, so a hostile image costs
+    /// no more memory than an honest one.
+    static func thumbnail(from data: Data) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maximumPixels,
+            kCGImageSourceShouldCacheImmediately: false,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(
+            source, 0, options as CFDictionary) else { return nil }
+        return NSImage(cgImage: cgImage,
+                       size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 
     private func remember(_ image: NSImage, for address: String) {
