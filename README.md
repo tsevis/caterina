@@ -52,7 +52,7 @@ Sources/
   FlickrKit/            pure Swift — no SwiftUI, no AppKit, fully testable
   FlickrDownloaderUI/   the SwiftUI layer, and the splash's artwork
 App/                    a thin Xcode shell: Info.plist, entitlements, @main
-Tests/                  198 tests in FlickrKit, 15 in the UI layer
+Tests/                  233 tests — the bulk in FlickrKit, none opening a window
 ```
 
 `FlickrKit` links no UI framework, and `make lint` fails if one appears. That is
@@ -87,6 +87,10 @@ Each of these was a defect in the reference application, and each has a test.
   variant exists classified every photo as small.
 * **A group name must match exactly.** `flickr.groups.search` is fuzzy; taking
   its first result loaded unrelated groups.
+* **A size fallback downgrades, never upgrades.** The size you pick is a
+  ceiling. A photo with no file at that size is saved at the largest size below
+  it — not at the Original, which on three hundred photos is gigabytes you did
+  not ask for.
 * **Downloads are atomic.** Bytes go to `<name>.part`, opened with `O_NOFOLLOW`
   so a planted symlink cannot redirect the write, and are renamed into place
   only once the transfer completes. Cancelling deletes the partial file and

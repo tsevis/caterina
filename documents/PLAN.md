@@ -117,23 +117,35 @@ marker convention. Live-API check is a separate, explicitly opted-in target.
 
 Conventional commits, no attribution lines.
 
-## 7. Open questions for review
+## 7. Questions raised at review, and what was decided
 
 1. **Sort labels.** The Python UI offers three (Relevance / Date / Interesting
    → `relevance`, `date-posted-desc`, `interestingness-desc`) while Flickr
    accepts seven. The spec says "exclusive, 3". Proposal: keep the three house
    labels in the picker and model all seven in `SortOrder`, so the asc variants
-   can be exposed later without a type change. Confirm, or expose all seven?
+   can be exposed later without a type change. **Decided: the three.** All seven are in `SortOrder`; the picker shows `SortOrder.offered`.
 2. **Colour codes.** The reference offers 7 + Any (`0`–`6`); Flickr's palette
-   has ten (white, grey, black are separate codes). Proposal: ship parity with
-   the reference now. Confirm.
+   has ten (white, grey, black are separate codes). **Decided: parity with the reference.**
 3. **Callback URL.** The native OAuth flow needs a callback registered on the
    Flickr app record, which only you can do. Proposal:
-   `flickrdownloader://auth`. I will document it; you register it before the
-   You section is testable.
+   `flickrdownloader://auth`. **Registered in `Info.plist` and documented in the
+   README; it still has to be set on the Flickr app record before the You
+   section works.**
 4. **Accent colour.** Derived from the app icon, per the CrewListr pattern —
-   but there is no icon yet. Proposal: ship a neutral system-accent-respecting
-   palette until an icon exists, then sample it. Flickr's own blue/pink are not
+   but there is no icon yet. **Decided: controls use the system accent**, so the window is correct under
+   whatever accent the user has chosen; a small identity amber taken from the
+   key art carries the few marks that are about the application itself. Sample
+   the icon instead once there is one. Flickr's own blue/pink are not
    used as the accent, since this is not an official client.
-5. **Bundle id.** Proposal: `com.tsevis.FlickrDownloader`, marketing version
-   `0.1.0`.
+5. **Bundle id.** **Decided: `com.tsevis.FlickrDownloader`, version `0.1.0`.**
+
+## 8. What changed from this plan while building it
+
+* `Section` was renamed `PhotoSource`: SwiftUI has a `Section`, and the
+  collision was ambiguous at every use site.
+* The splash gates what happens *after* launch rather than the main window
+  itself — the canonical Hipparchus pattern, where `showOnLaunchIfWanted(then:)`
+  is called from the root view's `.task` and its continuation does the
+  post-launch work. Suppressing the window scene instead was fragile.
+* Two review passes (security and code) ran after the sections were built
+  rather than after each one; their findings are in the fourth commit.
