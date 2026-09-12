@@ -14,7 +14,10 @@ import FlickrKit
                  transport: transport,
                  // No real backoff: the retry policy's timings are FlickrKit's
                  // to test, and waiting five seconds here proves nothing.
-                 policy: RetryPolicy(attempts: 2, backoff: [.milliseconds(1)]))
+                 policy: RetryPolicy(attempts: 2, backoff: [.milliseconds(1)]),
+                 // The inspector debounces so eight ticks are one search; the
+                 // interval itself is not what these tests are about.
+                 settleTime: .milliseconds(5))
     }
 
     private func settle() async throws {

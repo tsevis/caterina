@@ -103,8 +103,8 @@ import Testing
 
     @Test func sizeLabelsDescribeTheBuckets() {
         #expect(SizeBucket.small.label == "Small (up to 500px)")
-        #expect(SizeBucket.medium.label == "Medium (501 – 1024px)")
-        #expect(SizeBucket.large.label == "Large (1025px and above)")
+        #expect(SizeBucket.medium.label == "Medium (501 – 1023px)")
+        #expect(SizeBucket.large.label == "Large (1024px and above)")
     }
 
     // MARK: - Sort

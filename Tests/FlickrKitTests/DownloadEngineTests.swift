@@ -39,9 +39,15 @@ struct StubChunkTransport: ChunkTransport {
                     return
                 }
                 if stalls {
-                    // Suspends until the surrounding task is cancelled.
+                    // Suspends until the surrounding task is cancelled, then
+                    // **ends without throwing** — which is what a real
+                    // `AsyncThrowingStream` does when its consumer is
+                    // cancelled. Finishing with a `CancellationError` here
+                    // sent the engine down its `catch`, so the re-check after
+                    // the loop — the guard against renaming a truncated file
+                    // into place — was never the thing under test.
                     try? await Task.sleep(for: .seconds(60))
-                    continuation.finish(throwing: CancellationError())
+                    continuation.finish()
                     return
                 }
                 continuation.yield(chunk)

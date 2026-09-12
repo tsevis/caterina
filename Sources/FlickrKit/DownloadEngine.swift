@@ -128,6 +128,15 @@ public actor DownloadEngine {
     ) async -> DownloadReport {
         var outcomes: [DownloadOutcome] = []
 
+        // The folder was chosen in a panel and is about to be written to for
+        // as long as the batch takes. A symlink here would redirect every file
+        // in it, which the per-file `O_NOFOLLOW` cannot see.
+        if let refusal = Self.refusal(for: directory) {
+            return DownloadReport(
+                outcomes: photos.map { DownloadOutcome(photoID: $0.id, failure: refusal) },
+                requested: photos.count, wasCancelled: false)
+        }
+
         for photo in photos {
             if Task.isCancelled {
                 return DownloadReport(outcomes: outcomes, requested: photos.count,
@@ -205,6 +214,19 @@ public actor DownloadEngine {
             return DownloadOutcome(photoID: photo.id, failure: "Could not save the file: \(reason)")
         }
         return DownloadOutcome(photoID: photo.id, path: destination)
+    }
+
+    /// Why this folder cannot be downloaded into, or `nil` if it can.
+    private static func refusal(for directory: URL) -> String? {
+        let values = try? directory.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        if values?.isSymbolicLink == true {
+            return "That folder is a link to somewhere else. Choose the folder itself."
+        }
+        guard values?.isDirectory == true else {
+            return "That is not a folder that can be written to."
+        }
+        return nil
     }
 
     /// Open for writing, refusing to follow a symlink at that name.

@@ -69,6 +69,8 @@ public struct SectionState: Sendable, Equatable {
     public let page: Int
     public let totalPages: Int
     public let perPage: Int
+    /// How many photos Flickr said the whole result set holds.
+    public let total: Int
     public let status: SectionStatus
     /// True when Flickr reported more pages than it will actually serve.
     public let isPageCountClamped: Bool
@@ -79,7 +81,7 @@ public struct SectionState: Sendable, Equatable {
     public init(source: PhotoSource, input: String = "", query: PhotoQuery? = nil,
                 filters: SearchFilters = SearchFilters(), photos: [Photo] = [],
                 selection: Set<String> = [], page: Int = 1, totalPages: Int = 1,
-                perPage: Int = PhotoRequest.defaultPerPage,
+                perPage: Int = PhotoRequest.defaultPerPage, total: Int = 0,
                 status: SectionStatus = .idle, isPageCountClamped: Bool = false,
                 skippedEntries: Int = 0) {
         self.source = source
@@ -91,6 +93,7 @@ public struct SectionState: Sendable, Equatable {
         self.page = max(1, page)
         self.totalPages = max(1, totalPages)
         self.perPage = max(1, perPage)
+        self.total = max(0, total)
         self.status = status
         self.isPageCountClamped = isPageCountClamped
         self.skippedEntries = max(0, skippedEntries)
@@ -103,16 +106,20 @@ public struct SectionState: Sendable, Equatable {
     /// A new search term, a different user, a different group — or the same one
     /// asked for again — begins at the beginning. Only paging preserves a
     /// position, which is the whole of the rule.
+    /// A new query. **Always page 1, and always one page until Flickr says
+    /// otherwise** — leaving the old query's page count in place armed the Next
+    /// button while the new query's first page was still loading, and pressing
+    /// it fetched page 2 of results that had not arrived.
     public func beginning(query: PhotoQuery) -> SectionState {
-        copy(query: query, photos: [], selection: [], page: 1,
-             status: .loading, isPageCountClamped: false, skippedEntries: 0)
+        copy(query: query, photos: [], selection: [], page: 1, totalPages: 1,
+             total: 0, status: .loading, isPageCountClamped: false, skippedEntries: 0)
     }
 
     /// Looking something up — a username, a group — before there is a query
     /// to run. The source is busy but has nothing to page through yet.
     public func resolving() -> SectionState {
-        copy(query: .some(nil), photos: [], selection: [], page: 1,
-             status: .loading, isPageCountClamped: false, skippedEntries: 0)
+        copy(query: .some(nil), photos: [], selection: [], page: 1, totalPages: 1,
+             total: 0, status: .loading, isPageCountClamped: false, skippedEntries: 0)
     }
 
     /// Move to an explicit page, keeping everything else.
@@ -128,10 +135,20 @@ public struct SectionState: Sendable, Equatable {
         copy(filters: filters, selection: [], page: 1)
     }
 
-    /// Changing the page size keeps the position: the user is looking at
-    /// roughly the same part of the results, more densely.
-    public func with(perPage: Int) -> SectionState {
-        copy(perPage: max(1, perPage))
+    /// Changing the page size keeps the *position*, which is not the same as
+    /// keeping the page number.
+    ///
+    /// Page 120 of 160 at 25 a page is item 2,976. At 500 a page that is page 6
+    /// of 8 — and page 120 does not exist, so keeping the number asked Flickr
+    /// for a page past the end and drew "Nothing here matched" over a result
+    /// set of four thousand photos.
+    public func with(perPage newPerPage: Int) -> SectionState {
+        let newPerPage = max(1, newPerPage)
+        let offset = (page - 1) * self.perPage
+        let reported = total > 0 ? (total + newPerPage - 1) / newPerPage : totalPages
+        let reachable = Pagination.reachablePages(reported: reported, perPage: newPerPage)
+        return copy(page: min(offset / newPerPage + 1, reachable),
+                    totalPages: reachable, perPage: newPerPage)
     }
 
     public func with(input: String) -> SectionState {
@@ -152,14 +169,19 @@ public struct SectionState: Sendable, Equatable {
                     page: min(max(1, result.page), reachable),
                     totalPages: reachable,
                     perPage: result.perPage,
+                    total: result.total,
                     status: result.photos.isEmpty ? .empty : .ready,
                     isPageCountClamped: Pagination.isClamped(reported: result.pages,
                                                              perPage: result.perPage),
                     skippedEntries: result.skippedEntries)
     }
 
+    /// A failure leaves the page it was on — so a retry goes back to where the
+    /// user was — but no pages ahead of it: "Page 4 of 160" under an error
+    /// screen with no photos is a claim about results that are not there.
     public func failed(_ error: FlickrError) -> SectionState {
-        copy(photos: [], selection: [], status: .failed(error))
+        copy(photos: [], selection: [], totalPages: page,
+             status: .failed(error))
     }
 
     // MARK: - Selection
@@ -197,7 +219,7 @@ public struct SectionState: Sendable, Equatable {
                       filters: SearchFilters? = nil, photos: [Photo]? = nil,
                       selection: Set<String>? = nil, page: Int? = nil,
                       totalPages: Int? = nil, perPage: Int? = nil,
-                      status: SectionStatus? = nil,
+                      total: Int? = nil, status: SectionStatus? = nil,
                       isPageCountClamped: Bool? = nil,
                       skippedEntries: Int? = nil) -> SectionState {
         SectionState(
@@ -210,6 +232,7 @@ public struct SectionState: Sendable, Equatable {
             page: page ?? self.page,
             totalPages: totalPages ?? self.totalPages,
             perPage: perPage ?? self.perPage,
+            total: total ?? self.total,
             status: status ?? self.status,
             isPageCountClamped: isPageCountClamped ?? self.isPageCountClamped,
             skippedEntries: skippedEntries ?? self.skippedEntries)

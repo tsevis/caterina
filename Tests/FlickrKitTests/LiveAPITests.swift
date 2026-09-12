@@ -47,16 +47,36 @@ struct LiveAPITests {
     /// HTTP 401 `oauth_problem=signature_invalid`, and this is the only place
     /// that can be observed.
     @Test func aSearchWithSpacesAndPunctuationSignsCorrectly() async throws {
+        // A signature Flickr rejects throws, so the assertion that matters is
+        // that this returns at all. `page.total >= 0` is not an assertion —
+        // the decoder clamps it — so it says nothing and is not made.
         let page = try await client().photos(
             PhotoRequest(query: .search(text: "blue sky & sea"), perPage: 3))
-        #expect(page.total >= 0)
+        #expect(page.perPage > 0)
+        #expect(page.photos.allSatisfy { !$0.id.isEmpty })
     }
 
-    @Test func everyLicenceThisBuildKnowsIsStillOneFlickrAccepts() async throws {
+    /// Flickr answers `stat=ok` for a licence id it does not know, so asking
+    /// for all of them and checking the replies proves nothing on its own. What
+    /// it does catch is the opposite direction: a photo coming back under a
+    /// licence id this build has never heard of, which means Flickr has added
+    /// one and `License` is out of date.
+    @Test func flickrHasNotAddedALicenceThisBuildCannotName() async throws {
         let page = try await client().photos(PhotoRequest(
             query: .search(text: "sunset"),
-            filters: SearchFilters(licenses: Set(License.allCases)), perPage: 5))
+            filters: SearchFilters(licenses: Set(License.allCases)), perPage: 25))
+        #expect(!page.photos.isEmpty)
         #expect(page.photos.allSatisfy { $0.license != nil })
+        #expect(page.skippedEntries == 0)
+    }
+
+    /// Narrowing the licence filter has to narrow the results. If Flickr ever
+    /// starts ignoring the parameter, this is where it shows.
+    @Test func aSingleLicenceFilterComesBackAsThatLicence() async throws {
+        let page = try await client().photos(PhotoRequest(
+            query: .search(text: "mountain"),
+            filters: SearchFilters(licenses: [.publicDomainMark]), perPage: 25))
+        #expect(page.photos.allSatisfy { $0.license == .publicDomainMark })
     }
 
     @Test func aGroupResolvesByItsExactName() async throws {

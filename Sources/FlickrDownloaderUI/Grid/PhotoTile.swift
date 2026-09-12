@@ -82,7 +82,7 @@ public struct PhotoTile: View {
     }
 
     private func load() async {
-        guard let address = photo.thumbnailURL() else {
+        guard let address = photo.gridThumbnailURL() else {
             didFail = true
             return
         }

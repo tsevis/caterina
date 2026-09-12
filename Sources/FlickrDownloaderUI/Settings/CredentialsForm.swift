@@ -96,7 +96,9 @@ struct CredentialsForm: View {
     }
 
     /// Saving first: signing in needs the key that is in the fields, not the one
-    /// that was in the Keychain when the window opened.
+    /// that was in the Keychain when the window opened. Saving no longer
+    /// dismisses this sheet — it used to, which tore down the spinner and the
+    /// error line mid-flow and made a failed sign-in silent.
     private func signIn() {
         do {
             try model.saveAPIKey(key: key, secret: secret)
@@ -114,6 +116,7 @@ struct CredentialsForm: View {
             do {
                 let account = try await FlickrSignIn.run(credentials: credentials, anchor: anchor)
                 try model.signedIn(account)
+                // Only now is the sheet finished with.
                 onFinished()
             } catch {
                 problem = (error as? FlickrError)?.message ?? error.localizedDescription

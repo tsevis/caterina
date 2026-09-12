@@ -37,10 +37,18 @@ public enum FlickrSignIn {
         return try OAuthFlow.account(from: try await body(of: url))
     }
 
+    /// Every request carries a timeout, including these two.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 60
+        return URLSession(configuration: configuration)
+    }()
+
     /// These two endpoints answer form-encoded text, not JSON.
     private static func body(of url: URL) async throws -> String {
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await session.data(from: url)
             guard let text = String(data: data, encoding: .utf8) else {
                 throw FlickrError.malformedResponse("Flickr's reply was not readable text.")
             }
@@ -65,6 +73,11 @@ public enum FlickrSignIn {
         let presenter = Presenter(anchor: anchor)
 
         return try await withCheckedThrowingContinuation { continuation in
+            // **Held for the length of the flow.** Nothing else refers to the
+            // session once `authorize` returns: the box is captured by the
+            // completion handler, so the session stays alive until it fires and
+            // is released with the closure afterwards.
+            let box = SessionBox()
             let session = ASWebAuthenticationSession(
                 url: url, callbackURLScheme: OAuthFlow.callbackScheme
             ) { callback, error in
@@ -78,14 +91,21 @@ public enum FlickrSignIn {
                         error?.localizedDescription ?? "The sign-in window closed unexpectedly."))
                 }
                 // Held until the callback fires; released after it.
+                box.session = nil
                 _ = presenter
             }
+            box.session = session
             session.presentationContextProvider = presenter
             // A fresh session every time: reusing the browser's Flickr cookie
             // would sign in whoever last used this Mac's browser, silently.
             session.prefersEphemeralWebBrowserSession = true
             session.start()
         }
+    }
+
+    /// Keeps the session alive for exactly as long as the flow runs.
+    private final class SessionBox {
+        var session: ASWebAuthenticationSession?
     }
 
     /// Tells the system which window the sheet belongs to.

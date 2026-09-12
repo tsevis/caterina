@@ -21,6 +21,13 @@ struct FilterInspector: View {
                 }
             }
 
+            if filters.isFiltering {
+                Section {
+                    Button("Clear All Filters") { update(SearchFilters()) }
+                        .buttonStyle(.link)
+                }
+            }
+
             Section("Sort") {
                 // Exclusive, and only values Flickr accepts. Flickr answers
                 // `stat=ok` for a sort it does not recognise, so a wrong value
@@ -35,6 +42,9 @@ struct FilterInspector: View {
                 .labelsHidden()
             }
 
+            // **Not disabled with the rest.** Size is applied to the results
+            // here rather than sent to Flickr, so it works on a photostream and
+            // a pool exactly as it does on a search.
             Section("Size") {
                 Toggle("Any size", isOn: Binding(
                     get: { filters.sizes.isEmpty },
@@ -46,6 +56,7 @@ struct FilterInspector: View {
                     })
                 }
             }
+            .disabled(false)
 
             Section("Colour") {
                 Toggle("Any colour", isOn: Binding(
@@ -100,6 +111,9 @@ struct FilterInspector: View {
             return "A photostream comes back in Flickr's own order. Licence, "
                 + "colour and sort are search filters, and this is not a search."
         case .search:
+            // Unreachable: a search's query is a search, and those take
+            // filters. Kept so the switch stays exhaustive over the enum
+            // rather than over today's call sites.
             return ""
         }
     }

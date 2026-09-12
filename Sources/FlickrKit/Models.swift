@@ -90,22 +90,50 @@ public struct Photo: Sendable, Equatable, Hashable, Identifiable {
 
     public func url(for variant: PhotoVariant) -> String? { variants[variant] }
 
-    /// The URL to download for `variant`, falling back to the largest variant
-    /// that exists when the requested one does not.
+    /// The URL to download for `variant`.
+    ///
+    /// **A fallback downgrades; it never upgrades.** The requested size is a
+    /// ceiling: someone who picks Small 320 for three hundred photos is asking
+    /// for a small folder, and handing them Originals because a photo has no
+    /// `url_n` is gigabytes they did not ask for. Only when nothing smaller
+    /// exists is a larger file better than no file at all.
     public func downloadURL(preferring variant: PhotoVariant) -> String? {
         if let exact = variants[variant] { return exact }
-        for candidate in PhotoVariant.descendingBySize {
+
+        guard let position = PhotoVariant.descendingBySize.firstIndex(of: variant) else {
+            return nil
+        }
+        // Downwards from the requested size: the largest that is no larger.
+        for candidate in PhotoVariant.descendingBySize[position...] {
+            if let url = variants[candidate] { return url }
+        }
+        // Nothing smaller exists — take the smallest of what is left.
+        for candidate in PhotoVariant.descendingBySize[..<position].reversed() {
             if let url = variants[candidate] { return url }
         }
         return nil
     }
 
-    /// The smallest variant that exists, for the grid.
+    /// The smallest variant that exists.
     public func thumbnailURL() -> String? {
         for candidate in PhotoVariant.descendingBySize.reversed() {
             if let url = variants[candidate] { return url }
         }
         return nil
+    }
+
+    /// What the grid should draw.
+    ///
+    /// Not the *smallest* variant: that is the 75×75 square, which every photo
+    /// has, so every tile in a 128pt grid was a 75px image scaled up. This asks
+    /// for something the grid can show at its own size and falls back downwards
+    /// only when there is nothing better.
+    public func gridThumbnailURL() -> String? {
+        let preferred: [PhotoVariant] = [.small320, .medium, .small, .thumbnail, .square]
+        for candidate in preferred {
+            if let url = variants[candidate] { return url }
+        }
+        return thumbnailURL()
     }
 }
 
@@ -130,9 +158,6 @@ public struct PhotoPage: Sendable, Equatable {
         self.photos = photos
         self.skippedEntries = skippedEntries
     }
-
-    public static let empty = PhotoPage(page: 1, pages: 1, perPage: 25,
-                                        total: 0, photos: [])
 }
 
 // MARK: - Reading what Flickr sent
@@ -238,7 +263,7 @@ public enum FlickrResponse {
                 // rather than coerced — `42` is not a URL.
                 if let key = DynamicKey(stringValue: variant.rawValue),
                    let url = try? container.decode(String.self, forKey: key),
-                   !url.isEmpty {
+                   Self.isPublishedPhotoURL(url) {
                     variants[variant] = url
                 }
             }
@@ -249,6 +274,23 @@ public enum FlickrResponse {
                 owner: Self.text(container, "owner"),
                 license: Self.text(container, "license").flatMap(License.named),
                 variants: variants)
+        }
+
+        /// Whether a variant URL is one worth handing to `URLSession`.
+        ///
+        /// **The reply does not get to name its own scheme.** Flickr publishes
+        /// photographs over https; a `file:` or `data:` URL in a variant field
+        /// is not a photograph, and fetching one would be trusting a network
+        /// reply to choose what this process reads. It takes a broken TLS
+        /// connection to get one here, which is exactly the case worth being
+        /// unhelpful in.
+        static func isPublishedPhotoURL(_ address: String) -> Bool {
+            guard !address.isEmpty,
+                  let url = URL(string: address),
+                  let scheme = url.scheme?.lowercased(),
+                  url.host?.isEmpty == false
+            else { return false }
+            return scheme == "https"
         }
 
         /// A field Flickr documents as a string and sometimes sends as a number.

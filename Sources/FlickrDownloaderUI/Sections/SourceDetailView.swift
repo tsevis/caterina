@@ -109,9 +109,10 @@ public struct SourceDetailView: View {
             }
     }
 
+    /// No keyboard shortcut: the field's own `onSubmit` handles Return, and a
+    /// `.return` shortcut here ran the search a second time on every press.
     private func submitButton(_ title: String) -> some View {
         Button(title) { model.submit(source) }
-            .keyboardShortcut(.return, modifiers: [])
             .disabled(state.input.trimmed.isEmpty && source != .you)
     }
 }

@@ -39,17 +39,6 @@ public enum PhotoQuery: Sendable, Equatable, Hashable {
         if case .myPhotos = self { return true }
         return false
     }
-
-    /// What identifies this query, for deciding whether the page should reset.
-    var identity: String {
-        switch self {
-        case let .search(text): return "search:\(text.trimmed)"
-        case let .userPhotos(userID): return "user:\(userID)"
-        case .myPhotos: return "me"
-        case let .groupPool(groupID): return "pool:\(groupID)"
-        case let .groupSearch(groupID, text): return "group:\(groupID):\(text.trimmed)"
-        }
-    }
 }
 
 /// One listing request, ready to be signed and sent.
@@ -109,10 +98,6 @@ public struct PhotoRequest: Sendable, Equatable {
         }
 
         return sent.map { OAuthParameter(name: $0.0, value: $0.1) }
-    }
-
-    public func onPage(_ page: Int) -> PhotoRequest {
-        PhotoRequest(query: query, filters: filters, page: page, perPage: perPage)
     }
 }
 

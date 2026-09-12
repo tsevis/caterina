@@ -70,9 +70,11 @@ public struct RootView: View {
             } label: {
                 Label("Select All", systemImage: "checkmark.circle")
             }
-            .keyboardShortcut("a", modifiers: .command)
+            // ⇧⌘A, not ⌘A: a plain ⌘A here outranks the focused query field,
+            // where it means "select the text I just typed".
+            .keyboardShortcut("a", modifiers: [.command, .shift])
             .disabled(state.photos.isEmpty)
-            .help("Select every photo on this page")
+            .help("Select every photo on this page (⇧⌘A)")
 
             Button {
                 model.clearSelection(in: model.activeSource)

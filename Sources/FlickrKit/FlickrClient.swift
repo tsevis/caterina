@@ -37,8 +37,6 @@ public actor FlickrClient {
         self.credentials = credentials
     }
 
-    public var isAuthenticated: Bool { credentials.token != nil }
-
     // MARK: - Listing photos
 
     public func photos(_ request: PhotoRequest) async throws -> PhotoPage {

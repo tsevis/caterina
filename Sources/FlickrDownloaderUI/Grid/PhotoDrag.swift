@@ -31,9 +31,17 @@ enum PhotoDrag {
             let task = Task {
                 do {
                     let (data, _) = try await URLSession.shared.data(from: url)
-                    let file = FileManager.default.temporaryDirectory
-                        .appendingPathComponent(name)
-                    try data.write(to: file)
+                    // A directory of its own, per drag: the name comes from a
+                    // remote title and is therefore predictable, and two drags
+                    // of two photos with the same title would otherwise write
+                    // the same path. `.withoutOverwriting` is the `O_EXCL` that
+                    // the download path gets from `O_NOFOLLOW`.
+                    let folder = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("drag-\(UUID().uuidString)", isDirectory: true)
+                    try FileManager.default.createDirectory(
+                        at: folder, withIntermediateDirectories: true)
+                    let file = folder.appendingPathComponent(name)
+                    try data.write(to: file, options: [.atomic, .withoutOverwriting])
                     // `false`: the file is ours, in the temporary directory —
                     // the Finder copies it rather than moving it out from under
                     // a Quick Look that may still be showing it.

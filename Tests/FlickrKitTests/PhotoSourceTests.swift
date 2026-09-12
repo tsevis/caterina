@@ -126,12 +126,17 @@ import Testing
         #expect(state.previousPage().page == 1)
     }
 
-    @Test func perPageKeepsThePositionRatherThanResetting() {
+    /// The *position*, not the page number: page 3 at 25 a page starts at item
+    /// 51, which at 100 a page is on page 1.
+    @Test func perPageKeepsThePositionRatherThanTheNumber() {
         let state = SectionState(source: .search)
             .beginning(query: .search(text: "boats")).loaded(page(["a"], page: 3, pages: 9))
-            .with(perPage: 100)
         #expect(state.page == 3)
-        #expect(state.perPage == 100)
+
+        let denser = state.with(perPage: 100)
+        #expect(denser.perPage == 100)
+        #expect(denser.page == 1)
+        #expect(denser.page <= denser.totalPages)
     }
 
     @Test func pagingCannotWalkOffEitherEnd() {

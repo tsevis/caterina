@@ -23,8 +23,8 @@ struct SourceSidebar: View {
         .safeAreaInset(edge: .bottom) { account }
     }
 
-    /// How many photos a source is holding, so switching back to one says what
-    /// is waiting there.
+    /// How many photos are selected in a source, so switching away from one
+    /// does not lose track of a selection waiting to be downloaded.
     private func badge(for source: PhotoSource) -> Text? {
         let count = model.workspace[source].selection.count
         return count > 0 ? Text(count.formatted()) : nil

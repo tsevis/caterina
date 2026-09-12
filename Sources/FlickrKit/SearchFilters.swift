@@ -17,9 +17,12 @@ public enum SizeBucket: String, CaseIterable, Sendable, Identifiable, Hashable {
 
     public var label: String {
         switch self {
+        // The boundaries are the variants, not round numbers: `url_l` is a
+        // 1024px longest edge and lives in the Large bucket, so a Medium label
+        // reading "up to 1024" described a photo it had put in the other one.
         case .small: return "Small (up to 500px)"
-        case .medium: return "Medium (501 – 1024px)"
-        case .large: return "Large (1025px and above)"
+        case .medium: return "Medium (501 – 1023px)"
+        case .large: return "Large (1024px and above)"
         }
     }
 

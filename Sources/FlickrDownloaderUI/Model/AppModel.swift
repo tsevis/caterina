@@ -35,6 +35,11 @@ public final class AppModel {
     private let vault: CredentialsVault
     private let transport: any HTTPTransport
     private let policy: RetryPolicy
+    /// How long to let the user keep ticking before asking Flickr again.
+    ///
+    /// Without it, every checkbox in the inspector was its own search: ticking
+    /// eight licences fired eight requests and blanked the grid eight times.
+    private let settleTime: Duration
     private let engine: DownloadEngine
     private var client: FlickrClient
 
@@ -42,14 +47,21 @@ public final class AppModel {
     private var loads: [PhotoSource: Task<Void, Never>] = [:]
     private var generations: [PhotoSource: Int] = [:]
     private var downloadTask: Task<DownloadReport, Never>?
+    private var downloadObserver: Task<Void, Never>?
+    /// Bumped per download, so a straggling progress callback from a cancelled
+    /// batch cannot write "40 of 100" over the five-photo one that replaced it.
+    private var downloadGeneration = 0
+    private var filterReload: Task<Void, Never>?
 
     public init(vault: CredentialsVault = CredentialsVault(),
                 transport: any HTTPTransport = URLSessionTransport(),
                 engine: DownloadEngine = DownloadEngine(),
-                policy: RetryPolicy = .standard) {
+                policy: RetryPolicy = .standard,
+                settleTime: Duration = .milliseconds(500)) {
         self.vault = vault
         self.transport = transport
         self.policy = policy
+        self.settleTime = settleTime
         self.engine = engine
         self.client = FlickrClient(credentials: vault.credentials() ?? .empty,
                                    transport: transport, policy: policy)
@@ -72,12 +84,18 @@ public final class AppModel {
         workspace = workspace.updating(source) { $0.with(input: text) }
     }
 
+
     public func setFilters(_ filters: SearchFilters, for source: PhotoSource) {
         workspace = workspace.updating(source) { $0.with(filters: filters) }
-        // A filter change is a new query, so it reruns from page 1 — but only
-        // where there is something to rerun.
-        if let query = workspace[source].query {
-            start(source, query: query)
+        guard workspace[source].query != nil else { return }
+
+        filterReload?.cancel()
+        filterReload = Task { [weak self, settleTime] in
+            try? await Task.sleep(for: settleTime)
+            guard !Task.isCancelled, let self,
+                  let query = self.workspace[source].query else { return }
+            // A filter change is a new query, so it reruns from page 1.
+            self.start(source, query: query)
         }
     }
 
@@ -112,6 +130,14 @@ public final class AppModel {
         let input = workspace[source].input.trimmed
         let client = client
 
+        // Said here rather than left to come back as an OAuth failure the user
+        // cannot act on.
+        guard !source.requiresAuthentication || isSignedIn else {
+            fail(source, with: FlickrError.invalidInput(
+                "Sign in to Flickr to see your own photos."))
+            return
+        }
+
         switch source {
         case .search:
             guard !input.isEmpty else { return }
@@ -123,16 +149,17 @@ public final class AppModel {
         case .user:
             guard !input.isEmpty else { return }
             resolveThenLoad(.user) {
-                .userPhotos(userID: try await client.resolveUser(from: input))
+                (.userPhotos(userID: try await client.resolveUser(from: input)), nil)
             }
 
         case .groups:
             guard !input.isEmpty else { return }
             let text = groupSearchText
-            resolveThenLoad(.groups) { [weak self] in
+            resolveThenLoad(.groups, thenRemember: { [weak self] group in
+                self?.resolvedGroup = group
+            }) {
                 let group = try await client.resolveGroup(from: input)
-                await MainActor.run { self?.resolvedGroup = group }
-                return GroupResolver.query(groupID: group.nsid, text: text)
+                return (GroupResolver.query(groupID: group.nsid, text: text), group)
             }
         }
     }
@@ -150,16 +177,21 @@ public final class AppModel {
     /// answer on screen.
     private func resolveThenLoad(
         _ source: PhotoSource,
-        _ resolve: @escaping @Sendable () async throws -> PhotoQuery
+        thenRemember remember: (@MainActor (ResolvedGroup) -> Void)? = nil,
+        _ resolve: @escaping @Sendable () async throws -> (PhotoQuery, ResolvedGroup?)
     ) {
         workspace = workspace.updating(source) { $0.resolving() }
         let generation = begin(source)
 
         loads[source] = Task { [weak self] in
             do {
-                let query = try await resolve()
+                let (query, resolved) = try await resolve()
                 guard let self, !Task.isCancelled,
                       self.generations[source] == generation else { return }
+                // Written only after the generation check: two lookups in
+                // flight could otherwise leave the slower one's group behind
+                // the faster one's results.
+                if let resolved { remember?(resolved) }
                 self.workspace = self.workspace.updating(source) { $0.beginning(query: query) }
                 await self.run(source, page: 1, generation: generation, query: query)
             } catch {
@@ -257,24 +289,40 @@ public final class AppModel {
     public func startDownload(from source: PhotoSource, to directory: URL,
                               variant: PhotoVariant) {
         let photos = workspace[source].selectedPhotos
-        guard !photos.isEmpty else { return }
+        // One at a time: a second batch started over a running one would share
+        // its progress state and its report.
+        guard !photos.isEmpty, !download.isRunning else { return }
 
+        downloadGeneration += 1
+        let generation = downloadGeneration
         download = DownloadState(isRunning: true, completed: 0, total: photos.count)
+
+        // The panel granted access to this folder; under the sandbox a folder
+        // restored from a bookmark needs it held open for the whole batch.
+        let scoped = directory.startAccessingSecurityScopedResource()
+
         let task = Task { [engine] in
             await engine.download(photos, to: directory, variant: variant) { progress in
                 Task { @MainActor [weak self] in
-                    self?.download.completed = progress.completed
-                    self?.download.total = progress.total
+                    self?.record(progress, generation: generation)
                 }
             }
         }
         downloadTask = task
 
-        Task { [weak self] in
+        downloadObserver = Task { [weak self] in
             let report = await task.value
-            self?.download = DownloadState(isRunning: false, completed: report.saved,
-                                           total: report.requested, report: report)
+            if scoped { directory.stopAccessingSecurityScopedResource() }
+            guard let self, self.downloadGeneration == generation else { return }
+            self.download = DownloadState(isRunning: false, completed: report.saved,
+                                          total: report.requested, report: report)
         }
+    }
+
+    private func record(_ progress: DownloadProgress, generation: Int) {
+        guard downloadGeneration == generation else { return }
+        download.completed = progress.completed
+        download.total = progress.total
     }
 
     public func cancelDownload() {
@@ -284,8 +332,10 @@ public final class AppModel {
     /// Cancel and *wait*, so closing the window does not lose the report or
     /// leave a `.part` file behind.
     public func finishDownloadBeforeClosing() async {
-        downloadTask?.cancel()
-        guard let report = await downloadTask?.value else { return }
+        guard let downloadTask else { return }
+        downloadTask.cancel()
+        let report = await downloadTask.value
+        // The observer would do this too, but quitting does not wait for it.
         download = DownloadState(isRunning: false, completed: report.saved,
                                  total: report.requested, report: report)
     }
@@ -296,10 +346,13 @@ public final class AppModel {
 
     // MARK: - Credentials
 
+    /// Saving does **not** dismiss the onboarding sheet: signing in saves the
+    /// key first, and tearing the sheet down mid-flow took its spinner and its
+    /// error message with it, so a failed sign-in was silent. The view dismisses
+    /// itself when it is actually finished.
     public func saveAPIKey(key: String, secret: String) throws {
         try vault.saveAPIKey(key: key, secret: secret)
         refreshClient()
-        isShowingOnboarding = false
     }
 
     public func signedIn(_ account: OAuthFlow.Account) throws {
@@ -313,15 +366,22 @@ public final class AppModel {
         try vault.signOut()
         account = nil
         refreshClient()
-        // The You source is about the account that just went away.
+        // **Cancel first.** Pressing Reload on You and then signing out left a
+        // request in flight whose reply repopulated the grid with the account's
+        // photos *after* the account was gone. `begin` cancels the task and
+        // bumps the generation, so the reply has nowhere to land.
+        _ = begin(.you)
         workspace = workspace.updating(.you) { _ in SectionState(source: .you) }
     }
 
     public func credentials() -> OAuth1.Credentials? { vault.credentials() }
 
+    /// Hand the existing actor its new credentials rather than building a
+    /// second one: a request already in flight keeps the client it started
+    /// with, and there is one place the credentials live.
     private func refreshClient() {
-        client = FlickrClient(credentials: vault.credentials() ?? .empty,
-                              transport: transport, policy: policy)
+        let credentials = vault.credentials() ?? .empty
+        Task { [client] in await client.update(credentials: credentials) }
     }
 }
 

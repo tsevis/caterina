@@ -13,6 +13,9 @@ struct FlickrDownloaderApp: App {
     /// the statement about whose photographs these are, which has to live
     /// somewhere findable.
     @State private var about = AboutWindowController()
+    /// Holds the quit long enough for a running download to be cancelled
+    /// cleanly and reported.
+    @NSApplicationDelegateAdaptor(TerminationGuard.self) private var delegate
 
     var body: some Scene {
         // One window: there is one workspace, and a New that opened a second
@@ -20,6 +23,9 @@ struct FlickrDownloaderApp: App {
         // distrust.
         Window("FlickrDownloader", id: "main") {
             RootView(model: model, about: about)
+                .onAppear {
+                    delegate.beforeQuit = { await model.finishDownloadBeforeClosing() }
+                }
         }
         .defaultSize(width: 1180, height: 780)
         .windowResizability(.contentMinSize)

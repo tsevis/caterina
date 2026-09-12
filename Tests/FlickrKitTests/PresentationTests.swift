@@ -97,18 +97,5 @@ import Testing
         #expect(workspace.active == .user)
     }
 
-    @Test func aPhotoRequestCanBeMovedToAnotherPageWithoutRebuildingIt() {
-        let request = PhotoRequest(query: .search(text: "x"), page: 1, perPage: 50)
-        #expect(request.onPage(4).page == 4)
-        #expect(request.onPage(4).perPage == 50)
-        #expect(request.onPage(0).page == 1)
-    }
 
-    @Test func aQueryKnowsWhatMakesItADifferentQuery() {
-        #expect(PhotoQuery.search(text: "a").identity != PhotoQuery.search(text: "b").identity)
-        #expect(PhotoQuery.search(text: " a ").identity == PhotoQuery.search(text: "a").identity)
-        #expect(PhotoQuery.groupPool(groupID: "1@N1").identity
-            != PhotoQuery.groupSearch(groupID: "1@N1", text: "x").identity)
-        #expect(PhotoQuery.myPhotos.identity != PhotoQuery.userPhotos(userID: "me").identity)
-    }
 }

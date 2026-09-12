@@ -7,9 +7,11 @@ import FlickrKit
 ///
 /// The reference application fetched thumbnails one at a time on the GUI
 /// thread, so a page of 25 took about twelve seconds during which the window
-/// was unusable. Here each tile awaits its own image and SwiftUI cancels that
-/// work when the tile goes away, which is the structured-concurrency equivalent
-/// of the generation token that paper over the same problem.
+/// was unusable. Here each tile awaits its own image inside its own `.task`,
+/// and the fetch is *structured* — awaited directly rather than handed to an
+/// unstructured `Task` — so scrolling a tile away cancels the transfer rather
+/// than merely discarding its result. Five hundred abandoned requests still in
+/// flight is the bug that wording used to hide.
 public actor ThumbnailStore {
     public static let shared = ThumbnailStore()
 
@@ -20,7 +22,6 @@ public actor ThumbnailStore {
 
     private var cache: [String: NSImage] = [:]
     private var order: [String] = []
-    private var inFlight: [String: Task<NSImage?, Never>] = [:]
     private let session: URLSession
 
     public init(session: URLSession? = nil) {
@@ -36,20 +37,12 @@ public actor ThumbnailStore {
 
     public func image(for address: String) async -> NSImage? {
         if let cached = cache[address] { return cached }
-        // Two tiles asking for the same URL share one fetch; a page of
-        // duplicates should not be a page of requests.
-        if let existing = inFlight[address] { return await existing.value }
+        guard let url = URL(string: address),
+              let (data, _) = try? await session.data(from: url),
+              let image = NSImage(data: data)
+        else { return nil }
 
-        let task = Task<NSImage?, Never> { [session] in
-            guard let url = URL(string: address) else { return nil }
-            guard let (data, _) = try? await session.data(from: url) else { return nil }
-            return NSImage(data: data)
-        }
-        inFlight[address] = task
-
-        let image = await task.value
-        inFlight[address] = nil
-        if let image { remember(image, for: address) }
+        remember(image, for: address)
         return image
     }
 

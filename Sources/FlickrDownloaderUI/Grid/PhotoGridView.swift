@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 import FlickrKit
@@ -34,34 +35,17 @@ public struct PhotoGridView: View {
     }
 
     public var body: some View {
-        GeometryReader { _ in
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Metrics.tileMinimum),
-                                             spacing: Theme.Metrics.tileSpacing)],
-                          spacing: Theme.Metrics.tileSpacing) {
-                    ForEach(photos) { photo in
-                        PhotoTile(photo: photo, isSelected: selection.contains(photo.id))
-                            .background(frameReader(for: photo.id))
-                            .onTapGesture { click(photo) }
-                            .onDrag {
-                                // Dragging an unselected photo drags that one;
-                                // dragging a selected one drags the selection,
-                                // which is what every Mac list does.
-                                if !selection.contains(photo.id) { click(photo) }
-                                return PhotoDrag.provider(for: photo, variant: dragVariant)
-                            }
-                            .simultaneousGesture(TapGesture().modifiers(.command)
-                                .onEnded { commandClick(photo) })
-                            .simultaneousGesture(TapGesture().modifiers(.shift)
-                                .onEnded { shiftClick(photo) })
-                            .contextMenu { menu(for: photo) }
-                    }
-                }
-                .padding(Theme.Metrics.tileSpacing)
-                .coordinateSpace(name: Self.space)
+        ScrollView {
+            // One coordinate space for the whole content, declared *above* both
+            // the tiles that report their frames and the surface that reads the
+            // drag. They were in different spaces before, so a sweep two rows
+            // down the scroll selected tiles two rows up.
+            ZStack(alignment: .topLeading) {
+                sweepSurface
+                grid
+                marqueeRectangle
             }
-            .background(marqueeCatcher)
-            .overlay(alignment: .topLeading) { marqueeRectangle }
+            .coordinateSpace(name: Self.space)
         }
         .onPreferenceChange(TileFramePreference.self) { frames = $0 }
         .focusable()
@@ -76,32 +60,59 @@ public struct PhotoGridView: View {
         .onKeyPress(.downArrow) { move(by: columnCount) }
     }
 
+    private var grid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Metrics.tileMinimum),
+                                     spacing: Theme.Metrics.tileSpacing)],
+                  spacing: Theme.Metrics.tileSpacing) {
+            ForEach(photos) { photo in
+                PhotoTile(photo: photo, isSelected: selection.contains(photo.id))
+                    .background(frameReader(for: photo.id))
+                    // **One tap handler, not three.** A plain `.onTapGesture`
+                    // also recognises a ⌘-click, so adding modifier gestures
+                    // beside it ran two handlers for every modified click —
+                    // each computing its answer from the same stale selection,
+                    // and the last writer won.
+                    .onTapGesture { click(photo, modifiers: NSEvent.modifierFlags) }
+                    .onDrag {
+                        // Dragging an unselected photo drags that one; dragging
+                        // a selected one drags the selection, which is what
+                        // every Mac list does.
+                        if !selection.contains(photo.id) { click(photo, modifiers: []) }
+                        return PhotoDrag.provider(for: photo, variant: dragVariant)
+                    }
+                    .contextMenu { menu(for: photo) }
+            }
+        }
+        .padding(Theme.Metrics.tileSpacing)
+    }
+
     private static let space = "photo-grid"
 
     // MARK: - Clicks
 
-    private func click(_ photo: Photo) {
-        anchor = photo.id
-        onSelect([photo.id])
-    }
-
-    private func commandClick(_ photo: Photo) {
-        anchor = photo.id
-        var next = selection
-        if next.contains(photo.id) { next.remove(photo.id) } else { next.insert(photo.id) }
-        onSelect(next)
-    }
-
-    private func shiftClick(_ photo: Photo) {
-        guard let anchor,
-              let start = photos.firstIndex(where: { $0.id == anchor }),
-              let end = photos.firstIndex(where: { $0.id == photo.id })
-        else {
-            click(photo)
+    /// Click replaces, ⌘-click toggles, ⇧-click extends from the anchor.
+    private func click(_ photo: Photo, modifiers: NSEvent.ModifierFlags) {
+        if modifiers.contains(.command) {
+            anchor = photo.id
+            var next = selection
+            if next.contains(photo.id) { next.remove(photo.id) } else { next.insert(photo.id) }
+            onSelect(next)
             return
         }
-        let range = start <= end ? start...end : end...start
-        onSelect(selection.union(photos[range].map(\.id)))
+
+        if modifiers.contains(.shift),
+           let anchor,
+           let start = photos.firstIndex(where: { $0.id == anchor }),
+           let end = photos.firstIndex(where: { $0.id == photo.id }) {
+            // The anchor stays where it was, so a second ⇧-click re-measures
+            // from the same place rather than from the last one.
+            let range = start <= end ? start...end : end...start
+            onSelect(selection.union(photos[range].map(\.id)))
+            return
+        }
+
+        anchor = photo.id
+        onSelect([photo.id])
     }
 
     @ViewBuilder
@@ -135,7 +146,7 @@ public struct PhotoGridView: View {
         let current = focused.flatMap { photo in photos.firstIndex { $0.id == photo.id } } ?? 0
         let next = min(max(0, current + offset), photos.count - 1)
         guard next != current || focused == nil else { return .handled }
-        click(photos[next])
+        click(photos[next], modifiers: [])
         return .handled
     }
 
@@ -144,30 +155,29 @@ public struct PhotoGridView: View {
     private struct MarqueeState: Equatable {
         var start: CGPoint
         var current: CGPoint
-        var base: Set<String>
 
+        /// Rebuilt from the two live corners every time. The previous version
+        /// unioned the new point into the *old* rectangle, so the selection
+        /// only ever grew: sweeping out to twenty tiles and back to three left
+        /// twenty selected under a rectangle drawn around three.
         var rect: CGRect {
             CGRect(x: min(start.x, current.x), y: min(start.y, current.y),
                    width: abs(start.x - current.x), height: abs(start.y - current.y))
         }
     }
 
-    /// The background takes the drag, so a drag that begins on a tile is a
-    /// click and a drag that begins between them is a sweep.
-    private var marqueeCatcher: some View {
+    /// The surface behind the tiles takes the drag, so a drag that begins on a
+    /// tile is a click and a drag that begins between them is a sweep.
+    private var sweepSurface: some View {
         Color.clear
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.space))
                     .onChanged { value in
-                        let state = marquee ?? MarqueeState(start: value.startLocation,
-                                                            current: value.location,
-                                                            base: [])
-                        marquee = MarqueeState(start: state.start,
-                                               current: value.location,
-                                               base: state.base)
-                        onSelect(swept(in: state.rect.union(
-                            CGRect(origin: value.location, size: .zero))))
+                        let state = MarqueeState(start: value.startLocation,
+                                                 current: value.location)
+                        marquee = state
+                        onSelect(swept(in: state.rect))
                     }
                     .onEnded { _ in marquee = nil }
             )

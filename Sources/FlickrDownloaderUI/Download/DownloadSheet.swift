@@ -9,7 +9,10 @@ struct DownloadSheet: View {
     let source: PhotoSource
     @Binding var isPresented: Bool
 
-    @AppStorage("LastDownloadFolder") private var lastFolder = ""
+    /// **A bookmark, not a path.** Under the sandbox, the panel's grant does
+    /// not survive a relaunch: a remembered path would be pre-filled, look
+    /// right, and fail to write. A security-scoped bookmark is the grant.
+    @AppStorage("LastDownloadFolderBookmark") private var lastFolder = Data()
     @State private var destination: URL?
     @State private var problem: String?
 
@@ -68,8 +71,21 @@ struct DownloadSheet: View {
 
     private func restoredFolder() -> URL? {
         guard !lastFolder.isEmpty else { return nil }
-        let url = URL(fileURLWithPath: lastFolder)
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        var isStale = false
+        guard let url = try? URL(resolvingBookmarkData: lastFolder,
+                                 options: [.withSecurityScope],
+                                 relativeTo: nil,
+                                 bookmarkDataIsStale: &isStale),
+              !isStale,
+              FileManager.default.fileExists(atPath: url.path)
+        else { return nil }
+        return url
+    }
+
+    private func remember(_ url: URL) {
+        lastFolder = (try? url.bookmarkData(options: [.withSecurityScope],
+                                            includingResourceValuesForKeys: nil,
+                                            relativeTo: nil)) ?? Data()
     }
 
     private func chooseFolder() {
@@ -81,7 +97,7 @@ struct DownloadSheet: View {
         panel.directoryURL = destination
         guard panel.runModal() == .OK, let url = panel.url else { return }
         destination = url
-        lastFolder = url.path
+        remember(url)
     }
 
     private func start() {
