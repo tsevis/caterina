@@ -283,3 +283,109 @@ public enum FlickrResponse {
         init?(intValue: Int) { nil }
     }
 }
+
+// MARK: - The smaller replies
+
+extension FlickrResponse {
+
+    /// Throw if the payload is a `stat=fail` envelope. Used before decoding, so
+    /// a transient failure can be retried rather than reported as malformed.
+    static func throwIfFailed(_ data: Data) throws {
+        let status: StatusEnvelope
+        do {
+            status = try JSONDecoder().decode(StatusEnvelope.self, from: data)
+        } catch {
+            throw FlickrError.malformedResponse(
+                "Flickr sent a reply this version cannot read.")
+        }
+        if let failure = status.failure { throw failure }
+    }
+
+    /// `flickr.people.findByUsername`
+    public static func userID(from data: Data) throws -> String {
+        try throwIfFailed(data)
+        guard let envelope = try? JSONDecoder().decode(UserEnvelope.self, from: data),
+              let id = envelope.user?.id, !id.isEmpty
+        else { throw FlickrError.notFound("Flickr has no user by that name.") }
+        return id
+    }
+
+    /// `flickr.urls.lookupGroup`
+    public static func groupID(from data: Data) throws -> String {
+        try throwIfFailed(data)
+        guard let envelope = try? JSONDecoder().decode(GroupEnvelope.self, from: data),
+              let id = envelope.group?.id, !id.isEmpty
+        else { throw FlickrError.notFound("Flickr has no group at that address.") }
+        return id
+    }
+
+    /// `flickr.groups.getInfo`
+    public static func groupInfo(from data: Data) throws -> ResolvedGroup {
+        try throwIfFailed(data)
+        guard let envelope = try? JSONDecoder().decode(GroupEnvelope.self, from: data),
+              let group = envelope.group, let id = group.id, !id.isEmpty
+        else { throw FlickrError.notFound("Flickr has no group at that address.") }
+        let name = group.name?.text ?? group.groupname?.text ?? id
+        return ResolvedGroup(nsid: id, name: GroupResolver.unescapingHTML(name))
+    }
+
+    /// `flickr.groups.search`
+    public static func groups(from data: Data) throws -> [GroupSummary] {
+        try throwIfFailed(data)
+        guard let envelope = try? JSONDecoder().decode(GroupsEnvelope.self, from: data) else {
+            throw FlickrError.malformedResponse("Flickr sent an unreadable group list.")
+        }
+        return (envelope.groups?.group ?? []).compactMap(\.value).compactMap { entry in
+            guard let nsid = entry.nsid, !nsid.isEmpty else { return nil }
+            return GroupSummary(nsid: nsid, name: entry.name ?? "")
+        }
+    }
+
+    // MARK: Shapes
+
+    /// Flickr wraps some strings in `{"_content": "…"}` and sends others bare.
+    struct Wrapped: Decodable {
+        let text: String?
+        init(from decoder: Decoder) throws {
+            if let single = try? decoder.singleValueContainer(),
+               let bare = try? single.decode(String.self) {
+                text = bare
+                return
+            }
+            let keyed = try? decoder.container(keyedBy: DynamicKey.self)
+            if let keyed, let key = DynamicKey(stringValue: "_content") {
+                text = try? keyed.decode(String.self, forKey: key)
+            } else {
+                text = nil
+            }
+        }
+    }
+
+    struct UserEnvelope: Decodable {
+        struct User: Decodable {
+            let id: String?
+            let nsid: String?
+        }
+        let user: User?
+    }
+
+    struct GroupEnvelope: Decodable {
+        struct Group: Decodable {
+            let id: String?
+            let name: Wrapped?
+            let groupname: Wrapped?
+        }
+        let group: Group?
+    }
+
+    struct GroupsEnvelope: Decodable {
+        struct Entry: Decodable {
+            let nsid: String?
+            let name: String?
+        }
+        struct Container: Decodable {
+            let group: [Lenient<Entry>]?
+        }
+        let groups: Container?
+    }
+}
