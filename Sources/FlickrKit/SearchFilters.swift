@@ -113,8 +113,8 @@ public enum FlickrColor: String, CaseIterable, Sendable, Identifiable, Hashable 
 /// What the inspector panel holds.
 ///
 /// A value type: changing a filter returns a new set rather than mutating a
-/// shared one, so a section's filters cannot be altered from under it by
-/// another section's panel.
+/// shared one, so a source's filters cannot be altered from under it by
+/// another source's panel.
 public struct SearchFilters: Sendable, Equatable, Hashable {
     public let licenses: Set<License>
     public let sizes: Set<SizeBucket>

@@ -19,8 +19,13 @@ let package = Package(
         // is an Xcode target `swift test` cannot see, and `Bundle.module`
         // resolves the same way in the app and in a test, where `Bundle.main`
         // would be the test runner.
-        .target(name: "FlickrDownloaderUI", dependencies: ["FlickrKit"]),
+        .target(
+            name: "FlickrDownloaderUI",
+            dependencies: ["FlickrKit"],
+            resources: [.copy("Resources")]
+        ),
 
         .testTarget(name: "FlickrKitTests", dependencies: ["FlickrKit"]),
+        .testTarget(name: "FlickrDownloaderUITests", dependencies: ["FlickrDownloaderUI"]),
     ]
 )

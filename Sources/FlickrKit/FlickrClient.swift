@@ -14,7 +14,7 @@ public struct ResolvedGroup: Sendable, Equatable, Hashable {
 /// Talking to Flickr.
 ///
 /// An actor because the credentials change when the user signs in or out, and
-/// every section of the interface holds the same client.
+/// every source of the interface holds the same client.
 public actor FlickrClient {
     public static let endpoint = "https://api.flickr.com/services/rest/"
 

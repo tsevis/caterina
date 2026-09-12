@@ -1,7 +1,7 @@
 import Foundation
 
 /// The four places photos come from.
-public enum Section: String, CaseIterable, Sendable, Identifiable, Hashable {
+public enum PhotoSource: String, CaseIterable, Sendable, Identifiable, Hashable {
     case you, search, user, groups
 
     public var id: String { rawValue }
@@ -50,16 +50,16 @@ public enum SectionStatus: Sendable, Equatable {
     }
 }
 
-/// One section's world: what it asked for, what came back, what is selected,
+/// One source's world: what it asked for, what came back, what is selected,
 /// and where in the results it is.
 ///
-/// **A value type, and one per section.** The reference application shared a
+/// **A value type, and one per source.** The reference application shared a
 /// single selection map and a single page number across four tabs, so loading
 /// any tab wiped the others' selection while their ticked thumbnails stayed on
 /// screen, and the Download button acted on whichever tab had loaded last.
 public struct SectionState: Sendable, Equatable {
-    public let section: Section
-    /// What the user typed — kept so the field survives switching sections.
+    public let source: PhotoSource
+    /// What the user typed — kept so the field survives switching sources.
     public let input: String
     public let query: PhotoQuery?
     public let filters: SearchFilters
@@ -72,13 +72,17 @@ public struct SectionState: Sendable, Equatable {
     public let status: SectionStatus
     /// True when Flickr reported more pages than it will actually serve.
     public let isPageCountClamped: Bool
+    /// Entries in the last reply that could not be read. Surfaced rather than
+    /// hidden: a page that quietly shrank is worse than one that says why.
+    public let skippedEntries: Int
 
-    public init(section: Section, input: String = "", query: PhotoQuery? = nil,
+    public init(source: PhotoSource, input: String = "", query: PhotoQuery? = nil,
                 filters: SearchFilters = SearchFilters(), photos: [Photo] = [],
                 selection: Set<String> = [], page: Int = 1, totalPages: Int = 1,
                 perPage: Int = PhotoRequest.defaultPerPage,
-                status: SectionStatus = .idle, isPageCountClamped: Bool = false) {
-        self.section = section
+                status: SectionStatus = .idle, isPageCountClamped: Bool = false,
+                skippedEntries: Int = 0) {
+        self.source = source
         self.input = input
         self.query = query
         self.filters = filters
@@ -89,6 +93,7 @@ public struct SectionState: Sendable, Equatable {
         self.perPage = max(1, perPage)
         self.status = status
         self.isPageCountClamped = isPageCountClamped
+        self.skippedEntries = max(0, skippedEntries)
     }
 
     // MARK: - Asking for something
@@ -100,7 +105,14 @@ public struct SectionState: Sendable, Equatable {
     /// position, which is the whole of the rule.
     public func beginning(query: PhotoQuery) -> SectionState {
         copy(query: query, photos: [], selection: [], page: 1,
-             status: .loading, isPageCountClamped: false)
+             status: .loading, isPageCountClamped: false, skippedEntries: 0)
+    }
+
+    /// Looking something up — a username, a group — before there is a query
+    /// to run. The source is busy but has nothing to page through yet.
+    public func resolving() -> SectionState {
+        copy(query: .some(nil), photos: [], selection: [], page: 1,
+             status: .loading, isPageCountClamped: false, skippedEntries: 0)
     }
 
     /// Move to an explicit page, keeping everything else.
@@ -142,7 +154,8 @@ public struct SectionState: Sendable, Equatable {
                     perPage: result.perPage,
                     status: result.photos.isEmpty ? .empty : .ready,
                     isPageCountClamped: Pagination.isClamped(reported: result.pages,
-                                                             perPage: result.perPage))
+                                                             perPage: result.perPage),
+                    skippedEntries: result.skippedEntries)
     }
 
     public func failed(_ error: FlickrError) -> SectionState {
@@ -185,9 +198,10 @@ public struct SectionState: Sendable, Equatable {
                       selection: Set<String>? = nil, page: Int? = nil,
                       totalPages: Int? = nil, perPage: Int? = nil,
                       status: SectionStatus? = nil,
-                      isPageCountClamped: Bool? = nil) -> SectionState {
+                      isPageCountClamped: Bool? = nil,
+                      skippedEntries: Int? = nil) -> SectionState {
         SectionState(
-            section: section,
+            source: source,
             input: input ?? self.input,
             query: query ?? self.query,
             filters: filters ?? self.filters,
@@ -197,43 +211,44 @@ public struct SectionState: Sendable, Equatable {
             totalPages: totalPages ?? self.totalPages,
             perPage: perPage ?? self.perPage,
             status: status ?? self.status,
-            isPageCountClamped: isPageCountClamped ?? self.isPageCountClamped)
+            isPageCountClamped: isPageCountClamped ?? self.isPageCountClamped,
+            skippedEntries: skippedEntries ?? self.skippedEntries)
     }
 }
 
-/// All four sections, and which one the user is looking at.
+/// All four sources, and which one the user is looking at.
 ///
-/// The only way to change a section is through `updating`, which returns a new
-/// workspace — so one section's load cannot reach into another's state.
+/// The only way to change a source is through `updating`, which returns a new
+/// workspace — so one source's load cannot reach into another's state.
 public struct Workspace: Sendable, Equatable {
-    public let active: Section
-    private let states: [Section: SectionState]
+    public let active: PhotoSource
+    private let states: [PhotoSource: SectionState]
 
-    public init(active: Section = .search) {
+    public init(active: PhotoSource = .search) {
         self.active = active
         self.states = Dictionary(uniqueKeysWithValues:
-            Section.allCases.map { ($0, SectionState(section: $0)) })
+            PhotoSource.allCases.map { ($0, SectionState(source: $0)) })
     }
 
-    private init(active: Section, states: [Section: SectionState]) {
+    private init(active: PhotoSource, states: [PhotoSource: SectionState]) {
         self.active = active
         self.states = states
     }
 
-    public subscript(section: Section) -> SectionState {
-        states[section] ?? SectionState(section: section)
+    public subscript(source: PhotoSource) -> SectionState {
+        states[source] ?? SectionState(source: source)
     }
 
     public var activeState: SectionState { self[active] }
 
-    public func updating(_ section: Section,
+    public func updating(_ source: PhotoSource,
                          _ transform: (SectionState) -> SectionState) -> Workspace {
         var next = states
-        next[section] = transform(self[section])
+        next[source] = transform(self[source])
         return Workspace(active: active, states: next)
     }
 
-    public func activating(_ section: Section) -> Workspace {
-        Workspace(active: section, states: states)
+    public func activating(_ source: PhotoSource) -> Workspace {
+        Workspace(active: source, states: states)
     }
 }

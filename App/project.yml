@@ -1,0 +1,56 @@
+# Generated into FlickrDownloader.xcodeproj by:
+#   xcodegen generate --spec App/project.yml
+#
+# The project is a thin shell. Every line of logic lives in the FlickrKit
+# package one directory up, so `swift build` and `swift test` work without
+# Xcode and the tests never need a window.
+name: FlickrDownloader
+options:
+  bundleIdPrefix: com.tsevis
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  FlickrKit:
+    path: ..
+
+targets:
+  FlickrDownloader:
+    type: application
+    platform: macOS
+    sources:
+      - path: FlickrDownloader
+    dependencies:
+      - package: FlickrKit
+        product: FlickrDownloaderUI
+      - package: FlickrKit
+        product: FlickrKit
+    settings:
+      base:
+        PRODUCT_NAME: FlickrDownloader
+        PRODUCT_BUNDLE_IDENTIFIER: com.tsevis.FlickrDownloader
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: FlickrDownloader/Info.plist
+        CODE_SIGN_ENTITLEMENTS: FlickrDownloader/FlickrDownloader.entitlements
+        # Apple Developer Program team.
+        DEVELOPMENT_TEAM: TN899J6HRF
+        # Developer ID, manual, no provisioning profile: direct distribution
+        # outside the App Store needs none.
+        CODE_SIGN_IDENTITY: "Developer ID Application"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: YES
+        # Xcode injects `com.apple.security.get-task-allow` into anything built
+        # with `xcodebuild build` rather than archived — a debug entitlement
+        # under a Developer ID signature lets any process running as the user
+        # read this app's memory, and it is an automatic notarisation refusal.
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+        # The other thing `xcodebuild build` does that `archive` does not: it
+        # signs with `--timestamp=none`, which Apple refuses — a signature
+        # without a secure timestamp cannot be shown to predate a revocation.
+        OTHER_CODE_SIGN_FLAGS: --timestamp
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        ENABLE_USER_SCRIPT_SANDBOXING: NO

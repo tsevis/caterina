@@ -1,6 +1,6 @@
 import Foundation
 
-/// What a section is asking Flickr for.
+/// What a source is asking Flickr for.
 public enum PhotoQuery: Sendable, Equatable, Hashable {
     /// A text search across Flickr.
     case search(text: String)
@@ -117,5 +117,5 @@ public struct PhotoRequest: Sendable, Equatable {
 }
 
 extension String {
-    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+    public var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }

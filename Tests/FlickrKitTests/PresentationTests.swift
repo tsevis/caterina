@@ -33,9 +33,9 @@ import Testing
     }
 
     @Test func everySectionHasATitleAndASymbol() {
-        #expect(Set(Section.allCases.map(\.title)).count == 4)
-        #expect(Set(Section.allCases.map(\.systemImage)).count == 4)
-        #expect(Section.allCases.filter(\.requiresAuthentication) == [.you])
+        #expect(Set(PhotoSource.allCases.map(\.title)).count == 4)
+        #expect(Set(PhotoSource.allCases.map(\.systemImage)).count == 4)
+        #expect(PhotoSource.allCases.filter(\.requiresAuthentication) == [.you])
     }
 
     @Test func everyErrorSaysSomething() {
@@ -79,11 +79,11 @@ import Testing
     }
 
     @Test func aSectionKnowsWhichWayItCanPage() {
-        let middle = SectionState(section: .search, page: 2, totalPages: 5)
+        let middle = SectionState(source: .search, page: 2, totalPages: 5)
         #expect(middle.canGoBack)
         #expect(middle.canGoForward)
 
-        let only = SectionState(section: .search, page: 1, totalPages: 1)
+        let only = SectionState(source: .search, page: 1, totalPages: 1)
         #expect(!only.canGoBack)
         #expect(!only.canGoForward)
     }
@@ -93,7 +93,7 @@ import Testing
         workspace = workspace.updating(.user) { $0.with(input: "someone") }
         workspace = workspace.activating(.groups).activating(.user)
         #expect(workspace[.user].input == "someone")
-        #expect(workspace.activeState.section == .user)
+        #expect(workspace.activeState.source == .user)
         #expect(workspace.active == .user)
     }
 

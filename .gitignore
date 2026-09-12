@@ -4,3 +4,4 @@
 DerivedData/
 *.xcodeproj
 signed/
+App/*.xcodeproj
