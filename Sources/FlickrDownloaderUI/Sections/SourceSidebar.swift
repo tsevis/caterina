@@ -16,6 +16,7 @@ struct SourceSidebar: View {
                     Label(source.title, systemImage: source.systemImage)
                         .badge(badge(for: source))
                         .tag(source)
+                        .accessibilityLabel(label(for: source))
                 }
             }
         }
@@ -28,6 +29,14 @@ struct SourceSidebar: View {
     private func badge(for source: PhotoSource) -> Text? {
         let count = model.workspace[source].selection.count
         return count > 0 ? Text(count.formatted()) : nil
+    }
+
+    /// What VoiceOver says for a row: the source, and what is waiting in it.
+    private func label(for source: PhotoSource) -> String {
+        let state = model.workspace[source]
+        let selected = state.selection.count
+        guard selected > 0 else { return source.title }
+        return "\(source.title), \(selected) selected"
     }
 
     private var account: some View {

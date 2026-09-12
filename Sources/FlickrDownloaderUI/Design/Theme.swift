@@ -8,9 +8,10 @@ import SwiftUI
 /// the macOS contract and the reason this is not a dark hand-rolled stylesheet
 /// like the PyQt application it replaces.
 ///
-/// What is defined here is the small identity palette: an amber taken from the
-/// contact-sheet key art, used for the few places that are about *this*
-/// application rather than about a control. It is deliberately not Flickr's
+/// What is defined here is the small identity palette: the tungsten amber of
+/// the app icon's own tiles — `Scripts/make-icon.py`, `TUNGSTEN` — used for the
+/// few places that are about *this* application rather than about a control, so
+/// the interface and the icon in the Dock beside it agree. It is deliberately not Flickr's
 /// blue or pink — this is not an official Flickr client and must not read as
 /// one.
 ///

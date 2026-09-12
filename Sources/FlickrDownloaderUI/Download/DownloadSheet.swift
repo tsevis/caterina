@@ -34,6 +34,8 @@ struct DownloadSheet: View {
             HStack {
                 Text("Save to")
                 Text(destination?.path ?? "Choose a folder…")
+                    .accessibilityLabel(destination.map { "Saving to \($0.lastPathComponent)" }
+                        ?? "No folder chosen")
                     .foregroundStyle(destination == nil ? Theme.inkTertiary : Theme.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -121,6 +123,9 @@ struct DownloadBar: View {
                 ProgressView(value: model.download.fraction)
                     .progressViewStyle(.linear)
                     .frame(maxWidth: 260)
+                    .accessibilityLabel("Downloading")
+                    .accessibilityValue(
+                        "\(model.download.completed) of \(model.download.total)")
                 Text("\(model.download.completed) of \(model.download.total)")
                     .monospacedDigit()
                     .font(.callout)

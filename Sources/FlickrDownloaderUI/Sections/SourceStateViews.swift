@@ -11,6 +11,7 @@ import FlickrKit
 struct SourceStateView: View {
     let source: PhotoSource
     let status: SectionStatus
+    var isSignedIn: Bool = false
     let retry: () -> Void
 
     var body: some View {
@@ -25,6 +26,13 @@ struct SourceStateView: View {
                 Label(idleTitle, systemImage: source.systemImage)
             } description: {
                 Text(idleDescription)
+            } actions: {
+                // Telling someone to sign in without giving them a way to is
+                // an instruction to go and find Settings.
+                if source.requiresAuthentication, !isSignedIn {
+                    SettingsLink { Text("Sign In to Flickr…") }
+                        .buttonStyle(.borderedProminent)
+                }
             }
 
         case .loading:
@@ -86,8 +94,9 @@ struct PaginationBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Button(action: onPrevious) { Label("Previous", systemImage: "chevron.left") }
+            Button(action: onPrevious) { Label("Previous page", systemImage: "chevron.left") }
                 .labelStyle(.iconOnly)
+                .help("Previous page (⌘←)")
                 .disabled(!state.canGoBack)
                 .keyboardShortcut(.leftArrow, modifiers: .command)
 
@@ -95,9 +104,13 @@ struct PaginationBar: View {
                 .font(.callout)
                 .monospacedDigit()
                 .foregroundStyle(Theme.inkSecondary)
+                .accessibilityLabel(state.total > 0
+                    ? "Page \(state.page) of \(state.totalPages), \(state.total) photos found"
+                    : "Page \(state.page) of \(state.totalPages)")
 
-            Button(action: onNext) { Label("Next", systemImage: "chevron.right") }
+            Button(action: onNext) { Label("Next page", systemImage: "chevron.right") }
                 .labelStyle(.iconOnly)
+                .help("Next page (⌘→)")
                 .disabled(!state.canGoForward)
                 .keyboardShortcut(.rightArrow, modifiers: .command)
 

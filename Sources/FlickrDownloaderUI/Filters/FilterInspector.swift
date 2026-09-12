@@ -87,6 +87,10 @@ struct FilterInspector: View {
                 }
             }
         }
+        // Checkboxes, not switches. A switch says "this setting is on"; these
+        // are a set of things being picked out of a list, and macOS spells that
+        // with a checkbox.
+        .toggleStyle(.checkbox)
         .formStyle(.grouped)
         .disabled(!supportsFilters)
         .inspectorColumnWidth(min: 240, ideal: Theme.Metrics.inspectorWidth, max: 340)

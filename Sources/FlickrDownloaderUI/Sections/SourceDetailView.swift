@@ -22,7 +22,8 @@ public struct SourceDetailView: View {
                                   onPreview: { model.preview($0) },
                                   dragVariant: model.downloadVariant)
                 } else {
-                    SourceStateView(source: source, status: state.status) {
+                    SourceStateView(source: source, status: state.status,
+                                    isSignedIn: model.isSignedIn) {
                         model.submit(source)
                     }
                 }

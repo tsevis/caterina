@@ -59,9 +59,25 @@ public final class AboutWindowController: NSObject {
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentView = NSHostingView(
-            rootView: AboutView(close: { [weak self] in self?.window?.close() })
-        )
+
+        // **The window is sized here, not by the view.** Left to itself,
+        // `NSHostingView` sets the window's *content* size to the root view's
+        // 640 × 580 and macOS adds a title bar on top, so the frame becomes
+        // 640 × 608 and the key art starts 28pt down — with a grey strip above
+        // it, which is exactly what `.fullSizeContentView` and a transparent
+        // title bar exist to avoid. Sizing the frame instead puts the contact
+        // sheet under the traffic lights, where it belongs.
+        let hosting = NSHostingView(
+            rootView: AboutView(close: { [weak self] in self?.window?.close() }))
+        hosting.sizingOptions = []
+        // **And SwiftUI has to be told to ignore the title bar.** Measured:
+        // with `.fullSizeContentView` the content view really does span the
+        // whole 640 × 580 frame, but `contentLayoutRect` is 640 × 552 and
+        // SwiftUI lays out inside *that* safe area — so the contact sheet
+        // started 28pt down and the attribution line fell off the bottom.
+        hosting.safeAreaRegions = []
+        window.contentView = hosting
+        window.setFrame(NSRect(x: 0, y: 0, width: 640, height: 580), display: false)
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
