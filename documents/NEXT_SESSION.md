@@ -44,6 +44,25 @@ everything for no gain today; split each tab into its module when it gets code.
 * Organize shows the library copy's count and last sync, syncs at launch.
 * A background review's MEDIUM/LOW findings are fixed (`3ed27fc`).
 
+**Phase 2, the uploader (2026-09-13), offline-tested:**
+
+* `UploadRequest`: multipart body written to a temp file, photo excluded
+  from the signature (oauthlib vector), streamed by a 4-hour upload session.
+  `FlickrClient.upload` never retries a lost connection; `checkTickets`.
+* `FileMetadata`: IPTC title/caption/keywords, EXIF date, GPS via ImageIO.
+* Albums: `albums(page:)`, `createAlbum` (never repeated), `addToAlbum`.
+* `UploadRunner` + migration v3: queue on disk with security-scoped
+  bookmarks, 2 at a time, tickets polled, album filing. Mid-send at quit →
+  `interrupted`, resent only by the person.
+* Upload tab: drop/⌘O, editable titles and tags, presets (Public, Friends &
+  family, Private, plus the person's own), album choice, progress, Send
+  Again. `PermissionRequestSheet` asks Flickr for write when first needed.
+  Unfinished batches restore at launch.
+
+**Not in Phase 2 yet:** licence and group steps after upload, duplicate
+detection, watch folders, Photos import, video limits (Phase 5), thumbnails
+in the draft table, editing custom presets in the UI (store exists).
+
 **Not done in Phase 1:** multipart upload body (moved to the start of Phase 2);
 the permission-approval sheet and Activity panel (built with the first UI that
 writes, Phase 3); a live write test — it needs a write token in the
