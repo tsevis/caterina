@@ -32,11 +32,14 @@ public struct PhotoInfo: Sendable, Equatable {
     public let pageURL: URL?
     public let lastUpdated: Date?
     public let media: LibraryPhoto.Media
+    /// Who may comment and add tags; reported to the owner only.
+    public let permissions: LibraryPhoto.Permissions?
 
     public init(id: String, title: String, description: String, owner: Owner, views: Int, commentCount: Int,
                 license: License?, tags: [String], posted: Date?, taken: String?,
                 visibility: LibraryPhoto.Visibility, location: LibraryPhoto.Location?, place: String?, pageURL: URL?,
-                lastUpdated: Date? = nil, media: LibraryPhoto.Media = .photo) {
+                lastUpdated: Date? = nil, media: LibraryPhoto.Media = .photo,
+                permissions: LibraryPhoto.Permissions? = nil) {
         self.id = id
         self.title = title
         self.description = description
@@ -53,13 +56,14 @@ public struct PhotoInfo: Sendable, Equatable {
         self.pageURL = pageURL
         self.lastUpdated = lastUpdated
         self.media = media
+        self.permissions = permissions
     }
 
     /// The fields an edit reads and writes, with tags as they were typed.
     public var libraryPhoto: LibraryPhoto {
         LibraryPhoto(id: id, title: title, description: description, tags: tags, license: license,
                      visibility: visibility, uploaded: posted, lastUpdated: lastUpdated, taken: taken,
-                     media: media, location: location)
+                     media: media, location: location, permissions: permissions)
     }
 }
 

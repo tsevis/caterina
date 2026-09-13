@@ -20,12 +20,12 @@ public struct PhotoChange: Sendable, Equatable {
     /// In a fixed order, one call per group of fields that changed. Every one
     /// sets a value outright, so every one is safe to repeat.
     public var writes: [FlickrWrite] {
-        [meta, tags, visibility, taken, license, location].compactMap { $0 }
+        [meta, tags, visibility, taken, license, location, geoPermissions, safety, contentType].compactMap { $0 }
     }
 
     private var id: String { after.id }
 
-    private func write(_ method: String, _ arguments: [String: String]) -> FlickrWrite {
+    func write(_ method: String, _ arguments: [String: String]) -> FlickrWrite {
         FlickrWrite(method: method, arguments: arguments.merging(["photo_id": id]) { new, _ in new },
                     repeatable: true)
     }
@@ -42,13 +42,22 @@ public struct PhotoChange: Sendable, Equatable {
         return write("flickr.photos.setTags", ["tags": UploadMetadata.tagList(after.tags)])
     }
 
+    /// `setPerms` needs the three visibility flags even when only who may
+    /// comment changes. Unknown comment and tag permissions are left out,
+    /// which leaves Flickr's alone.
     private var visibility: FlickrWrite? {
-        guard before.visibility != after.visibility else { return nil }
-        let flag = { (on: Bool) in on ? "1" : "0" }
-        return write("flickr.photos.setPerms", ["is_public": flag(after.visibility.isPublic),
-                                                "is_friend": flag(after.visibility.isFriend),
-                                                "is_family": flag(after.visibility.isFamily)])
+        guard before.visibility != after.visibility || before.permissions != after.permissions else { return nil }
+        var arguments = ["is_public": Self.flag(after.visibility.isPublic),
+                         "is_friend": Self.flag(after.visibility.isFriend),
+                         "is_family": Self.flag(after.visibility.isFamily)]
+        if let permissions = after.permissions {
+            arguments["perm_comment"] = String(permissions.comment.rawValue)
+            arguments["perm_addmeta"] = String(permissions.addMeta.rawValue)
+        }
+        return write("flickr.photos.setPerms", arguments)
     }
+
+    static func flag(_ on: Bool) -> String { on ? "1" : "0" }
 
     /// Flickr cannot be told a date is unknown, so going back to one is skipped.
     private var taken: FlickrWrite? {

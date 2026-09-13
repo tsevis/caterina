@@ -45,3 +45,28 @@ import Testing
         #expect(try await client.livePhoto(id: "2733", priority: .edit).taken == nil)
     }
 }
+
+/// `photos.geo.getPerms`, read only for an edit that changes who can see a
+/// location: it is a call per photo.
+@Suite struct GeoPermissionReadTests {
+
+    private func client(_ replies: [ScriptedTransport.Reply]) -> (FlickrClient, ScriptedTransport) {
+        let transport = ScriptedTransport(replies)
+        return (FlickrClient(credentials: Fixtures.credentials, transport: transport, budget: .unspaced,
+                             sleep: SleepRecorder().sleep), transport)
+    }
+
+    @Test func theFourFlagsAreRead() async throws {
+        let (client, transport) = client([.body(
+            #"{"perms":{"id":"10592","ispublic":0,"iscontact":"1","isfriend":0,"isfamily":1},"stat":"ok"}"#)])
+        #expect(try await client.geoPermissions(photoID: "10592", priority: .edit)
+                == .init(isPublic: false, isContact: true, isFriend: false, isFamily: true))
+        #expect(await transport.lastQueryItems["method"] == "flickr.photos.geo.getPerms")
+    }
+
+    /// Code 2: the photo has no location, so nobody can see one.
+    @Test func aPhotoWithNoLocationHasNoPermissions() async throws {
+        let (client, _) = client([.body(#"{"stat":"fail","code":2,"message":"Photo has no location information"}"#)])
+        #expect(try await client.geoPermissions(photoID: "1", priority: .edit) == nil)
+    }
+}

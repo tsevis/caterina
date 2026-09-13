@@ -118,7 +118,7 @@ extension LibraryStore {
                          createdAt: Date(timeIntervalSince1970: row["createdAt"]),
                          undoes: row["undoes"],
                          // One read per photo, to lay the change over Flickr's copy.
-                         calls: changes.reduce(0) { $0 + 1 + $1.change.writes.count })
+                         calls: changes.reduce(0) { $0 + $1.change.readCalls + $1.change.writes.count })
     }
 
     private static func entry(_ row: Row) throws -> EditEntry {

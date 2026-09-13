@@ -8,7 +8,7 @@ public struct UploadMetadata: Sendable, Equatable, Hashable, Codable {
     }
 
     public enum ContentType: Int, Sendable, Codable, CaseIterable {
-        case photo = 1, screenshot = 2, other = 3
+        case photo = 1, screenshot = 2, other = 3, virtualPhotography = 4
     }
 
     public let title: String

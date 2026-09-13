@@ -122,3 +122,27 @@ import FlickrKit
         #expect(try store.entries(in: batch.id).map(\.photoID) == ["3", "2", "1"])
     }
 }
+
+@Suite struct BatchGeoPermissionTests {
+    @Test func locationPermissionsAreReadOnlyWhenTheEditChangesThem() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryStoreTests.photo("1", location: .init(latitude: 1, longitude: 2, accuracy: 16))],
+                       generation: 1)
+        let hide = LibraryPhoto.GeoPermissions(isPublic: false, isContact: false, isFriend: false, isFamily: false)
+        let shown = LibraryPhoto.GeoPermissions(isPublic: true, isContact: false, isFriend: false, isFamily: false)
+        let title = try store.createBatch(title: "T", edit: .setTitle("A"), photos: try store.photos(ids: ["1"]))
+        let geo = try store.createBatch(title: "G", edit: .setGeoPermissions(hide), photos: try store.photos(ids: ["1"]))
+        #expect(geo.calls == 3)
+        let flickr = ScriptedWriter(store: store, geoPermissions: ["1": shown])
+
+        _ = try await BatchRunner(writer: flickr, store: store).run(title.id)
+        #expect(await flickr.geoRead.isEmpty)
+        _ = try await BatchRunner(writer: flickr, store: store).run(geo.id)
+        #expect(await flickr.geoRead == ["1"])
+
+        let undo = try store.undoBatch(for: geo.id)
+        let undoing = ScriptedWriter(store: store, geoPermissions: ["1": hide])
+        _ = try await BatchRunner(writer: undoing, store: store).run(undo.id)
+        #expect(await undoing.sent.last?.arguments["is_public"] == "1")
+    }
+}

@@ -10,6 +10,7 @@ public protocol PhotoWriter: Sendable {
 /// Where a photo is read back from just before it is changed.
 public protocol LivePhotoReader: Sendable {
     func livePhoto(id: String, priority: CallPriority) async throws -> LibraryPhoto
+    func geoPermissions(photoID: String, priority: CallPriority) async throws -> LibraryPhoto.GeoPermissions?
 }
 
 extension FlickrClient: PhotoWriter, LivePhotoReader {}
@@ -57,7 +58,10 @@ public struct BatchRunner: Sendable {
     }
 
     private func apply(_ entry: EditEntry) async throws {
-        let live = try await flickr.livePhoto(id: entry.photoID, priority: .edit)
+        var live = try await flickr.livePhoto(id: entry.photoID, priority: .edit)
+        if entry.change.readsGeoPermissions {
+            live = live.with(geoPermissions: try await flickr.geoPermissions(photoID: entry.photoID, priority: .edit))
+        }
         switch entry.change.rebased(onto: live) {
         case let .conflict(reason):
             try store.record(entry, as: .failed, message: reason)

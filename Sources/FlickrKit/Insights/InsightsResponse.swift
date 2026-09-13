@@ -30,7 +30,9 @@ enum InsightsResponse {
             let location: Location?
             let urls: URLs?
             let media: String?
+            let permissions: Permissions?
         }
+        struct Permissions: Decodable { let permcomment: LooseInt?; let permaddmeta: LooseInt? }
         struct Owner: Decodable { let nsid: String?; let username: String?; let realname: String? }
         struct Visibility: Decodable { let ispublic: LooseInt?; let isfriend: LooseInt?; let isfamily: LooseInt? }
         struct Dates: Decodable {
@@ -69,7 +71,15 @@ enum InsightsResponse {
             location: location, place: place.isEmpty ? nil : place.joined(separator: ", "),
             pageURL: photo.urls?.url?.first { $0.type == "photopage" }?._content.flatMap(URL.init(string:)),
             lastUpdated: photo.dates?.lastupdate?.value.map { Date(timeIntervalSince1970: TimeInterval($0)) },
-            media: photo.media.flatMap(LibraryPhoto.Media.init(rawValue:)) ?? .photo)
+            media: photo.media.flatMap(LibraryPhoto.Media.init(rawValue:)) ?? .photo,
+            permissions: permissions(photo.permissions?.permcomment, photo.permissions?.permaddmeta))
+    }
+
+    /// Only the owner is told; anyone else's photo has neither.
+    private static func permissions(_ comment: LooseInt?, _ addMeta: LooseInt?) -> LibraryPhoto.Permissions? {
+        guard let comment = comment?.value.flatMap(LibraryPhoto.Audience.init(rawValue:)),
+              let addMeta = addMeta?.value.flatMap(LibraryPhoto.Audience.init(rawValue:)) else { return nil }
+        return .init(comment: comment, addMeta: addMeta)
     }
 
     static func favorites(from data: Data) throws -> FavePage {

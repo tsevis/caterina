@@ -11,11 +11,15 @@ actor ScriptedWriter: PhotoWriter, LivePhotoReader {
     private let readFailures: [String: FlickrError]
     private let live: [String: LibraryPhoto]
     private(set) var sent: [FlickrWrite] = []
+    private let geo: [String: LibraryPhoto.GeoPermissions]
     private(set) var read: [String] = []
+    private(set) var geoRead: [String] = []
 
     /// `failures` and `readFailures` are keyed on photo id.
     init(store: LibraryStore, failing failures: [String: FlickrError] = [:],
-         failingReads readFailures: [String: FlickrError] = [:], live: [String: LibraryPhoto] = [:]) {
+         failingReads readFailures: [String: FlickrError] = [:], live: [String: LibraryPhoto] = [:],
+         geoPermissions geo: [String: LibraryPhoto.GeoPermissions] = [:]) {
+        self.geo = geo
         self.store = store
         self.failures = failures
         self.readFailures = readFailures
@@ -36,5 +40,10 @@ actor ScriptedWriter: PhotoWriter, LivePhotoReader {
             throw FlickrError.api(code: 1, message: "Photo not found", transient: false)
         }
         return photo
+    }
+
+    func geoPermissions(photoID: String, priority: CallPriority) async throws -> LibraryPhoto.GeoPermissions? {
+        geoRead.append(photoID)
+        return geo[photoID]
     }
 }

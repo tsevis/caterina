@@ -27,6 +27,11 @@ extension PhotoChange {
             rebased.visibility = try field("who can see", \.visibility, live)
             rebased.taken = try field("date taken", \.taken, live)
             rebased.location = try field("location", \.location, live)
+            rebased.permissions = try unreported("who can comment and add tags", \.permissions, live)
+            rebased.safety = try unreported("safety level", \.safety, live)
+            rebased.contentType = try unreported("content type", \.contentType, live)
+            rebased.hiddenFromSearch = try unreported("hidden from search", \.hiddenFromSearch, live)
+            rebased.geoPermissions = try unreported("who can see the location", \.geoPermissions, live)
         } catch {
             return .conflict("The \(error.field) was changed on Flickr after this edit was made, so it was left as it is.")
         }
@@ -41,6 +46,16 @@ extension PhotoChange {
         guard from != to else { return now }
         guard now == from || now == to else { throw Conflict(field: name) }
         return to
+    }
+
+    /// For a field the library copy does not hold: nil before means "not
+    /// known", so whatever Flickr reports is the true before.
+    private func unreported<Value: Equatable>(_ name: String, _ path: KeyPath<LibraryPhoto, Value?>,
+                                              _ live: LibraryPhoto) throws(Conflict) -> Value? {
+        guard before[keyPath: path] != nil else {
+            return after[keyPath: path] ?? live[keyPath: path]
+        }
+        return try field(name, path, live)
     }
 
     private func rebasedTags(onto live: [String]) -> [String] {
@@ -70,6 +85,11 @@ extension LibraryPhoto {
         merged.visibility = other.visibility
         merged.taken = other.taken
         merged.location = other.location
+        merged.permissions = other.permissions
+        merged.safety = other.safety
+        merged.contentType = other.contentType
+        merged.hiddenFromSearch = other.hiddenFromSearch
+        merged.geoPermissions = other.geoPermissions
         return merged
     }
 

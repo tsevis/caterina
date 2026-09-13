@@ -53,3 +53,26 @@ extension FlickrClient {
             priority: priority)
     }
 }
+
+extension FlickrClient {
+
+    /// Who can see where the photo was taken; nil when it has no location
+    /// (Flickr's code 2).
+    public func geoPermissions(photoID: String, priority: CallPriority) async throws -> LibraryPhoto.GeoPermissions? {
+        struct Envelope: Decodable { let perms: Perms }
+        struct Perms: Decodable {
+            let ispublic: InsightsResponse.LooseInt?, iscontact: InsightsResponse.LooseInt?
+            let isfriend: InsightsResponse.LooseInt?, isfamily: InsightsResponse.LooseInt?
+        }
+        let data: Data
+        do {
+            data = try await call("flickr.photos.geo.getPerms", ["photo_id": photoID], priority: priority)
+        } catch FlickrError.api(code: 2, _, _) {
+            return nil
+        }
+        let perms = try InsightsResponse.decode(Envelope.self, data, "who can see the location").perms
+        let flag = { (value: InsightsResponse.LooseInt?) in (value?.value ?? 0) != 0 }
+        return .init(isPublic: flag(perms.ispublic), isContact: flag(perms.iscontact),
+                     isFriend: flag(perms.isfriend), isFamily: flag(perms.isfamily))
+    }
+}

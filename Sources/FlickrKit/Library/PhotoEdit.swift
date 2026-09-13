@@ -37,6 +37,11 @@ public enum PhotoEdit: Sendable, Equatable {
     case shiftTaken(seconds: Int)
     case setLocation(LibraryPhoto.Location)
     case removeLocation
+    case setPermissions(LibraryPhoto.Permissions)
+    case setSafety(UploadMetadata.Safety)
+    case setContentType(UploadMetadata.ContentType)
+    case setHiddenFromSearch(Bool)
+    case setGeoPermissions(LibraryPhoto.GeoPermissions)
 
     public func applied(to photo: LibraryPhoto, context: Context = .single) -> LibraryPhoto {
         var edited = photo
@@ -55,6 +60,11 @@ public enum PhotoEdit: Sendable, Equatable {
         case let .shiftTaken(seconds): edited.taken = photo.taken.flatMap { TakenDate.shift($0, by: seconds) }
         case let .setLocation(location): edited.location = location
         case .removeLocation: edited.location = nil
+        case let .setPermissions(permissions): edited.permissions = permissions
+        case let .setSafety(safety): edited.safety = safety
+        case let .setContentType(contentType): edited.contentType = contentType
+        case let .setHiddenFromSearch(hidden): edited.hiddenFromSearch = hidden
+        case let .setGeoPermissions(permissions): edited.geoPermissions = permissions
         }
         return edited
     }

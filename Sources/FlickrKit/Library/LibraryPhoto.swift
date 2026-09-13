@@ -57,13 +57,24 @@ public struct LibraryPhoto: Sendable, Equatable, Hashable, Identifiable, Codable
     public internal(set) var ownerID: String?
     public internal(set) var ownerName: String?
 
+    // Nil where unknown: the library copy does not hold these, and Flickr
+    // does not report all of them back.
+    public internal(set) var permissions: Permissions?
+    public internal(set) var safety: UploadMetadata.Safety?
+    public internal(set) var contentType: UploadMetadata.ContentType?
+    public internal(set) var hiddenFromSearch: Bool?
+    public internal(set) var geoPermissions: GeoPermissions?
+
     public init(id: String, title: String = "", description: String = "", tags: [String] = [],
                 license: License? = nil,
                 visibility: Visibility = Visibility(isPublic: true, isFriend: false, isFamily: false),
                 uploaded: Date? = nil, lastUpdated: Date? = nil, taken: String? = nil,
                 views: Int = 0, media: Media = .photo, location: Location? = nil,
                 thumbnailURL: String? = nil, mediumURL: String? = nil,
-                ownerID: String? = nil, ownerName: String? = nil) {
+                ownerID: String? = nil, ownerName: String? = nil,
+                permissions: Permissions? = nil, safety: UploadMetadata.Safety? = nil,
+                contentType: UploadMetadata.ContentType? = nil, hiddenFromSearch: Bool? = nil,
+                geoPermissions: GeoPermissions? = nil) {
         self.id = id
         self.title = title
         self.description = description
@@ -80,6 +91,11 @@ public struct LibraryPhoto: Sendable, Equatable, Hashable, Identifiable, Codable
         self.mediumURL = mediumURL
         self.ownerID = ownerID
         self.ownerName = ownerName
+        self.permissions = permissions
+        self.safety = safety
+        self.contentType = contentType
+        self.hiddenFromSearch = hiddenFromSearch
+        self.geoPermissions = geoPermissions
     }
 }
 
