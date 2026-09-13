@@ -59,6 +59,24 @@ everything for no gain today; split each tab into its module when it gets code.
   Again. `PermissionRequestSheet` asks Flickr for write when first needed.
   Unfinished batches restore at launch.
 
+**Phase 4, Browse & Insights (2026-09-14), offline-tested.** The user
+verified uploads work and asked for the browser next, so Phase 3 (Organize UI)
+was skipped for now; its engine (`PhotoEdit`, `BatchRunner`) exists.
+
+* FlickrKit reads: `photoInfo`, `favorites` (50/page), `comments`,
+  `contexts`, `exif` (hidden → `.hidden`), and Pro stats: `StatsDay` (GMT),
+  `popularPhotos` (100/page), `totalViews`, `photoStats`,
+  `referringDomains`, `referrers`. Shapes follow Flickr's documented XML
+  mapped to JSON; **not yet checked live**.
+* Migration v4: `photoDay`, `accountDay`. `StatsSnapshot` saves every whole
+  day Flickr still holds, oldest first, one transaction per day; runs at
+  launch. `topPhotos`, `risingPhotos`.
+* Browse tab: rankings, account views chart, photo record with Swift Charts
+  (views per day, faves over time), albums/groups, tags, camera, comments,
+  faved by. Charts reviewed by eye from offscreen renders.
+* Referrer data is read by FlickrKit but not shown yet; Explore and other
+  people's photos in Browse are not built.
+
 **Not in Phase 2 yet:** licence and group steps after upload, duplicate
 detection, watch folders, Photos import, video limits (Phase 5), thumbnails
 in the draft table, editing custom presets in the UI (store exists).
