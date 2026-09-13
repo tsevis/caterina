@@ -13,7 +13,7 @@ import Testing
 
     private func client(_ transport: ScriptedTransport, granted: FlickrPermission) -> FlickrClient {
         FlickrClient(credentials: Fixtures.credentials, permission: granted,
-                     transport: transport, sleep: SleepRecorder().sleep)
+                     transport: transport, budget: .unspaced, sleep: SleepRecorder().sleep)
     }
 
     @Test func eachLevelIncludesTheOnesBelowIt() {

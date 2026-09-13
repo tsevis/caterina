@@ -23,17 +23,20 @@ public actor FlickrClient {
     private let transport: HTTPTransport
     private let policy: RetryPolicy
     private let sleep: Sleeper
+    private let budget: CallBudget
 
     public init(credentials: OAuth1.Credentials,
                 permission: FlickrPermission = .read,
                 transport: HTTPTransport = URLSessionTransport(),
                 policy: RetryPolicy = .standard,
+                budget: CallBudget = .standard,
                 sleep: @escaping Sleeper = { try await Task.sleep(for: $0) }) {
         self.credentials = credentials
         self.permission = permission
         self.transport = transport
         self.policy = policy
         self.sleep = sleep
+        self.budget = budget
     }
 
     public func update(credentials: OAuth1.Credentials, permission: FlickrPermission = .read) {
@@ -191,7 +194,10 @@ public actor FlickrClient {
     // MARK: - Writing
 
     /// Change something on Flickr. Needs a signed-in account.
-    public func perform(_ write: FlickrWrite) async throws -> Data {
+    ///
+    /// `priority` is `.edit` unless the person is waiting on this one call:
+    /// a batch is spaced out so that it never crowds what they are looking at.
+    public func perform(_ write: FlickrWrite, priority: CallPriority = .edit) async throws -> Data {
         guard credentials.token != nil else {
             throw FlickrError.invalidInput("Sign in to Flickr to change your photos.")
         }
@@ -200,7 +206,8 @@ public actor FlickrClient {
         }
         let credentials = self.credentials
         do {
-            return try await withRetries(retryingLostConnections: write.repeatable) { transport in
+            return try await withRetries(priority: priority,
+                                         retryingLostConnections: write.repeatable) { transport in
                 let request = try OAuth1.signedPOSTRequest(
                     url: Self.endpoint, parameters: write.parameters, credentials: credentials)
                 return try await transport.send(request)
@@ -218,7 +225,8 @@ public actor FlickrClient {
 
     private func send(_ parameters: [OAuthParameter]) async throws -> Data {
         let credentials = self.credentials
-        return try await withRetries(retryingLostConnections: true) { transport in
+        return try await withRetries(priority: .interactive,
+                                     retryingLostConnections: true) { transport in
             let url = try OAuth1.signedURL(
                 method: "GET", url: Self.endpoint,
                 parameters: parameters, credentials: credentials)
@@ -235,12 +243,15 @@ public actor FlickrClient {
     /// seconds for the same message. Every attempt is signed afresh, so no two
     /// share a nonce.
     private func withRetries(
+        priority: CallPriority,
         retryingLostConnections: Bool,
         _ call: @Sendable (HTTPTransport) async throws -> Data
     ) async throws -> Data {
         var lastError: FlickrError = .busy("Flickr did not answer.")
 
         for attempt in 0..<policy.attempts {
+            // Every attempt is a call Flickr counts, retries included.
+            try await budget.acquire(priority)
             do {
                 let data = try await call(transport)
                 // Reading the status here is what makes a `stat=fail` blip

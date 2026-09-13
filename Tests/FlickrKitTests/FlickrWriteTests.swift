@@ -14,7 +14,7 @@ import Testing
     private func client(_ transport: ScriptedTransport,
                         credentials: OAuth1.Credentials = Fixtures.credentials) -> FlickrClient {
         FlickrClient(credentials: credentials, permission: .write,
-                     transport: transport, sleep: SleepRecorder().sleep)
+                     transport: transport, budget: .unspaced, sleep: SleepRecorder().sleep)
     }
 
     private let setTitle = FlickrWrite(method: "flickr.photos.setMeta",

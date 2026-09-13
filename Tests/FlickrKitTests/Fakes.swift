@@ -112,3 +112,10 @@ enum Fixtures {
     static let unauthenticated = OAuth1.Credentials(
         consumerKey: "key", consumerSecret: "secret")
 }
+
+extension CallBudget {
+    /// Counts, never waits: a write test is not about pacing.
+    static var unspaced: CallBudget {
+        CallBudget(limits: .standard, spacing: .zero)
+    }
+}
