@@ -77,6 +77,20 @@ was skipped for now; its engine (`PhotoEdit`, `BatchRunner`) exists.
 * Referrer data is read by FlickrKit but not shown yet; Explore and other
   people's photos in Browse are not built.
 
+**Browse overhaul (2026-09-14), at the user's request, offline-tested and
+reviewed (`4ee5308`):**
+
+* Scopes (`BrowseScope`): your photos (all, timeline, tags, places, people,
+  videos), rankings, albums/collections/galleries/groups, audience, licence,
+  your faves, Explore. Layouts: list, grid, timeline, map (MapKit, 2,000 pins).
+* FlickrKit `PhotoList` and structures: `groups(of:)`, `galleries()`,
+  `collections()`, `contacts(page:)`, `photoList(_:page:)`.
+* Migrations v5 (`mediumURL`, forces one full sync) and v6 (`FansIndex`:
+  faves per photo, read in the background after each sync).
+* Not possible via the API at account scale: people tagged in photos
+  (per-photo only), cameras (per-photo EXIF), editing collections.
+* `galleries.getList` paging by `page` with `continuation=0` is unverified live.
+
 **Not in Phase 2 yet:** licence and group steps after upload, duplicate
 detection, watch folders, Photos import, video limits (Phase 5), thumbnails
 in the draft table, editing custom presets in the UI (store exists).
