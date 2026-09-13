@@ -75,8 +75,12 @@ import FlickrKit
         let data = DownloadFolder.bookmark(for: folder, options: [])
         #expect(!data.isEmpty)
 
+        // Compared by path, not by URL. A bookmark resolves to a *directory*
+        // URL — on macOS 26 that carries a trailing slash where the original
+        // did not — and two URLs that differ only in that name one folder.
         let restored = DownloadFolder.restored(from: data, options: [])
-        #expect(restored?.standardizedFileURL == folder.standardizedFileURL)
+        #expect(restored?.resolvingSymlinksInPath().path
+            == folder.resolvingSymlinksInPath().path)
     }
 
     @Test func nothingRememberedIsNotAFolder() {
