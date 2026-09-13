@@ -111,6 +111,20 @@ enum LibrarySchema {
             // sync a full one so every photo gets it.
             try db.execute(sql: "UPDATE syncState SET lastFullSync = NULL")
         }
+        migrator.registerMigration("v6-fans") { db in
+            // Who faved which of your photos, and when: the People view.
+            try db.create(table: "fave") { t in
+                t.column("photoID", .text).notNull()
+                t.column("nsid", .text).notNull().indexed()
+                t.column("username", .text).notNull()
+                t.column("date", .double).notNull().indexed()
+                t.primaryKey(["photoID", "nsid"])
+            }
+            try db.create(table: "faveScan") { t in
+                t.primaryKey("photoID", .text)
+                t.column("readAt", .double).notNull()
+            }
+        }
         return migrator
     }
 

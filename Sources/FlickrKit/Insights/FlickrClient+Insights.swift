@@ -8,8 +8,13 @@ extension FlickrClient {
 
     /// Flickr's largest page of faves is 50.
     public func favorites(photoID: String, page: Int) async throws -> FavePage {
+        try await favorites(photoID: photoID, page: page, priority: .interactive)
+    }
+
+    public func favorites(photoID: String, page: Int, priority: CallPriority) async throws -> FavePage {
         try InsightsResponse.favorites(from: await call("flickr.photos.getFavorites",
-                                                        ["photo_id": photoID, "page": String(page), "per_page": "50"]))
+                                                        ["photo_id": photoID, "page": String(page), "per_page": "50"],
+                                                        priority: priority))
     }
 
     public func comments(photoID: String) async throws -> [PhotoComment] {
