@@ -77,7 +77,7 @@ struct PhotoRecordView: View {
     private var favesSection: some View {
         if !record.faves.isEmpty {
             RecordSection("Faves over time") {
-                FavesOverTimeChart(counts: PhotoRecord.cumulativeFaves(record.faves))
+                FavesOverTimeChart(counts: PhotoRecord.cumulativeFaves(record.faves, total: record.faveTotal))
                     .frame(height: 140)
                 if record.faveTotal > record.faves.count {
                     Text("The latest \(record.faves.count.formatted()) of \(record.faveTotal.formatted()) faves.")

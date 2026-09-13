@@ -11,14 +11,20 @@ actor ScriptedStats: StatsSource {
     private(set) var askedDays: [String] = []
 
     /// `perDay[day]` is that day's pages.
-    init(_ perDay: [String: [[PhotoDayStats]]], failure: FlickrError? = nil) {
+    private let failingDays: [String: FlickrError]
+
+    init(_ perDay: [String: [[PhotoDayStats]]], failure: FlickrError? = nil,
+         failingDays: [String: FlickrError] = [:]) {
         self.perDay = perDay
         self.failure = failure
+        self.failingDays = failingDays
     }
+
 
     func popularPhotos(on day: StatsDay, page: Int, priority: CallPriority) async throws -> PopularPage {
         if let failure { throw failure }
         askedDays.append(day.text)
+        if let failing = failingDays[day.text] { throw failing }
         let pages = perDay[day.text] ?? [[]]
         return PopularPage(page: page, pages: pages.count, photos: pages[page - 1])
     }
@@ -54,7 +60,10 @@ actor ScriptedStats: StatsSource {
         #expect(try store.accountHistory().last?.totals.photos == 8)
     }
 
-    @Test func aDayAlreadySavedIsNotAskedForAgain() async throws {
+    /// Older saved days are final. The newest two are asked for again while
+    /// Flickr still holds them: a day saved just after midnight GMT may not
+    /// have had all its numbers counted yet.
+    @Test func onlyTheNewestSavedDaysAreAskedForAgain() async throws {
         let store = try LibraryStore.inMemory()
         let source = ScriptedStats([:])
         _ = try await StatsSnapshot(source: source, store: store).run(now: now)
@@ -63,7 +72,30 @@ actor ScriptedStats: StatsSource {
         let outcome = try await StatsSnapshot(source: later, store: store).run(now: now.addingTimeInterval(86_400))
 
         #expect(outcome == .saved(days: 1))
-        #expect(await later.askedDays == ["2024-06-01"])
+        #expect(await later.askedDays == ["2024-05-31", "2024-06-01"])
+    }
+
+    /// A photo that dropped out of a re-fetched day keeps no stale numbers.
+    @Test func aDayAskedForAgainIsReplacedWhole() async throws {
+        let store = try LibraryStore.inMemory()
+        let day = StatsDay("2024-05-31")!
+        try store.saveStatsDay(day, photos: [stats("early", views: 1)], totals: .zero)
+        try store.saveStatsDay(day, photos: [stats("late", views: 9)], totals: .zero)
+        #expect(try store.statsHistory(photoID: "early").isEmpty)
+        #expect(try store.statsHistory(photoID: "late").map(\.views) == [9])
+    }
+
+    /// Flickr's "no stats for that date" is about that day only: the oldest
+    /// day may predate stats being switched on, or be purged as it is asked.
+    @Test func aDayFlickrHasNoStatsForIsSkippedAndTheRestAreSaved() async throws {
+        let store = try LibraryStore.inMemory()
+        let source = ScriptedStats([:], failingDays: [
+            "2024-05-05": .api(code: 2, message: "No stats for that date", transient: false)])
+
+        let outcome = try await StatsSnapshot(source: source, store: store).run(now: now)
+
+        #expect(outcome == .saved(days: 26))
+        #expect(!(try store.savedStatsDays().contains(StatsDay("2024-05-05")!)))
     }
 
     /// A day half-fetched when Flickr failed is not a day with no views.

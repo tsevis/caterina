@@ -12,6 +12,9 @@ public struct RootView: View {
     @Bindable var model: AppModel
     let about: AboutWindowController
 
+    /// Six hours: several times inside any GMT day.
+    static let refreshInterval: TimeInterval = 6 * 3600
+
     public init(model: AppModel, about: AboutWindowController) {
         self.model = model
         self.about = about
@@ -51,6 +54,17 @@ public struct RootView: View {
                     // a day not saved within 28 days is gone.
                     async let stats: Void = model.browse.saveStats()
                     _ = await (uploads, library, stats)
+                }
+            }
+            .task {
+                // Left open for days, the app still saves each day's stats
+                // and keeps the library copy fresh.
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(Self.refreshInterval))
+                    guard !Task.isCancelled, model.isSignedIn else { continue }
+                    async let library: Void = model.syncLibrary()
+                    async let stats: Void = model.browse.saveStats()
+                    _ = await (library, stats)
                 }
             }
             .onChange(of: model.download.completed) { _, _ in updateDockProgress() }

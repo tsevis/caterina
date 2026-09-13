@@ -47,7 +47,7 @@ import FlickrKit
 
     @Test func favesOverTimeDrawsItsLine() throws {
         let faves = (0..<30).map { Fave(nsid: "\($0)", username: "", date: Date(timeIntervalSince1970: 1_600_000_000 + Double($0 * $0) * 86_400)) }
-        #expect(hasMarks(try render(FavesOverTimeChart(counts: PhotoRecord.cumulativeFaves(faves)), "faves-over-time",
+        #expect(hasMarks(try render(FavesOverTimeChart(counts: PhotoRecord.cumulativeFaves(faves, total: faves.count)), "faves-over-time",
                                     size: CGSize(width: 520, height: 140))))
     }
 }

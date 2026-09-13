@@ -38,8 +38,7 @@ struct BrowseTab: View {
             ContentUnavailableView("Could not read this photo", systemImage: "exclamationmark.triangle",
                                    description: Text(message))
         case let .loaded(record):
-            PhotoRecordView(record: record,
-                            thumbnailURL: browse.rows.first { $0.photoID == record.info.id }?.thumbnailURL)
+            PhotoRecordView(record: record, thumbnailURL: browse.thumbnailURL(for: record.info.id))
         }
     }
 
@@ -49,6 +48,9 @@ struct BrowseTab: View {
         case .mostViewed, .recentUploads:
             ContentUnavailableView("No photos yet", systemImage: "externaldrive.badge.icloud",
                                    description: Text("Your library copy fills after the first sync. See Organize."))
+        case .rising:
+            ContentUnavailableView("Not enough history yet", systemImage: "arrow.up.right",
+                                   description: Text("Rising compares this week with last week, so it needs 14 saved days."))
         default:
             ContentUnavailableView("No history yet", systemImage: "chart.bar",
                                    description: Text("Rankings come from saved daily stats, which need Flickr Pro."))

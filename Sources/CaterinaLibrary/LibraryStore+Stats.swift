@@ -38,9 +38,10 @@ public struct RisingPhoto: Sendable, Equatable, Identifiable {
 /// Daily stats, kept for as long as the library copy is.
 extension LibraryStore {
 
-    /// One day, all or nothing.
+    /// One day, all or nothing, replacing whatever was saved for it before.
     public func saveStatsDay(_ day: StatsDay, photos: [PhotoDayStats], totals: ViewTotals) throws {
         try write { db in
+            try db.execute(sql: "DELETE FROM photoDay WHERE day = ?", arguments: [day.text])
             let statement = try db.cachedStatement(sql: """
                 INSERT OR REPLACE INTO photoDay (photoID, day, views, comments, faves) VALUES (?, ?, ?, ?, ?)
                 """)

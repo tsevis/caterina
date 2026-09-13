@@ -93,6 +93,12 @@ public final class LibraryStore: Sendable {
         }
     }
 
+    public func photo(id: String) throws -> LibraryPhoto? {
+        try database.read { db in
+            try Row.fetchOne(db, sql: "SELECT * FROM photo WHERE id = ?", arguments: [id]).map(LibrarySchema.photo)
+        }
+    }
+
     public func count(_ filter: LibraryFilter) throws -> Int {
         let condition = LibrarySchema.condition(filter)
         return try database.read { db in

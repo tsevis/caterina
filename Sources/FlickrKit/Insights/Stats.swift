@@ -4,6 +4,9 @@ import Foundation
 public struct StatsDay: Sendable, Hashable, Comparable, Codable {
     /// `yyyy-MM-dd`, the form Flickr takes and the form stored.
     public let text: String
+    /// Midnight GMT at the start of the day. Kept, not re-parsed: charts ask
+    /// for it on every hover.
+    public let start: Date
 
     /// How long Flickr keeps daily stats.
     public static let retentionDays = 28
@@ -25,16 +28,16 @@ public struct StatsDay: Sendable, Hashable, Comparable, Codable {
     }()
 
     public init(containing date: Date) {
-        text = Self.formatter.string(from: date)
+        let text = Self.formatter.string(from: date)
+        self.text = text
+        self.start = Self.formatter.date(from: text) ?? date
     }
 
     public init?(_ text: String) {
         guard let date = Self.formatter.date(from: text), Self.formatter.string(from: date) == text else { return nil }
         self.text = text
+        self.start = date
     }
-
-    /// Midnight GMT at the start of the day.
-    public var start: Date { Self.formatter.date(from: text) ?? .distantPast }
 
     public var previous: StatsDay { StatsDay(containing: start.addingTimeInterval(-12 * 3600)) }
 

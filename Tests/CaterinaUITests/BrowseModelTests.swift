@@ -124,8 +124,35 @@ actor FakeRecords: PhotoRecordSource, StatsSource {
     @Test func favesAddUpOverTime() {
         let faves = [Fave(nsid: "a", username: "", date: Date(timeIntervalSince1970: 300)),
                      Fave(nsid: "b", username: "", date: Date(timeIntervalSince1970: 100))]
-        #expect(PhotoRecord.cumulativeFaves(faves).map(\.count) == [1, 2])
-        #expect(PhotoRecord.cumulativeFaves(faves).first?.date == Date(timeIntervalSince1970: 100))
+        #expect(PhotoRecord.cumulativeFaves(faves, total: 2).map(\.count) == [1, 2])
+        #expect(PhotoRecord.cumulativeFaves(faves, total: 2).first?.date == Date(timeIntervalSince1970: 100))
+    }
+
+    /// Only the latest faves are read; the curve starts from the ones before.
+    @Test func aHeavilyFavedPhotosCurveStartsFromTheFavesNotRead() {
+        let faves = [Fave(nsid: "a", username: "", date: Date(timeIntervalSince1970: 300)),
+                     Fave(nsid: "b", username: "", date: Date(timeIntervalSince1970: 300))]
+        let counts = PhotoRecord.cumulativeFaves(faves, total: 40_000)
+        #expect(counts.map(\.count) == [39_999, 40_000])
+        #expect(Set(counts.map(\.id)).count == 2)
+    }
+
+    /// Rising compares two whole weeks; with fewer saved, every photo with a
+    /// view this week would "rise" from nothing.
+    @Test func risingWaitsForTwoWeeksOfHistory() throws {
+        let store = try library()
+        try store.saveStatsDay(StatsDay("2024-05-31")!, photos: [
+            PhotoDayStats(photoID: "1", title: "", views: 90, comments: 0, faves: 0)], totals: .zero)
+        let model = model(store)
+        model.show(.rising)
+        #expect(model.rows.isEmpty)
+        #expect(!model.hasHistory(for: .rising))
+    }
+
+    @Test func theDetailThumbnailComesFromTheLibraryNotTheRanking() throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "9", thumbnailURL: "https://live.staticflickr.com/9_q.jpg")], generation: 1)
+        #expect(model(store).thumbnailURL(for: "9") == "https://live.staticflickr.com/9_q.jpg")
     }
 
     @Test func aPhotoThatCannotBeReadSaysWhy() async throws {

@@ -17,7 +17,8 @@ extension FlickrClient: PhotoRecordSource {}
 /// Everything known about one photo, gathered for the record panel.
 public struct PhotoRecord: Sendable, Equatable {
     public struct FaveCount: Sendable, Equatable, Identifiable {
-        public var id: Date { date }
+        /// The running count, which is unique where a date may not be.
+        public var id: Int { count }
         public let date: Date
         public let count: Int
     }
@@ -33,8 +34,11 @@ public struct PhotoRecord: Sendable, Equatable {
     /// Daily numbers saved on this Mac, oldest first.
     public let history: [StatsPoint]
 
-    /// The running total of faves by date, oldest first, for a chart.
-    public static func cumulativeFaves(_ faves: [Fave]) -> [FaveCount] {
-        faves.sorted { $0.date < $1.date }.enumerated().map { FaveCount(date: $1.date, count: $0 + 1) }
+    /// The running total of faves by date, oldest first, for a chart. When
+    /// only the latest were read, the count starts from those before them.
+    public static func cumulativeFaves(_ faves: [Fave], total: Int) -> [FaveCount] {
+        let before = max(0, total - faves.count)
+        return faves.sorted { $0.date < $1.date }.enumerated()
+            .map { FaveCount(date: $1.date, count: before + $0 + 1) }
     }
 }

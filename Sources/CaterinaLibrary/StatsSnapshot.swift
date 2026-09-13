@@ -26,6 +26,10 @@ public actor StatsSnapshot {
     private let store: LibraryStore
     private var inFlight: Task<Outcome, Error>?
 
+    /// Saved days this recent are fetched again while Flickr still holds them:
+    /// a day saved just after midnight GMT may not have been fully counted.
+    public static let refreshedDays = 2
+
     public init(source: StatsSource, store: LibraryStore) {
         self.source = source
         self.store = store
@@ -41,33 +45,44 @@ public actor StatsSnapshot {
 
     private func snapshot(now: Date) async throws -> Outcome {
         let saved = try store.savedStatsDays()
+        let available = StatsDay.completeDaysAvailable(at: now)
+        let recent = Set(available.prefix(Self.refreshedDays))
         // Oldest first: the day closest to being lost goes first.
-        let missing = StatsDay.completeDaysAvailable(at: now).filter { !saved.contains($0) }.reversed()
-        var count = 0
+        let wanted = available.filter { !saved.contains($0) || recent.contains($0) }.reversed()
+        var newlySaved = 0
         do {
-            for day in missing {
+            for day in wanted {
                 try Task.checkCancellation()
-                try await save(day)
-                count += 1
+                guard try await save(day) else { continue }
+                if !saved.contains(day) { newlySaved += 1 }
             }
         } catch let error as FlickrError where error.meansStatsUnavailable {
             return .statsUnavailable
         }
-        return .saved(days: count)
+        return .saved(days: newlySaved)
     }
 
-    /// Every page of the day, then its totals, written together.
-    private func save(_ day: StatsDay) async throws {
+    /// Flickr's "no stats for that date", from a stats call.
+    static let noStatsForDate = 2
+
+    /// Every page of the day, then its totals, written together. False when
+    /// Flickr has no stats for that one day, which says nothing of the others.
+    private func save(_ day: StatsDay) async throws -> Bool {
         var photos: [PhotoDayStats] = []
         var page = 1
         var pages = 1
-        repeat {
-            let reply = try await source.popularPhotos(on: day, page: page, priority: .background)
-            photos += reply.photos
-            pages = reply.pages
-            page += 1
-        } while page <= pages
-        let totals = try await source.totalViews(on: day, priority: .background)
-        try store.saveStatsDay(day, photos: photos, totals: totals)
+        do {
+            repeat {
+                let reply = try await source.popularPhotos(on: day, page: page, priority: .background)
+                photos += reply.photos
+                pages = reply.pages
+                page += 1
+            } while page <= pages
+            let totals = try await source.totalViews(on: day, priority: .background)
+            try store.saveStatsDay(day, photos: photos, totals: totals)
+            return true
+        } catch FlickrError.api(code: Self.noStatsForDate, _, _) {
+            return false
+        }
     }
 }

@@ -73,6 +73,9 @@ public final class BrowseModel {
     private let records: PhotoRecordSource
     private let snapshot: StatsSnapshot?
     private let now: @Sendable () -> Date
+    /// One photo loading at a time: arrowing down a list must not leave a
+    /// dozen records' worth of calls running for photos no longer chosen.
+    private var loadTask: Task<Void, Never>?
 
     public init(store: LibraryStore?, records: PhotoRecordSource, stats: StatsSource,
                 now: @escaping @Sendable () -> Date = { Date() }) {
@@ -96,17 +99,37 @@ public final class BrowseModel {
     // MARK: - One photo
 
     public func select(_ photoID: String?) async {
+        loadTask?.cancel()
         selectedPhotoID = photoID
         guard let photoID else { record = .none; return }
         record = .loading
-        do {
-            let loaded = try await load(photoID)
-            guard selectedPhotoID == photoID else { return }
-            record = .loaded(loaded)
-        } catch {
-            guard selectedPhotoID == photoID else { return }
-            record = .failed((error as? FlickrError)?.message ?? error.localizedDescription)
+        let task = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let loaded = try await self.load(photoID)
+                guard !Task.isCancelled, self.selectedPhotoID == photoID else { return }
+                self.record = .loaded(loaded)
+            } catch {
+                guard !Task.isCancelled, self.selectedPhotoID == photoID else { return }
+                self.record = .failed((error as? FlickrError)?.message ?? error.localizedDescription)
+            }
         }
+        loadTask = task
+        await task.value
+    }
+
+    /// The thumbnail for the record's header, from the library, whichever
+    /// ranking is showing.
+    public func thumbnailURL(for photoID: String) -> String? {
+        try? store?.photo(id: photoID)?.thumbnailURL
+    }
+
+    /// Whether saved history covers what `ranking` compares.
+    public func hasHistory(for ranking: Ranking) -> Bool {
+        guard ranking == .rising else { return true }
+        let saved = (try? store?.savedStatsDays()) ?? []
+        let fortnight = sequence(first: StatsDay(containing: now()).previous) { $0.previous }.prefix(14)
+        return fortnight.allSatisfy(saved.contains)
     }
 
     private func load(_ id: String) async throws -> PhotoRecord {
@@ -118,17 +141,20 @@ public final class BrowseModel {
         async let comments = (try? records.comments(photoID: id)) ?? []
         async let contexts = (try? records.contexts(photoID: id)) ?? PhotoContexts(albums: [], groups: [])
         async let exif = (try? records.exif(photoID: id)) ?? PhotoExif(camera: nil, fields: [], isHidden: false)
-        let (allFaves, total) = (try? await faves) ?? ([], 0)
+        let (allFaves, total) = await faves
         return PhotoRecord(info: try await info, faves: allFaves, faveTotal: total,
                            comments: await comments, contexts: await contexts, exif: await exif,
                            history: (try? store?.statsHistory(photoID: id)) ?? [])
     }
 
-    private nonisolated static func faves(of id: String, from records: PhotoRecordSource) async throws -> ([Fave], Int) {
-        let first = try await records.favorites(photoID: id, page: 1)
+    /// As many pages as load: one failing page keeps the ones before it.
+    private nonisolated static func faves(of id: String, from records: PhotoRecordSource) async -> ([Fave], Int) {
+        guard let first = try? await records.favorites(photoID: id, page: 1) else { return ([], 0) }
         var faves = first.faves
         for page in stride(from: 2, through: min(first.pages, favePageLimit), by: 1) {
-            faves += try await records.favorites(photoID: id, page: page).faves
+            guard !Task.isCancelled,
+                  let next = try? await records.favorites(photoID: id, page: page) else { break }
+            faves += next.faves
         }
         return (faves, first.total)
     }
@@ -171,11 +197,13 @@ public final class BrowseModel {
                 row($0.photoID, $0.photo, figure: Self.count($0.total, "view") + " this week")
             }
         case .mostFavedThisMonth:
-            let start = StatsDay.completeDaysAvailable(at: now()).last ?? yesterday
+            // 28 days of saved history, which outlasts Flickr's own window.
+            let start = Array(sequence(first: yesterday) { $0.previous }.prefix(28)).last ?? yesterday
             return try store.topPhotos(from: start, through: yesterday, by: .faves, limit: Self.rowLimit).map {
                 row($0.photoID, $0.photo, figure: Self.count($0.total, "fave") + " in 28 days")
             }
         case .rising:
+            guard hasHistory(for: .rising) else { return [] }
             return try store.risingPhotos(endingOn: yesterday, limit: Self.rowLimit).map {
                 row($0.photoID, $0.photo, figure: "\($0.weekBefore.formatted()) → \($0.thisWeek.formatted()) views a week")
             }
