@@ -103,9 +103,10 @@ public struct PhotoGridView: View {
                     // and the last writer won.
                     .onTapGesture { onClick(photo.id, Self.modifiers()) }
                     .onDrag {
-                        // Dragging an unselected photo drags that one; dragging
-                        // a selected one drags the selection, which is what
-                        // every Mac list does.
+                        // Dragging an unselected photo selects it first, as a
+                        // Mac list does. **One file per drag, even from a
+                        // selection:** `.onDrag` carries a single provider, so
+                        // several photos go out through Download (⌘D).
                         if !selection.contains(photo.id) { onClick(photo.id, []) }
                         return PhotoDrag.provider(for: photo, variant: dragVariant)
                     }
