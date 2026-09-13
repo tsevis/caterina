@@ -5,9 +5,26 @@ import Foundation
 /// Pure: it turns a photo into the photo it should become. What to send
 /// Flickr is worked out afterwards by `PhotoChange`, from the difference.
 public enum PhotoEdit: Sendable, Equatable {
+
+    /// Where a photo stands in its batch, for `{n}` and `{count}`.
+    public struct Context: Sendable, Equatable {
+        /// From 1.
+        public let position: Int
+        public let count: Int
+
+        public init(position: Int, count: Int) {
+            self.position = position
+            self.count = count
+        }
+
+        public static let single = Context(position: 1, count: 1)
+    }
+
+    /// Title and description text is a `TitlePattern`.
     case setTitle(String)
     case appendToTitle(String)
     case setDescription(String)
+    case appendToDescription(String)
     case addTags([String])
     case removeTags([String])
     /// One tag respelled or renamed, wherever it is.
@@ -21,12 +38,14 @@ public enum PhotoEdit: Sendable, Equatable {
     case setLocation(LibraryPhoto.Location)
     case removeLocation
 
-    public func applied(to photo: LibraryPhoto) -> LibraryPhoto {
+    public func applied(to photo: LibraryPhoto, context: Context = .single) -> LibraryPhoto {
         var edited = photo
+        let render = { (pattern: String) in TitlePattern.render(pattern, photo: photo, context: context) }
         switch self {
-        case let .setTitle(title): edited.title = title
-        case let .appendToTitle(suffix): edited.title = photo.title + suffix
-        case let .setDescription(description): edited.description = description
+        case let .setTitle(title): edited.title = render(title)
+        case let .appendToTitle(suffix): edited.title = photo.title + render(suffix)
+        case let .setDescription(description): edited.description = render(description)
+        case let .appendToDescription(suffix): edited.description = photo.description + render(suffix)
         case let .addTags(tags): edited.tags = TagList.adding(tags, to: photo.tags)
         case let .removeTags(tags): edited.tags = TagList.removing(tags, from: photo.tags)
         case let .renameTag(tag, replacement): edited.tags = TagList.renaming(tag, to: replacement, in: photo.tags)

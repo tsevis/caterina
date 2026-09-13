@@ -110,3 +110,15 @@ import FlickrKit
         #expect(try store.summary(of: second.id).pending == 2)
     }
 }
+
+@Suite struct BatchPatternTests {
+    @Test func photosAreNumberedInTheOrderTheyWereGiven() throws {
+        let store = try LibraryStore.inMemory()
+        try store.save(["1", "2", "3"].map { LibraryStoreTests.photo($0, title: "") }, generation: 1)
+        let batch = try store.createBatch(title: "Number", edit: .setTitle("Pier {n} of {count}"),
+                                          photos: try store.photos(ids: ["3", "1", "2"]).sorted { $0.id > $1.id })
+        #expect(try store.entries(in: batch.id).map(\.change.after.title)
+                == ["Pier 1 of 3", "Pier 2 of 3", "Pier 3 of 3"])
+        #expect(try store.entries(in: batch.id).map(\.photoID) == ["3", "2", "1"])
+    }
+}

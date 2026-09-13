@@ -9,7 +9,10 @@ extension LibraryStore {
     /// Record `edit` applied to `photos`, leaving out any it would not change.
     public func createBatch(title: String, edit: PhotoEdit, photos: [LibraryPhoto],
                             now: Date = Date()) throws -> EditBatch {
-        let changes = photos.map { PhotoChange(before: $0, after: edit.applied(to: $0)) }
+        let changes = photos.enumerated().map { index, photo in
+            PhotoChange(before: photo,
+                        after: edit.applied(to: photo, context: .init(position: index + 1, count: photos.count)))
+        }
         return try createBatch(title: title, changes: changes, undoes: nil, now: now)
     }
 
