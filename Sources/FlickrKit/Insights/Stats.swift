@@ -78,6 +78,12 @@ public struct PopularPage: Sendable, Equatable {
     public let page: Int
     public let pages: Int
     public let photos: [PhotoDayStats]
+
+    public init(page: Int, pages: Int, photos: [PhotoDayStats]) {
+        self.page = page
+        self.pages = pages
+        self.photos = photos
+    }
 }
 
 /// Views across the account, for a day or all time.
@@ -95,6 +101,8 @@ public struct ViewTotals: Sendable, Equatable, Codable {
         self.albums = albums
         self.collections = collections
     }
+
+    public static let zero = ViewTotals(total: 0, photos: 0, photostream: 0, albums: 0, collections: 0)
 }
 
 public struct Referral: Sendable, Equatable, Hashable {

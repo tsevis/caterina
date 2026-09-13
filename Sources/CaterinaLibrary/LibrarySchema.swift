@@ -83,6 +83,28 @@ enum LibrarySchema {
                 t.primaryKey(["batchID", "position"])
             }
         }
+        migrator.registerMigration("v4-stats-history") { db in
+            // A photo's numbers for a day it had any. A day saved with no row
+            // for a photo is a day that photo had none.
+            try db.create(table: "photoDay") { t in
+                t.column("photoID", .text).notNull()
+                t.column("day", .text).notNull().indexed()
+                t.column("views", .integer).notNull()
+                t.column("comments", .integer).notNull()
+                t.column("faves", .integer).notNull()
+                t.primaryKey(["photoID", "day"])
+            }
+            // Written last, in the same transaction as the day's photos: a
+            // row here is what makes a day saved.
+            try db.create(table: "accountDay") { t in
+                t.primaryKey("day", .text)
+                t.column("total", .integer).notNull()
+                t.column("photos", .integer).notNull()
+                t.column("photostream", .integer).notNull()
+                t.column("albums", .integer).notNull()
+                t.column("collections", .integer).notNull()
+            }
+        }
         return migrator
     }
 
