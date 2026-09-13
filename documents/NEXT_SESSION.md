@@ -30,8 +30,31 @@ registering a new API key named Caterina with that callback URL.
 split out yet. Download's files lean on `AppModel` and would need `public` on
 everything for no gain today; split each tab into its module when it gets code.
 
-**Next: Phase 1** — write permission on first need, signed POST, multipart,
-`CallBudget`, `JobQueue`, `EditJournal`, `LibraryMirror`.
+**Phase 1, mostly done (2026-09-13), offline-tested:**
+
+* Signed POST writes (`FlickrWrite`, `FlickrClient.perform`), signature checked
+  against oauthlib. A lost connection is retried only for a repeatable write.
+* `FlickrPermission` read < write < delete, stored with the token; a Keychain
+  document without it reads as `read`. Code 99 becomes `permissionNeeded`.
+* `CallBudget`: sliding hour, tiered headroom, batch spacing 1 call/s.
+* `CaterinaLibrary` module (GRDB 7.11.1): `LibraryStore`, `LibrarySync` (full,
+  then changes, full weekly; never removes on a partial or suspicious pass).
+* `PhotoEdit` → `PhotoChange` → writes from the difference; undo is the
+  reverse. `EditBatch` + `BatchRunner` record, resume and undo batches.
+* Organize shows the library copy's count and last sync, syncs at launch.
+* A background review's MEDIUM/LOW findings are fixed (`3ed27fc`).
+
+**Not done in Phase 1:** multipart upload body (moved to the start of Phase 2);
+the permission-approval sheet and Activity panel (built with the first UI that
+writes, Phase 3); a live write test — it needs a write token in the
+environment, which the user must supply, and must touch only a test album.
+
+**Unverified against the real API:** the `people.getPhotos` extras as decoded,
+and `recentlyUpdated` paging. The user's sync in the running app is the check.
+
+**SwiftPM trap seen today:** after changing a protocol in FlickrKit,
+`swift test` ran stale CaterinaUITests binaries and reported green. Run
+`swift build --build-tests` after protocol changes.
 
 ## Read these first
 
