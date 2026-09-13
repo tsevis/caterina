@@ -69,6 +69,15 @@ public actor ThumbnailStore {
     /// ever decoded.
     public static let maximumPixels = 1024
 
+    /// **Decoded here, inside the actor, not when first drawn.** Left lazy,
+    /// ImageIO decodes on first draw — the main thread, as a row scrolls in.
+    static var decodeOptions: [CFString: Any] { [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: maximumPixels,
+        kCGImageSourceShouldCacheImmediately: true,
+    ] }
+
     /// Decode to a bounded size rather than to whatever the file claims.
     ///
     /// **`NSImage(data:)` will allocate whatever the image says it needs.** A
@@ -80,14 +89,8 @@ public actor ThumbnailStore {
     /// no more memory than an honest one.
     static func thumbnail(from data: Data) -> NSImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maximumPixels,
-            kCGImageSourceShouldCacheImmediately: false,
-        ]
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(
-            source, 0, options as CFDictionary) else { return nil }
+            source, 0, decodeOptions as CFDictionary) else { return nil }
         return NSImage(cgImage: cgImage,
                        size: NSSize(width: cgImage.width, height: cgImage.height))
     }

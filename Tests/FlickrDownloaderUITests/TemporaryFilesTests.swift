@@ -1,3 +1,4 @@
+import ImageIO
 import Foundation
 import Testing
 
@@ -89,5 +90,20 @@ import Testing
         let store = ThumbnailStore()
         await store.clear()
         #expect(await store.diskUsage >= 0)
+    }
+}
+
+/// Where a thumbnail is decoded.
+///
+/// **Lazily meant on the main thread, mid-scroll.** With
+/// `kCGImageSourceShouldCacheImmediately` false, ImageIO hands back an image
+/// that decodes the first time it is drawn — which is the main thread, as a
+/// row scrolls into view. Decoding inside the store's actor keeps that work
+/// off the frame.
+@Suite struct ThumbnailDecodeTests {
+    @Test func thumbnailsAreDecodedWhenCreatedNotWhenDrawn() {
+        let options = ThumbnailStore.decodeOptions
+        #expect(options[kCGImageSourceShouldCacheImmediately] as? Bool == true)
+        #expect(options[kCGImageSourceThumbnailMaxPixelSize] as? Int == ThumbnailStore.maximumPixels)
     }
 }
