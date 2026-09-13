@@ -36,21 +36,21 @@ public struct LibraryPhoto: Sendable, Equatable, Hashable, Identifiable {
     }
 
     public let id: String
-    public let title: String
-    public let description: String
-    public let tags: [String]
-    public let license: License?
-    public let visibility: Visibility
-    public let uploaded: Date?
-    public let lastUpdated: Date?
+    public internal(set) var title: String
+    public internal(set) var description: String
+    public internal(set) var tags: [String]
+    public internal(set) var license: License?
+    public internal(set) var visibility: Visibility
+    public internal(set) var uploaded: Date?
+    public internal(set) var lastUpdated: Date?
     /// As Flickr gives it, `yyyy-MM-dd HH:mm:ss` in the camera's own time with
     /// no zone. Kept as text: it sorts correctly, and turning it into a `Date`
     /// would invent a time zone the camera never recorded.
-    public let taken: String?
-    public let views: Int
-    public let media: Media
-    public let location: Location?
-    public let thumbnailURL: String?
+    public internal(set) var taken: String?
+    public internal(set) var views: Int
+    public internal(set) var media: Media
+    public internal(set) var location: Location?
+    public internal(set) var thumbnailURL: String?
 
     public init(id: String, title: String = "", description: String = "", tags: [String] = [],
                 license: License? = nil,
