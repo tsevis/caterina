@@ -68,10 +68,14 @@ struct DownloadSheet: View {
         }
         .padding(20)
         .frame(width: 460)
-        .onAppear { destination = restoredFolder() }
+        .onAppear(perform: restoreFolder)
     }
 
-    private func restoredFolder() -> URL? { DownloadFolder.restored(from: lastFolder) }
+    private func restoreFolder() {
+        guard let remembered = DownloadFolder.remembered(from: lastFolder) else { return }
+        destination = remembered.url
+        if let refreshed = remembered.refreshedBookmark { lastFolder = refreshed }
+    }
 
     private func remember(_ url: URL) { lastFolder = DownloadFolder.bookmark(for: url) }
 
@@ -84,12 +88,13 @@ struct DownloadSheet: View {
         panel.directoryURL = destination
         guard panel.runModal() == .OK, let url = panel.url else { return }
         destination = url
+        problem = nil
         remember(url)
     }
 
     private func start() {
         guard let destination else { return }
-        guard FileManager.default.isWritableFile(atPath: destination.path) else {
+        guard DownloadFolder.isWritable(destination) else {
             problem = "That folder cannot be written to. Choose another."
             return
         }
