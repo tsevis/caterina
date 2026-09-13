@@ -54,6 +54,8 @@ public struct RootView: View {
                     // a day not saved within 28 days is gone.
                     async let stats: Void = model.browse.saveStats()
                     _ = await (uploads, library, stats)
+                    // After the sync, so it reads faves of the photos it found.
+                    await model.browse.readFaves()
                 }
             }
             .task {
@@ -65,6 +67,7 @@ public struct RootView: View {
                     async let library: Void = model.syncLibrary()
                     async let stats: Void = model.browse.saveStats()
                     _ = await (library, stats)
+                    await model.browse.readFaves()
                 }
             }
             .onChange(of: model.download.completed) { _, _ in updateDockProgress() }

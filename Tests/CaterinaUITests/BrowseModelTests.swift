@@ -65,24 +65,24 @@ actor FakeRecords: PhotoRecordSource, StatsSource {
     }
 
     private func model(_ store: LibraryStore?, _ records: FakeRecords = FakeRecords()) -> BrowseModel {
-        BrowseModel(store: store, records: records, stats: records, now: { self.now })
+        BrowseModel(store: store, records: records, stats: records, directory: FakeDirectory(),
+                    accountID: { "me@N00" }, now: { self.now })
     }
 
     @Test func itOpensOnYourMostViewedPhotosOfAllTime() throws {
         let model = model(try library())
-        #expect(model.ranking == .mostViewed)
-        #expect(model.rows.map(\.photoID) == ["2", "1", "3"])
-        #expect(model.rows.first?.figure == "500 views")
-        #expect(model.rows.last?.title == "Untitled")
+        #expect(model.scope == .ranking(.mostViewed))
+        #expect(model.items.map(\.photo.id) == ["2", "1", "3"])
+        #expect(model.items.first?.figure == "500 views")
     }
 
-    @Test func recentUploadsAreNewestFirst() throws {
+    @Test func recentUploadsAreNewestFirst() async throws {
         let model = model(try library())
-        model.show(.recentUploads)
-        #expect(model.rows.map(\.photoID) == ["2", "3", "1"])
+        await model.jump(to: .ranking(.recentUploads))
+        #expect(model.items.map(\.photo.id) == ["2", "3", "1"])
     }
 
-    @Test func thisWeeksTopPhotosComeFromSavedHistory() throws {
+    @Test func thisWeeksTopPhotosComeFromSavedHistory() async throws {
         let store = try library()
         try store.saveStatsDay(StatsDay("2024-05-31")!, photos: [
             PhotoDayStats(photoID: "3", title: "", views: 90, comments: 0, faves: 4),
@@ -91,13 +91,13 @@ actor FakeRecords: PhotoRecordSource, StatsSource {
             PhotoDayStats(photoID: "2", title: "", views: 1000, comments: 0, faves: 0)], totals: .zero)
         let model = model(store)
 
-        model.show(.topThisWeek)
-        #expect(model.rows.map(\.photoID) == ["3", "1"])
-        #expect(model.rows.first?.figure == "90 views this week")
+        await model.jump(to: .ranking(.topThisWeek))
+        #expect(model.items.map(\.photo.id) == ["3", "1"])
+        #expect(model.items.first?.figure == "90 views this week")
 
-        model.show(.mostFavedThisMonth)
-        #expect(model.rows.map(\.photoID) == ["1", "3"])
-        #expect(model.rows.first?.figure == "9 faves in 28 days")
+        await model.jump(to: .ranking(.mostFavedThisMonth))
+        #expect(model.items.map(\.photo.id) == ["1", "3"])
+        #expect(model.items.first?.figure == "9 faves in 28 days")
     }
 
     @Test func choosingAPhotoLoadsItsWholeRecord() async throws {
@@ -139,13 +139,13 @@ actor FakeRecords: PhotoRecordSource, StatsSource {
 
     /// Rising compares two whole weeks; with fewer saved, every photo with a
     /// view this week would "rise" from nothing.
-    @Test func risingWaitsForTwoWeeksOfHistory() throws {
+    @Test func risingWaitsForTwoWeeksOfHistory() async throws {
         let store = try library()
         try store.saveStatsDay(StatsDay("2024-05-31")!, photos: [
             PhotoDayStats(photoID: "1", title: "", views: 90, comments: 0, faves: 0)], totals: .zero)
         let model = model(store)
-        model.show(.rising)
-        #expect(model.rows.isEmpty)
+        await model.jump(to: .ranking(.rising))
+        #expect(model.items.isEmpty)
         #expect(!model.hasHistory(for: .rising))
     }
 

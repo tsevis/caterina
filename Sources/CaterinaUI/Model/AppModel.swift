@@ -52,6 +52,8 @@ public final class AppModel {
     public let library: LibraryModel
     public let uploads: UploadModel
     public let browse: BrowseModel
+    /// Read by Browse off the main actor, so kept in a box it can hold.
+    private let accountID: AccountIDBox
 
     /// One in-flight load per source, so loading Groups cannot cancel Search.
     private var loads: [PhotoSource: Task<Void, Never>] = [:]
@@ -86,7 +88,10 @@ public final class AppModel {
         self.library = LibraryModel(store: libraryStore, source: client)
         self.uploads = UploadModel(store: libraryStore, uploader: client, albums: client,
                                    files: SecurityScopedFileAccess())
-        self.browse = BrowseModel(store: libraryStore, records: client, stats: client)
+        let accountBox = AccountIDBox(stored?.account?.nsid)
+        self.accountID = accountBox
+        self.browse = BrowseModel(store: libraryStore, records: client, stats: client, directory: client, faves: client,
+                                  accountID: { accountBox.value })
         self.account = stored?.account
         self.isShowingOnboarding = !(stored?.hasAPIKey ?? false)
     }
@@ -419,6 +424,7 @@ public final class AppModel {
         let next = stored.signedIn(account)
         try vault.save(next)
         self.stored = next
+        accountID.set(next.nsid)
         await client.update(credentials: next.oauth, permission: next.grantedPermission ?? .read)
         self.account = next.account
     }
@@ -430,6 +436,7 @@ public final class AppModel {
             self.stored = next
         }
         account = nil
+        accountID.set(nil)
         refreshClient()
         // **Cancel first.** Pressing Reload on You and then signing out left a
         // request in flight whose reply repopulated the grid with the account's
@@ -468,4 +475,15 @@ extension OAuth1.Credentials {
     /// Stands in until the user supplies an API key. Every call made with it
     /// fails, which is correct: there is nothing to call Flickr with yet.
     static let empty = OAuth1.Credentials(consumerKey: "", consumerSecret: "")
+}
+
+/// The signed-in NSID, readable from any thread.
+final class AccountIDBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: String?
+
+    init(_ value: String?) { stored = value }
+
+    var value: String? { lock.withLock { stored } }
+    func set(_ value: String?) { lock.withLock { stored = value } }
 }

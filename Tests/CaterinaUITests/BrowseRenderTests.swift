@@ -51,3 +51,30 @@ import FlickrKit
                                     size: CGSize(width: 520, height: 140))))
     }
 }
+
+@MainActor
+@Suite struct BrowseLayoutRenderTests {
+    @Test func theTagCloudWrapsAndTheTilesFillTheirColumns() throws {
+        let tags = ["sea", "athens", "mosaic", "portrait", "night", "blue", "greece", "street", "art", "digital", "tsevis", "piraeus"]
+        let cloud = FlowLayout(spacing: 6) {
+            ForEach(Array(tags.enumerated()), id: \.offset) { index, tag in
+                Text("\(tag) \(100 - index * 8)").font(.system(size: CGFloat(11 + (12 - index)))).padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Theme.well, in: Capsule())
+            }
+        }
+        let items = (0..<9).map { BrowseItem(photo: LibraryPhoto(id: "\($0)", title: "Photo \($0)"), figure: "\($0 * 120) views") }
+        let model = BrowseModel(store: nil, records: FakeRecords(), stats: FakeRecords(), directory: FakeDirectory(), accountID: { nil })
+        let view = VStack(alignment: .leading, spacing: 20) {
+            cloud
+            PhotoTiles(items: items, browse: model, tileSize: 120)
+        }
+        .frame(width: 460).padding(12).background(Color(nsColor: .windowBackgroundColor))
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        let image = try #require(renderer.nsImage)
+        let bitmap = try #require(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+        try #require(bitmap.representation(using: .png, properties: [:]))
+            .write(to: BrowseRenderTests.output.appendingPathComponent("tags-and-tiles.png"))
+        #expect(image.size.height > 300)
+    }
+}

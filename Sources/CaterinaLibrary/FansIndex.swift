@@ -97,7 +97,7 @@ extension LibraryStore {
         }
     }
 
-    func replaceFaves(_ faves: [Fave], of photoID: String, readAt: Date) throws {
+    public func replaceFaves(_ faves: [Fave], of photoID: String, readAt: Date) throws {
         try write { db in
             try db.execute(sql: "DELETE FROM fave WHERE photoID = ?", arguments: [photoID])
             for fave in faves {

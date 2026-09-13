@@ -36,6 +36,11 @@ public struct TagCount: Sendable, Equatable, Hashable, Identifiable {
     public var id: String { tag }
     public let tag: String
     public let count: Int
+
+    public init(tag: String, count: Int) {
+        self.tag = tag
+        self.count = count
+    }
 }
 
 public struct MonthCount: Sendable, Equatable, Hashable, Identifiable {
@@ -43,6 +48,11 @@ public struct MonthCount: Sendable, Equatable, Hashable, Identifiable {
     /// `yyyy-MM`.
     public let month: String
     public let count: Int
+
+    public init(month: String, count: Int) {
+        self.month = month
+        self.count = count
+    }
 
     public var year: String { String(month.prefix(4)) }
 

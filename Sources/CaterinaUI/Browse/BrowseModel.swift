@@ -4,44 +4,11 @@ import Observation
 import CaterinaLibrary
 import FlickrKit
 
-/// The Browse tab: rankings of your photos, and one photo's whole record.
+/// The Browse tab: every way into the account, laid out as a list, a grid, a
+/// timeline or a map, and one photo's whole record.
 @MainActor
 @Observable
 public final class BrowseModel {
-
-    public enum Ranking: String, CaseIterable, Identifiable, Sendable {
-        case mostViewed, topThisWeek, mostFavedThisMonth, rising, recentUploads
-
-        public var id: String { rawValue }
-
-        public var title: String {
-            switch self {
-            case .mostViewed: "Most viewed"
-            case .topThisWeek: "Top this week"
-            case .mostFavedThisMonth: "Most faved, 28 days"
-            case .rising: "Rising"
-            case .recentUploads: "Recent uploads"
-            }
-        }
-
-        public var systemImage: String {
-            switch self {
-            case .mostViewed: "eye"
-            case .topThisWeek: "chart.bar"
-            case .mostFavedThisMonth: "star"
-            case .rising: "arrow.up.right"
-            case .recentUploads: "clock"
-            }
-        }
-    }
-
-    public struct Row: Sendable, Equatable, Identifiable {
-        public var id: String { photoID }
-        public let photoID: String
-        public let title: String
-        public let thumbnailURL: String?
-        public let figure: String
-    }
 
     public enum RecordPhase: Sendable, Equatable {
         case none, loading
@@ -60,40 +27,103 @@ public final class BrowseModel {
     /// 500 faves is enough to draw the curve; a photo with 40,000 would
     /// otherwise cost 800 calls to open.
     nonisolated static let favePageLimit = 10
-    nonisolated static let rowLimit = 200
+    nonisolated static let rowLimit = 500
 
-    public private(set) var ranking: Ranking = .mostViewed
-    public private(set) var rows: [Row] = []
+    // MARK: What is showing
+
+    public private(set) var scope: BrowseScope = .ranking(.mostViewed)
+    public private(set) var items: [BrowseItem] = []
+    public private(set) var isLoading = false
+    public private(set) var problem: String?
+    public private(set) var canLoadMore = false
+    public private(set) var tags: [TagCount] = []
+    public private(set) var months: [MonthCount] = []
+    public private(set) var fans: [Fan] = []
+    public private(set) var recentFaves: [FaveEvent] = []
+    public let directory: AccountDirectory
+
+    /// Remembered per kind of scope: a grid chosen for a tag stays the grid
+    /// for the next tag, while rankings keep their list.
+    public var layout: BrowseLayout {
+        get { layouts[scope.layoutKind] ?? scope.defaultLayout }
+        set { layouts[scope.layoutKind] = newValue }
+    }
+
+    public var availableLayouts: [BrowseLayout] {
+        BrowseLayout.allCases.filter { layout in
+            switch layout {
+            case .list, .grid: true
+            case .timeline: items.contains { $0.photo.taken != nil }
+            case .map: items.contains { $0.photo.location != nil }
+            }
+        }
+    }
+
+    public var canGoBack: Bool { !history.isEmpty }
+
+    // MARK: The chosen photo and stats
+
     public private(set) var selectedPhotoID: String?
     public private(set) var record: RecordPhase = .none
     public private(set) var statsPhase: StatsPhase = .idle
     public private(set) var accountHistory: [AccountPoint] = []
 
-    private let store: LibraryStore?
-    private let records: PhotoRecordSource
+    let store: LibraryStore?
+    let records: PhotoRecordSource
+    let source: AccountDirectorySource
+    let accountID: @Sendable () -> String?
+    let now: @Sendable () -> Date
     private let snapshot: StatsSnapshot?
-    private let now: @Sendable () -> Date
-    /// One photo loading at a time: arrowing down a list must not leave a
-    /// dozen records' worth of calls running for photos no longer chosen.
+    private let fansIndex: FansIndex?
+    private var layouts: [String: BrowseLayout] = [:]
+    private var history: [BrowseScope] = []
     private var loadTask: Task<Void, Never>?
+    var remotePage = 0
 
     public init(store: LibraryStore?, records: PhotoRecordSource, stats: StatsSource,
+                directory: AccountDirectorySource, faves: FaveSource = NoFaves(),
+                accountID: @escaping @Sendable () -> String?,
                 now: @escaping @Sendable () -> Date = { Date() }) {
         self.store = store
         self.records = records
-        self.snapshot = store.map { StatsSnapshot(source: stats, store: $0) }
+        self.source = directory
+        self.accountID = accountID
         self.now = now
-        reloadRows()
+        self.snapshot = store.map { StatsSnapshot(source: stats, store: $0) }
+        self.fansIndex = store.map { FansIndex(source: faves, store: $0) }
+        self.directory = AccountDirectory(source: directory, accountID: accountID)
         accountHistory = (try? store?.accountHistory()) ?? []
+        items = (try? localItems(for: scope)) ?? []
     }
 
-    public func show(_ ranking: Ranking) {
-        self.ranking = ranking
-        reloadRows()
+    // MARK: - Moving around
+
+    /// Show `scope`, remembering where this came from.
+    public func open(_ scope: BrowseScope) async {
+        if scope != self.scope { history.append(self.scope) }
+        await show(scope)
     }
 
-    public func reloadRows() {
-        rows = (try? makeRows()) ?? []
+    public func goBack() async {
+        guard let previous = history.popLast() else { return }
+        await show(previous)
+    }
+
+    /// Choosing from the sidebar starts afresh: Back is for drilling in.
+    public func jump(to scope: BrowseScope) async {
+        history = []
+        await show(scope)
+    }
+
+    public func reload() async { await show(scope) }
+
+    private func show(_ scope: BrowseScope) async {
+        self.scope = scope
+        problem = nil
+        canLoadMore = false
+        remotePage = 0
+        await fill(scope)
+        if !availableLayouts.contains(layout) { layout = .grid }
     }
 
     // MARK: - One photo
@@ -106,7 +136,7 @@ public final class BrowseModel {
         let task = Task { [weak self] in
             guard let self else { return }
             do {
-                let loaded = try await self.load(photoID)
+                let loaded = try await self.loadRecord(photoID)
                 guard !Task.isCancelled, self.selectedPhotoID == photoID else { return }
                 self.record = .loaded(loaded)
             } catch {
@@ -118,26 +148,17 @@ public final class BrowseModel {
         await task.value
     }
 
-    /// The thumbnail for the record's header, from the library, whichever
-    /// ranking is showing.
+    /// The thumbnail for the record's header: from what is showing, else the
+    /// library.
     public func thumbnailURL(for photoID: String) -> String? {
-        try? store?.photo(id: photoID)?.thumbnailURL
+        items.first { $0.photo.id == photoID }?.photo.thumbnailURL ?? (try? store?.photo(id: photoID))??.thumbnailURL
     }
 
-    /// Whether saved history covers what `ranking` compares.
-    public func hasHistory(for ranking: Ranking) -> Bool {
-        guard ranking == .rising else { return true }
-        let saved = (try? store?.savedStatsDays()) ?? []
-        let fortnight = sequence(first: StatsDay(containing: now()).previous) { $0.previous }.prefix(14)
-        return fortnight.allSatisfy(saved.contains)
-    }
-
-    private func load(_ id: String) async throws -> PhotoRecord {
+    private func loadRecord(_ id: String) async throws -> PhotoRecord {
         let records = self.records
         async let info = records.photoInfo(id: id)
         async let faves = Self.faves(of: id, from: records)
-        // The rest are extras: a photo whose comments will not load still
-        // has a record worth showing.
+        // Extras: a photo whose comments will not load still has a record.
         async let comments = (try? records.comments(photoID: id)) ?? []
         async let contexts = (try? records.contexts(photoID: id)) ?? PhotoContexts(albums: [], groups: [])
         async let exif = (try? records.exif(photoID: id)) ?? PhotoExif(camera: nil, fields: [], isHidden: false)
@@ -152,8 +173,7 @@ public final class BrowseModel {
         guard let first = try? await records.favorites(photoID: id, page: 1) else { return ([], 0) }
         var faves = first.faves
         for page in stride(from: 2, through: min(first.pages, favePageLimit), by: 1) {
-            guard !Task.isCancelled,
-                  let next = try? await records.favorites(photoID: id, page: page) else { break }
+            guard !Task.isCancelled, let next = try? await records.favorites(photoID: id, page: page) else { break }
             faves += next.faves
         }
         return (faves, first.total)
@@ -161,7 +181,6 @@ public final class BrowseModel {
 
     // MARK: - Stats
 
-    /// Save whatever whole days Flickr holds that this Mac does not.
     public func saveStats() async {
         guard let snapshot, statsPhase != .saving else { return }
         statsPhase = .saving
@@ -174,49 +193,32 @@ public final class BrowseModel {
             statsPhase = .failed((error as? FlickrError)?.message ?? error.localizedDescription)
         }
         accountHistory = (try? store?.accountHistory()) ?? accountHistory
-        reloadRows()
+        if case .ranking = scope { items = (try? localItems(for: scope)) ?? items }
     }
 
-    // MARK: - Rows
-
-    private func makeRows() throws -> [Row] {
-        guard let store else { return [] }
-        let yesterday = StatsDay(containing: now()).previous
-        switch ranking {
-        case .mostViewed:
-            return try store.photos(.all, order: .mostViewed, limit: Self.rowLimit).map {
-                row($0.id, $0, figure: Self.count($0.views, "view"))
-            }
-        case .recentUploads:
-            return try store.photos(.all, order: .newestUploaded, limit: Self.rowLimit).map {
-                row($0.id, $0, figure: $0.uploaded.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "")
-            }
-        case .topThisWeek:
-            let start = Array(sequence(first: yesterday) { $0.previous }.prefix(7)).last ?? yesterday
-            return try store.topPhotos(from: start, through: yesterday, by: .views, limit: Self.rowLimit).map {
-                row($0.photoID, $0.photo, figure: Self.count($0.total, "view") + " this week")
-            }
-        case .mostFavedThisMonth:
-            // 28 days of saved history, which outlasts Flickr's own window.
-            let start = Array(sequence(first: yesterday) { $0.previous }.prefix(28)).last ?? yesterday
-            return try store.topPhotos(from: start, through: yesterday, by: .faves, limit: Self.rowLimit).map {
-                row($0.photoID, $0.photo, figure: Self.count($0.total, "fave") + " in 28 days")
-            }
-        case .rising:
-            guard hasHistory(for: .rising) else { return [] }
-            return try store.risingPhotos(endingOn: yesterday, limit: Self.rowLimit).map {
-                row($0.photoID, $0.photo, figure: "\($0.weekBefore.formatted()) → \($0.thisWeek.formatted()) views a week")
-            }
-        }
+    /// Read another batch of photos' faves into the fans index, in the
+    /// background. Quiet on failure: it tries again next time.
+    public func readFaves(photoLimit: Int = 200) async {
+        guard let fansIndex else { return }
+        _ = try? await fansIndex.run(now: now(), photoLimit: photoLimit)
+        if scope == .people { await fill(.people) }
     }
 
-    private func row(_ id: String, _ photo: LibraryPhoto?, figure: String) -> Row {
-        let title = photo?.title ?? ""
-        return Row(photoID: id, title: title.isEmpty ? "Untitled" : title,
-                   thumbnailURL: photo?.thumbnailURL, figure: figure)
+    func setLoading(_ loading: Bool) { isLoading = loading }
+    func setProblem(_ message: String?) { problem = message }
+    func setItems(_ items: [BrowseItem], more: Bool) { self.items = items; canLoadMore = more }
+    func setIndexes(tags: [TagCount]? = nil, months: [MonthCount]? = nil, fans: [Fan]? = nil, recent: [FaveEvent]? = nil) {
+        if let tags { self.tags = tags }
+        if let months { self.months = months }
+        if let fans { self.fans = fans }
+        if let recent { self.recentFaves = recent }
     }
+}
 
-    private static func count(_ value: Int, _ noun: String) -> String {
-        "\(value.formatted(.number.locale(Locale(identifier: "en_US")))) \(noun)\(value == 1 ? "" : "s")"
+/// For a Browse without a fans index (tests of other things).
+public struct NoFaves: FaveSource {
+    public init() {}
+    public func favorites(photoID: String, page: Int, priority: CallPriority) async throws -> FavePage {
+        FavePage(page: 1, pages: 1, total: 0, faves: [])
     }
 }

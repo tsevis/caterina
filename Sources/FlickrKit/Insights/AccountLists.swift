@@ -110,4 +110,10 @@ public struct ContactPage: Sendable, Equatable {
     public let page: Int
     public let pages: Int
     public let contacts: [Contact]
+
+    public init(page: Int, pages: Int, contacts: [Contact]) {
+        self.page = page
+        self.pages = pages
+        self.contacts = contacts
+    }
 }
