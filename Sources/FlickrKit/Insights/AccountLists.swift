@@ -13,6 +13,8 @@ public enum PhotoList: Sendable, Hashable {
     case photosOf(userID: String)
     /// Flickr's Explore: today's most interesting.
     case explore
+    /// Your photos in no album.
+    case notInAlbum
 
     static let perPage = 500
 
@@ -25,6 +27,7 @@ public enum PhotoList: Sendable, Hashable {
         case let .photostream(user): ("flickr.people.getPhotos", ["user_id": user])
         case let .photosOf(user): ("flickr.people.getPhotosOf", ["user_id": user])
         case .explore: ("flickr.interestingness.getList", [:])
+        case .notInAlbum: ("flickr.photos.getNotInSet", [:])
         }
     }
 

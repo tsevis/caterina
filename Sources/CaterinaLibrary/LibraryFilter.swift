@@ -17,6 +17,8 @@ public enum LibraryFilter: Sendable, Equatable, Hashable {
     case licensed(License)
     case seenBy(Audience)
     case videos
+    /// In no album, as `NotInAlbumIndex` last read it whole.
+    case notInAlbum
 }
 
 /// Who can see a photo, as one choice rather than three flags.
@@ -79,7 +81,7 @@ public struct MonthCount: Sendable, Equatable, Hashable, Identifiable {
 
 /// In what order.
 public enum LibraryOrder: Sendable, Equatable, Hashable, CaseIterable {
-    case newestTaken, oldestTaken, newestUploaded, mostViewed
+    case newestTaken, oldestTaken, newestUploaded, mostViewed, recentlyUpdated
 }
 
 public struct LibrarySyncState: Sendable, Equatable {

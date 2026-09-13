@@ -125,6 +125,15 @@ enum LibrarySchema {
                 t.column("readAt", .double).notNull()
             }
         }
+        migrator.registerMigration("v7-not-in-album") { db in
+            try db.create(table: "notInAlbum") { t in
+                t.primaryKey("photoID", .text)
+            }
+            try db.create(table: "notInAlbumState") { t in
+                t.primaryKey("id", .integer)
+                t.column("readAt", .double).notNull()
+            }
+        }
         return migrator
     }
 
@@ -194,6 +203,8 @@ enum LibrarySchema {
             }
         case .videos:
             return ("media = 'video'", [])
+        case .notInAlbum:
+            return ("id IN (SELECT photoID FROM notInAlbum)", [])
         case let .matching(text):
             // SQLite's LIKE folds case for ASCII only; GRDB's Swift lowercase
             // does every alphabet, so both sides are lowered by it.
@@ -213,6 +224,7 @@ enum LibrarySchema {
         case .oldestTaken: "taken IS NULL, taken ASC, id"
         case .newestUploaded: "uploaded IS NULL, uploaded DESC, id"
         case .mostViewed: "views DESC, id"
+        case .recentlyUpdated: "lastUpdated IS NULL, lastUpdated DESC, id"
         }
     }
 

@@ -23,6 +23,7 @@ import Testing
         (PhotoList.photostream(userID: "12@N01"), "flickr.people.getPhotos", ["user_id": "12@N01"]),
         (PhotoList.photosOf(userID: "12@N01"), "flickr.people.getPhotosOf", ["user_id": "12@N01"]),
         (PhotoList.explore, "flickr.interestingness.getList", [:]),
+        (PhotoList.notInAlbum, "flickr.photos.getNotInSet", [:]),
     ])
     func eachListAsksTheRightMethod(list: PhotoList, method: String, arguments: [String: String]) {
         let fields = Dictionary(uniqueKeysWithValues: list.parameters(page: 2).map { ($0.name, $0.value) })
