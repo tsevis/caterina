@@ -21,7 +21,7 @@ Reference implementation (PyQt6, read-only): `/Users/tsevis/AI/ClaudeCode/FDownl
 
 ## Where it stands
 
-21 commits, ~5,700 lines of source and ~4,600 of tests. **342 offline tests**
+24 commits, ~5,700 lines of source and ~4,600 of tests. **342 offline tests**
 (`swift test`: offline, headless, opens no window) and **14 live tests** against
 the real Flickr API, opt-in:
 
