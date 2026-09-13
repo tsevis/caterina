@@ -36,6 +36,14 @@ public final class LibraryStore: Sendable {
             .appendingPathComponent("Library.sqlite")
     }
 
+    func read<T>(_ work: (Database) throws -> T) throws -> T {
+        try database.read(work)
+    }
+
+    func write<T>(_ work: (Database) throws -> T) throws -> T {
+        try database.write(work)
+    }
+
     // MARK: - Writing
 
     /// Insert or replace, marking each photo as seen by `generation`.

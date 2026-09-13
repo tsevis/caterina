@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Distinct from `Photo`, which is a search result someone may download: this
 /// is a record of your library, kept locally and changed by Organize.
-public struct LibraryPhoto: Sendable, Equatable, Hashable, Identifiable {
+public struct LibraryPhoto: Sendable, Equatable, Hashable, Identifiable, Codable {
 
     public struct Visibility: Sendable, Equatable, Hashable, Codable {
         public let isPublic: Bool

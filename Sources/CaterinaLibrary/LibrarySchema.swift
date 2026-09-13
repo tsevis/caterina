@@ -37,6 +37,25 @@ enum LibrarySchema {
                 t.column("changesSince", .double)
             }
         }
+        migrator.registerMigration("v2-edit-batches") { db in
+            try db.create(table: "editBatch") { t in
+                t.primaryKey("id", .text)
+                t.column("title", .text).notNull()
+                t.column("createdAt", .double).notNull().indexed()
+                t.column("undoes", .text)
+            }
+            try db.create(table: "editEntry") { t in
+                t.column("batchID", .text).notNull().references("editBatch", onDelete: .cascade)
+                t.column("position", .integer).notNull()
+                t.column("photoID", .text).notNull()
+                // The whole photo before and after, as JSON: undo needs nothing else.
+                t.column("before", .text).notNull()
+                t.column("after", .text).notNull()
+                t.column("state", .text).notNull()
+                t.column("message", .text)
+                t.primaryKey(["batchID", "position"])
+            }
+        }
         return migrator
     }
 

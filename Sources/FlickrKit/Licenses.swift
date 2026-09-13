@@ -157,3 +157,6 @@ public enum License: String, CaseIterable, Sendable, Identifiable, Hashable {
         License(rawValue: id.trimmingCharacters(in: .whitespaces))
     }
 }
+
+/// Stored as its Flickr id.
+extension License: Codable {}
