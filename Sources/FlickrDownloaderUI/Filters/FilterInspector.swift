@@ -41,10 +41,8 @@ struct FilterInspector: View {
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
             }
+            .disabled(!isEnabled(.sort))
 
-            // **Not disabled with the rest.** Size is applied to the results
-            // here rather than sent to Flickr, so it works on a photostream and
-            // a pool exactly as it does on a search.
             Section("Size") {
                 Toggle("Any size", isOn: Binding(
                     get: { filters.sizes.isEmpty },
@@ -56,7 +54,7 @@ struct FilterInspector: View {
                     })
                 }
             }
-            .disabled(false)
+            .disabled(!isEnabled(.size))
 
             Section("Colour") {
                 Toggle("Any colour", isOn: Binding(
@@ -69,6 +67,7 @@ struct FilterInspector: View {
                     })
                 }
             }
+            .disabled(!isEnabled(.colour))
 
             Section("Licence") {
                 HStack {
@@ -86,19 +85,23 @@ struct FilterInspector: View {
                     .lineLimit(2)
                 }
             }
+            .disabled(!isEnabled(.licence))
         }
         // Checkboxes, not switches. A switch says "this setting is on"; these
         // are a set of things being picked out of a list, and macOS spells that
         // with a checkbox.
         .toggleStyle(.checkbox)
         .formStyle(.grouped)
-        .disabled(!supportsFilters)
         .inspectorColumnWidth(min: 240, ideal: Theme.Metrics.inspectorWidth, max: 340)
     }
 
     // MARK: - Reading and writing one filter at a time
 
     private var filters: SearchFilters { model.workspace[source].filters }
+
+    private func isEnabled(_ section: FilterSection) -> Bool {
+        FilterAvailability.isEnabled(section, supportsFilters: supportsFilters)
+    }
 
     private var supportsFilters: Bool {
         model.workspace[source].query?.supportsFilters ?? (source == .search)
