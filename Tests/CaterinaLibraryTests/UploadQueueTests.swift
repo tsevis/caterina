@@ -141,6 +141,39 @@ actor ScriptedUploader: PhotoUploader {
 
     /// Quit mid-send and nobody knows whether Flickr has the photo. Sending it
     /// again could make two; it waits for the person to decide.
+    /// The backstop against two runs of one batch: a file is claimed for
+    /// sending once, and the second claim is refused.
+    @Test func aFileCanBeClaimedForSendingOnlyOnce() throws {
+        let store = try LibraryStore.inMemory()
+        let batch = try queue(store, ["a.jpg"])
+        let item = try #require(try store.uploadItems(in: batch.id).first)
+        #expect(try store.claimForSending(item))
+        #expect(try !store.claimForSending(item))
+    }
+
+    /// Checked Flickr, the photo is there: settled, and the batch is finished.
+    @Test func anInterruptedFileThePersonFoundOnFlickrIsSettled() async throws {
+        let store = try LibraryStore.inMemory()
+        let batch = try queue(store, ["a.jpg"])
+        let item = try #require(try store.uploadItems(in: batch.id).first)
+        try store.markUpload(item, .interrupted)
+
+        try store.markUpload(item, .alreadyOnFlickr)
+
+        #expect(try store.uploadItems(in: batch.id).first?.state == .alreadyOnFlickr)
+        #expect(try store.unfinishedUploadBatchIDs().isEmpty)
+        #expect(try store.uploadSummary(of: batch.id) == UploadBatch.Summary(done: 0, failed: 0, remaining: 0, interrupted: 0))
+    }
+
+    /// A reply that is not Flickr's may still have come after the photo
+    /// arrived; it is a question for the person, not a refusal.
+    @Test func anUnreadableReplyIsInterruptedNotFailed() async throws {
+        let store = try LibraryStore.inMemory()
+        let batch = try queue(store, ["a.jpg"])
+        _ = try await runner(store, ScriptedUploader(refusing: ["a.jpg": .malformedResponse("Bad Gateway")])).run(batch.id)
+        #expect(try store.uploadItems(in: batch.id).first?.state == .interrupted)
+    }
+
     /// Unfinished: anything not yet on Flickr, or on Flickr but not yet in its
     /// album. Newest first.
     @Test func unfinishedBatchesAreFound() async throws {

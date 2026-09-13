@@ -1,5 +1,7 @@
 import Foundation
 
+import FlickrKit
+
 /// Tidying up after Quick Look and drag-out.
 ///
 /// Both write a real file so the system has something to open or copy, and
@@ -9,7 +11,7 @@ import Foundation
 /// than leaving a growing pile of other people's photographs in the container.
 enum TemporaryFiles {
     /// Names this application creates in the temporary directory.
-    static let prefixes = ["drag-", "Quick Look_"]
+    static let prefixes = ["drag-", "Quick Look_", UploadRequest.bodyFolderName]
 
     /// Old enough that nothing can still be using it.
     static let staleAfter: TimeInterval = 60 * 60

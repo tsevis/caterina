@@ -41,6 +41,22 @@ actor FakeUploader: PhotoUploader, AlbumLister {
     }
 }
 
+actor SlowUploader: PhotoUploader {
+    private(set) var sent: [String] = []
+    func upload(file: URL, metadata: UploadMetadata,
+                progress: @escaping @Sendable (Double) -> Void) async throws -> String {
+        sent.append(file.lastPathComponent)
+        try await Task.sleep(for: .milliseconds(60))
+        return "t-\(file.lastPathComponent)-\(sent.count)"
+    }
+    func checkTickets(_ tickets: [String]) async throws -> [String: TicketStatus] {
+        Dictionary(uniqueKeysWithValues: tickets.map { ($0, .done(photoID: "p-\($0)")) })
+    }
+    func createAlbum(title: String, description: String, coverPhotoID: String,
+                     priority: CallPriority) async throws -> String { "a" }
+    func addToAlbum(photoID: String, albumID: String, priority: CallPriority) async throws {}
+}
+
 @MainActor
 @Suite struct UploadModelTests {
 
@@ -117,7 +133,8 @@ actor FakeUploader: PhotoUploader, AlbumLister {
         let model = try model(uploader)
         await model.add([folder])
         model.preset = UploadPreset.builtIn.first { $0.name == "Private" }!
-        model.album = .new(title: "Athens 2026")
+        model.albumSelection = .new
+        model.newAlbumTitle = "Athens 2026"
 
         await model.send()
 
@@ -174,6 +191,60 @@ actor FakeUploader: PhotoUploader, AlbumLister {
         await relaunched.restoreUnfinished()
         #expect(relaunched.activeBatchID == nil)
         #expect(relaunched.phase == .editing)
+    }
+
+    /// Send Again while the batch is still going must not start a second run
+    /// over the same queue.
+    @Test func sendingAgainDuringARunDoesNotSendAnythingTwice() async throws {
+        let folder = try folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let uploader = SlowUploader()
+        let model = UploadModel(store: try LibraryStore.inMemory(), uploader: uploader, albums: FakeUploader(),
+                                files: PlainFileAccess(),
+                                presets: UploadPresetStore(defaults: UserDefaults(suiteName: UUID().uuidString)!),
+                                pollInterval: .zero)
+        await model.add([folder])
+
+        async let first: Void = model.send()
+        try await Task.sleep(for: .milliseconds(20))
+        async let second: Void = model.resume()
+        _ = await (first, second)
+
+        #expect(await uploader.sent.sorted() == ["a.jpg", "b.jpg", "c.jpg"])
+        #expect(model.phase == .finished(UploadBatch.Summary(done: 3, failed: 0, remaining: 0, interrupted: 0)))
+    }
+
+    /// A file queued again while a run is going is picked up by that run's
+    /// end, not left waiting.
+    @Test func aFileQueuedAgainDuringARunIsSentBeforeItEnds() async throws {
+        let folder = try folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = try LibraryStore.inMemory()
+        let uploader = SlowUploader()
+        let model = UploadModel(store: store, uploader: uploader, albums: FakeUploader(), files: PlainFileAccess(),
+                                presets: UploadPresetStore(defaults: UserDefaults(suiteName: UUID().uuidString)!),
+                                pollInterval: .zero)
+        await model.add([folder])
+        async let run: Void = model.send()
+        try await Task.sleep(for: .milliseconds(20))
+        let batchID = try #require(model.activeBatchID)
+        let first = try #require(try store.uploadItems(in: batchID).first)
+        try store.markUpload(first, .interrupted)
+        await model.resend(first)
+        await run
+
+        #expect(model.phase == .finished(UploadBatch.Summary(done: 3, failed: 0, remaining: 0, interrupted: 0)))
+    }
+
+    @Test func theAlbumChoiceLivesInTheModel() throws {
+        let model = try model(FakeUploader())
+        model.albumSelection = .new
+        model.newAlbumTitle = "  "
+        #expect(model.batchAlbum == .none)
+        model.newAlbumTitle = "Athens"
+        #expect(model.batchAlbum == .new(title: "Athens"))
+        model.albumSelection = .existing("72157001")
+        #expect(model.batchAlbum == .existing(id: "72157001"))
     }
 
     @Test func nothingToSendIsNotABatch() async throws {

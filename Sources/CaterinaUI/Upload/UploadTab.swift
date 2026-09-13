@@ -114,8 +114,10 @@ struct UploadDraftTable: View {
     }
 }
 
-/// Tags are read when the field is finished with, not per keystroke: parsing
-/// half a quoted tag would drop the quote from under the cursor.
+/// The typed text stays the field's own while it is being edited — parsing
+/// half a quoted tag back into it would drop the quote from under the cursor —
+/// but every change reaches the draft at once, so ⌘↩ straight after typing
+/// sends what was typed.
 struct TagsField: View {
     let tags: [String]
     let commit: (String) -> Void
@@ -127,8 +129,7 @@ struct TagsField: View {
             .labelsHidden()
             .focused($isFocused)
             .onAppear { text = UploadMetadata.tagList(tags) }
-            .onSubmit { commit(text) }
-            .onChange(of: isFocused) { _, focused in if !focused { commit(text) } }
+            .onChange(of: text) { _, typed in if isFocused { commit(typed) } }
             .onChange(of: tags) { _, new in if !isFocused { text = UploadMetadata.tagList(new) } }
     }
 }

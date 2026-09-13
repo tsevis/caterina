@@ -44,6 +44,8 @@ public struct UploadItem: Sendable, Equatable {
         case done(photoID: String)
         case failed(String)
         case interrupted
+        /// Interrupted, and the person found it on Flickr: nothing more to do.
+        case alreadyOnFlickr
     }
 
     public let batchID: String

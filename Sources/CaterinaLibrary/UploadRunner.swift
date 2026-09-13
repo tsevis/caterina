@@ -74,7 +74,7 @@ public struct UploadRunner: Sendable {
 
     private func send(_ item: UploadItem) async throws {
         try Task.checkCancellation()
-        try store.markUpload(item, .sending)
+        guard try store.claimForSending(item) else { return }
         do {
             let ticket = try await files.withAccess(to: item.file) {
                 try await uploader.upload(file: item.file, metadata: item.metadata) { _ in }
@@ -89,6 +89,9 @@ public struct UploadRunner: Sendable {
             if case .busy = error { try store.markUpload(item, .queued); throw error }
             // A lost connection may have lost only the reply.
             if error.isTransient { try store.markUpload(item, .interrupted); throw error }
+            // Not Flickr's answer at all — perhaps a proxy's page after the
+            // photo arrived. A question for the person, not a refusal.
+            if case .malformedResponse = error { try store.markUpload(item, .interrupted); return }
             try store.markUpload(item, .failed(error.message))
         } catch {
             try? store.markUpload(item, .interrupted)

@@ -19,10 +19,12 @@ public final class UploadModel {
         public let tags: [String]
     }
 
-    public enum AlbumChoice: Equatable, Sendable {
+    /// What the album picker shows. Kept here, not in the view, so the
+    /// picker and what gets sent can never disagree.
+    public enum AlbumSelection: Hashable, Sendable {
         case none
-        case new(title: String)
-        case existing(Album)
+        case new
+        case existing(String)
     }
 
     public enum Phase: Equatable, Sendable {
@@ -40,13 +42,17 @@ public final class UploadModel {
     public private(set) var activeBatchID: String?
     public private(set) var items: [UploadItem] = []
     public var preset: UploadPreset
-    public var album: AlbumChoice = .none
+    public var albumSelection: AlbumSelection = .none
+    public var newAlbumTitle = ""
 
     public let presets: UploadPresetStore
     private let store: LibraryStore?
     private let runner: UploadRunner?
     private let albumLister: AlbumLister
     private let files: FileAccess
+    /// One run of the active batch at a time: a second would send the same
+    /// queued files again.
+    private var isRunning = false
 
     public init(store: LibraryStore?, uploader: PhotoUploader, albums: AlbumLister, files: FileAccess,
                 presets: UploadPresetStore = UploadPresetStore(), pollInterval: Duration = .seconds(3)) {
@@ -113,12 +119,19 @@ public final class UploadModel {
 
     /// Run the active batch from wherever it stopped.
     public func resume() async {
-        guard let runner, let store, let batchID = activeBatchID else { return }
+        guard !isRunning, let runner, let store, let batchID = activeBatchID else { return }
+        isRunning = true
+        defer { isRunning = false }
         phase = .sending((try? store.uploadSummary(of: batchID)) ?? .init(done: 0, failed: 0, remaining: 0, interrupted: 0))
         do {
-            let summary = try await runner.run(batchID) { [weak self] summary in
-                Task { @MainActor in self?.showProgress(summary) }
-            }
+            var summary: UploadBatch.Summary
+            // Again while anything was queued during the run — Send Again
+            // pressed while it was going — so it is not left waiting.
+            repeat {
+                summary = try await runner.run(batchID) { [weak self] summary in
+                    Task { @MainActor in self?.showProgress(summary) }
+                }
+            } while try store.uploadItems(in: batchID).contains { $0.state == .queued }
             refreshItems()
             phase = .finished(summary)
         } catch let FlickrError.permissionNeeded(permission) {
@@ -138,10 +151,21 @@ public final class UploadModel {
         await resume()
     }
 
-    /// Send again a file the person has checked is not on Flickr.
+    /// Send again a file the person has checked is not on Flickr. During a
+    /// run it joins that run; otherwise it starts one.
     public func resend(_ item: UploadItem) async {
         try? store?.resend(item)
+        refreshItems()
         await resume()
+    }
+
+    /// The person checked, and the photo is on Flickr: nothing more to do.
+    public func markAlreadyOnFlickr(_ item: UploadItem) {
+        try? store?.markUpload(item, .alreadyOnFlickr)
+        refreshItems()
+        if case let .finished(summary) = phase, let store, let batchID = activeBatchID {
+            phase = .finished((try? store.uploadSummary(of: batchID)) ?? summary)
+        }
     }
 
     public func startOver() {
@@ -153,11 +177,12 @@ public final class UploadModel {
 
     // MARK: - Private
 
-    private var batchAlbum: UploadBatch.AlbumChoice {
-        switch album {
+    var batchAlbum: UploadBatch.AlbumChoice {
+        switch albumSelection {
         case .none: .none
-        case let .new(title): title.trimmingCharacters(in: .whitespaces).isEmpty ? .none : .new(title: title)
-        case let .existing(album): .existing(id: album.id)
+        case .new:
+            newAlbumTitle.trimmingCharacters(in: .whitespaces).isEmpty ? .none : .new(title: newAlbumTitle)
+        case let .existing(id): .existing(id: id)
         }
     }
 
@@ -169,7 +194,9 @@ public final class UploadModel {
 
     private func refreshItems() {
         guard let store, let activeBatchID else { return }
-        items = (try? store.uploadItems(in: activeBatchID, files: files)) ?? items
+        // Paths only: resolving a bookmark per file on every tick of a
+        // 500-photo batch would stall the window, and the list only shows names.
+        items = (try? store.uploadItems(in: activeBatchID)) ?? items
     }
 
     nonisolated static func drafts(for urls: [URL], skipping known: Set<URL>) -> [Draft] {

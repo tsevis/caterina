@@ -5,10 +5,6 @@ import FlickrKit
 /// Who can see the photos, which album they go in, and the button that sends.
 struct UploadSettingsPanel: View {
     @Bindable var uploads: UploadModel
-    @State private var newAlbumTitle = ""
-    @State private var albumMode: AlbumMode = .none
-
-    private enum AlbumMode: Hashable { case none, new, existing(String) }
 
     var body: some View {
         Form {
@@ -21,16 +17,16 @@ struct UploadSettingsPanel: View {
                     .foregroundStyle(Theme.inkSecondary)
             }
             Section("Album") {
-                Picker("Put in", selection: $albumMode) {
-                    Text("No album").tag(AlbumMode.none)
-                    Text("New album…").tag(AlbumMode.new)
+                Picker("Put in", selection: $uploads.albumSelection) {
+                    Text("No album").tag(UploadModel.AlbumSelection.none)
+                    Text("New album…").tag(UploadModel.AlbumSelection.new)
                     if !uploads.albums.isEmpty { Divider() }
                     ForEach(uploads.albums) { album in
-                        Text("\(album.title) (\(album.photoCount))").tag(AlbumMode.existing(album.id))
+                        Text("\(album.title) (\(album.photoCount))").tag(UploadModel.AlbumSelection.existing(album.id))
                     }
                 }
-                if albumMode == .new {
-                    TextField("Album title", text: $newAlbumTitle)
+                if uploads.albumSelection == .new {
+                    TextField("Album title", text: $uploads.newAlbumTitle)
                 }
             }
             Section {
@@ -45,8 +41,6 @@ struct UploadSettingsPanel: View {
             }
         }
         .formStyle(.grouped)
-        .onChange(of: albumMode) { _, _ in applyAlbum() }
-        .onChange(of: newAlbumTitle) { _, _ in applyAlbum() }
     }
 
     private var sendTitle: String {
@@ -65,12 +59,4 @@ struct UploadSettingsPanel: View {
         }
     }
 
-    private func applyAlbum() {
-        switch albumMode {
-        case .none: uploads.album = .none
-        case .new: uploads.album = .new(title: newAlbumTitle)
-        case let .existing(id):
-            uploads.album = uploads.albums.first { $0.id == id }.map { .existing($0) } ?? .none
-        }
-    }
 }

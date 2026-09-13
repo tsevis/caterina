@@ -21,6 +21,10 @@ struct UploadProgressList: View {
                         .lineLimit(2)
                 }
                 Spacer()
+                if item.state == .interrupted {
+                    Button("Already on Flickr") { uploads.markAlreadyOnFlickr(item) }
+                        .help("It is in your photostream; nothing more to do")
+                }
                 if item.state == .interrupted || item.message != nil {
                     Button("Send Again") { Task { await uploads.resend(item) } }
                         .help("Only if the photo is not already in your photostream")
@@ -38,6 +42,7 @@ struct UploadProgressList: View {
         case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
         case .failed: Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
         case .interrupted: Image(systemName: "questionmark.circle.fill").foregroundStyle(.orange)
+        case .alreadyOnFlickr: Image(systemName: "checkmark.circle").foregroundStyle(Theme.inkSecondary)
         }
     }
 
@@ -49,6 +54,7 @@ struct UploadProgressList: View {
         case .done: item.inAlbum ? "On Flickr, in the album" : "On Flickr"
         case let .failed(message): message
         case .interrupted: "Stopped while sending. Check your photostream before sending it again."
+        case .alreadyOnFlickr: "Already on Flickr"
         }
     }
 }
@@ -119,8 +125,4 @@ struct UploadStatusBar: View {
         if summary.interrupted > 0 { parts.append("\(summary.interrupted) to check") }
         return parts.joined(separator: " · ")
     }
-}
-
-extension FlickrPermission: Identifiable {
-    public var id: String { rawValue }
 }

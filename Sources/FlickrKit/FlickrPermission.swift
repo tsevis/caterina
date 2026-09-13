@@ -5,8 +5,10 @@ import Foundation
 /// **Each level includes the ones below it**, and each is a separate trip to
 /// Flickr's authorisation page that issues a new token. Caterina asks for more
 /// only when something the user just asked for needs it.
-public enum FlickrPermission: String, Codable, CaseIterable, Comparable, Sendable {
+public enum FlickrPermission: String, Codable, CaseIterable, Comparable, Sendable, Identifiable {
     case read, write, delete
+
+    public var id: String { rawValue }
 
     public static func < (lhs: FlickrPermission, rhs: FlickrPermission) -> Bool {
         lhs.rank < rhs.rank

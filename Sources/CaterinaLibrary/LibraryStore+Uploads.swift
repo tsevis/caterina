@@ -70,12 +70,25 @@ extension LibraryStore {
         case let .done(photoID): ("done", nil, photoID, nil)
         case let .failed(message): ("failed", nil, nil, message)
         case .interrupted: ("interrupted", nil, nil, nil)
+        case .alreadyOnFlickr: ("alreadyOnFlickr", nil, nil, nil)
         }
         try write { db in
             try db.execute(sql: """
                 UPDATE uploadItem SET state = ?, ticket = ?, photoID = ?, message = ?
                 WHERE batchID = ? AND position = ?
                 """, arguments: [name, ticket, photoID, message, item.batchID, item.position])
+        }
+    }
+
+    /// Mark a queued file as being sent, unless something else already has.
+    /// The last line of defence against sending one file twice.
+    func claimForSending(_ item: UploadItem) throws -> Bool {
+        try write { db in
+            try db.execute(sql: """
+                UPDATE uploadItem SET state = 'sending'
+                WHERE batchID = ? AND position = ? AND state = 'queued'
+                """, arguments: [item.batchID, item.position])
+            return db.changesCount == 1
         }
     }
 
@@ -114,6 +127,7 @@ extension LibraryStore {
         case "done": .done(photoID: row["photoID"] ?? "")
         case "failed": .failed(row["message"] ?? "")
         case "interrupted": .interrupted
+        case "alreadyOnFlickr": .alreadyOnFlickr
         default: .queued
         }
         return UploadItem(

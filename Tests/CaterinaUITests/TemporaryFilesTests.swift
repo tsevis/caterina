@@ -2,10 +2,18 @@ import ImageIO
 import Foundation
 import Testing
 
+import FlickrKit
+
 @testable import CaterinaUI
 
 /// Cleaning up after Quick Look and drag-out.
 @Suite struct TemporaryFilesTests {
+
+    /// Each body is a full copy of a photo; a crash mid-upload must not leave
+    /// them for good.
+    @Test func leftoverUploadBodiesAreSwept() {
+        #expect(TemporaryFiles.prefixes.contains(FlickrKit.UploadRequest.bodyFolderName))
+    }
 
     private func directory() throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
