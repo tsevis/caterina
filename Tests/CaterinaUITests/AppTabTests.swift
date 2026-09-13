@@ -28,10 +28,9 @@ import FlickrKit
         #expect(Set(AppTab.allCases.map(\.title)).count == AppTab.allCases.count)
     }
 
-    /// Only Download is built. The others must say so rather than show an
-    /// empty grid that looks broken.
-    @Test func downloadAndUploadAreBuiltSoFar() {
-        #expect(AppTab.allCases.filter(\.isBuilt) == [.download, .upload, .browse])
+    /// Organize was the last to be built.
+    @Test func everyTabIsBuilt() {
+        #expect(AppTab.allCases.filter { !$0.isBuilt }.isEmpty)
     }
 
     @Test func theWindowOpensOnDownload() {
@@ -40,23 +39,5 @@ import FlickrKit
         #expect(model.tab == .download)
         model.tab = .browse
         #expect(model.tab == .browse)
-    }
-
-    @Test(arguments: AppTab.allCases.filter { !$0.isBuilt })
-    func anUnbuiltTabIsDrawnAsWhatIsComing(tab: AppTab) throws {
-        let renderer = ImageRenderer(content:
-            PlannedTabView(tab: tab)
-                .frame(width: 640, height: 420)
-                .background(Color(nsColor: .windowBackgroundColor)))
-        let image = try #require(renderer.nsImage)
-        let bitmap = try #require(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
-        var seen = Set<String>()
-        for x in stride(from: 20, to: bitmap.pixelsWide - 20, by: 12) {
-            for y in stride(from: 20, to: bitmap.pixelsHigh - 20, by: 12) {
-                guard let colour = bitmap.colorAt(x: x, y: y) else { continue }
-                seen.insert(String(format: "%.2f", colour.brightnessComponent))
-            }
-        }
-        #expect(seen.count > 2)
     }
 }

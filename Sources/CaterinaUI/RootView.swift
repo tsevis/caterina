@@ -80,11 +80,7 @@ public struct RootView: View {
         case .download: DownloadTab(model: model)
         case .upload: UploadTab(model: model)
         case .browse: BrowseTab(model: model)
-        case .organize:
-            VStack(spacing: 0) {
-                PlannedTabView(tab: .organize)
-                LibraryStatusBar(model: model)
-            }
+        case .organize: OrganizeTab(model: model)
         }
     }
 
