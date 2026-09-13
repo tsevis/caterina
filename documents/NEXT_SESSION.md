@@ -99,9 +99,47 @@ left is 4–7, and each needs a running window and a hand on the machine.
    `AppModelTests.changingAFilterRerunsTheQueryFromPageOne`; what is unproven is
    only the checkbox-to-model plumbing.
 
+**Found by reading the code and a sandboxed probe (2026-09-13), fixed, not yet
+seen in a running window:**
+
+* **6 was broken.** The sheet called `isWritableFile` before any security scope
+  was started, and under the sandbox that answers `false` for an ungranted
+  folder (confirmed with an ad-hoc-signed sandboxed probe). Every remembered
+  folder would have been refused after a relaunch. `DownloadFolder.isWritable`
+  now checks inside the scope. A stale bookmark (folder renamed) was also
+  discarded; it is now followed and refreshed. No
+  `files.bookmarks.app-scope` entitlement is needed — the probe created and
+  resolved security-scoped bookmarks without it.
+* **7 had a bug beside the one asked about.** The `Form` was `.disabled` for
+  photostreams and pools and Size tried `.disabled(false)`, which cannot undo a
+  parent's; Size was greyed out everywhere but search. Now gated per section
+  by `FilterAvailability`. The re-run-once plumbing reads correct: one binding
+  set per tick, debounced 500ms in `AppModel.setFilters`.
+* **4:** dragging from a multi-selection drags one photo — `.onDrag` carries a
+  single provider. The comment claimed otherwise; corrected. Multi-item drag
+  would need macOS 26's `dragContainer`; not done.
+* **5:** the sheet's error message now clears when a new folder is chosen.
+
 The *logic* behind 4–7 is extracted and tested (`GridSelection`, `Marquee`,
 `PhotoDrag.promisedName`, `DownloadFolder`). What is untested is the gesture
 plumbing.
+
+**Performance work (2026-09-13), offline-tested; the transport also checked
+against the real CDN via the public feed (byte-identical JPEGs, 404 throws):**
+
+* **Download transport streams URLSession's own chunks** (`ChunkTransport.swift`,
+  a delegate routing per task). The old per-byte `AsyncBytes` loop measured
+  32 MB/s with a core pegged; the new one 1,657 MB/s on the same 64MB file.
+  The old one also held back anything under 64KB, so a stalled server
+  delivered nothing until the timeout.
+* **Four photos transfer at once** (`DownloadEngine.simultaneousTransfers`).
+  The report keeps selection order. Cancelling keeps every photo already
+  finished — no longer only those *before* the one in flight; two tests that
+  encoded the one-at-a-time contract were updated to say so.
+* **Thumbnails decode inside the store's actor** (`ShouldCacheImmediately`),
+  not on the main thread at first draw.
+* Checked and left alone: `@Observable` already skips equal writes (Swift
+  6.2), so no-op selection sweeps cost nothing.
 
 ## Hard constraints — read before acting
 
