@@ -51,6 +51,7 @@ public final class AppModel {
     /// The local copy of your library, shared by Organize and Browse.
     public let library: LibraryModel
     public let uploads: UploadModel
+    public let browse: BrowseModel
 
     /// One in-flight load per source, so loading Groups cannot cancel Search.
     private var loads: [PhotoSource: Task<Void, Never>] = [:]
@@ -85,6 +86,7 @@ public final class AppModel {
         self.library = LibraryModel(store: libraryStore, source: client)
         self.uploads = UploadModel(store: libraryStore, uploader: client, albums: client,
                                    files: SecurityScopedFileAccess())
+        self.browse = BrowseModel(store: libraryStore, records: client, stats: client)
         self.account = stored?.account
         self.isShowingOnboarding = !(stored?.hasAPIKey ?? false)
     }

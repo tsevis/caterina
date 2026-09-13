@@ -31,7 +31,7 @@ import FlickrKit
     /// Only Download is built. The others must say so rather than show an
     /// empty grid that looks broken.
     @Test func downloadAndUploadAreBuiltSoFar() {
-        #expect(AppTab.allCases.filter(\.isBuilt) == [.download, .upload])
+        #expect(AppTab.allCases.filter(\.isBuilt) == [.download, .upload, .browse])
     }
 
     @Test func theWindowOpensOnDownload() {

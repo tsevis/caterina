@@ -47,7 +47,10 @@ public struct RootView: View {
                     // not hold the library sync until it finishes.
                     async let uploads: Void = model.uploads.restoreUnfinished()
                     async let library: Void = model.syncLibrary()
-                    _ = await (uploads, library)
+                    // Daily stats are saved whether or not Browse is opened:
+                    // a day not saved within 28 days is gone.
+                    async let stats: Void = model.browse.saveStats()
+                    _ = await (uploads, library, stats)
                 }
             }
             .onChange(of: model.download.completed) { _, _ in updateDockProgress() }
@@ -59,7 +62,7 @@ public struct RootView: View {
         switch model.tab {
         case .download: DownloadTab(model: model)
         case .upload: UploadTab(model: model)
-        case .browse: PlannedTabView(tab: model.tab)
+        case .browse: BrowseTab(model: model)
         case .organize:
             VStack(spacing: 0) {
                 PlannedTabView(tab: .organize)

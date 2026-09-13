@@ -54,5 +54,5 @@ public enum AppTab: String, CaseIterable, Identifiable, Sendable {
 
     /// Whether the tab does its job yet. An unbuilt one says what is coming
     /// instead of showing an empty grid that looks broken.
-    public var isBuilt: Bool { self == .download || self == .upload }
+    public var isBuilt: Bool { self != .organize }
 }
