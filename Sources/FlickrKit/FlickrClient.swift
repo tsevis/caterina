@@ -191,6 +191,22 @@ public actor FlickrClient {
         return try FlickrResponse.licenses(from: data)
     }
 
+    // MARK: - Your library
+
+    /// A page of your own photos. Background work: a sync is spaced out so it
+    /// never crowds what the person is looking at.
+    public func library(_ query: LibraryQuery,
+                        priority: CallPriority = .background) async throws -> LibraryPage {
+        guard credentials.token != nil else { throw FlickrError.permissionNeeded(.read) }
+        let credentials = self.credentials
+        let data = try await withRetries(priority: priority, retryingLostConnections: true) { transport in
+            let url = try OAuth1.signedURL(method: "GET", url: Self.endpoint,
+                                           parameters: query.parameters, credentials: credentials)
+            return try await transport.data(from: url)
+        }
+        return try LibraryResponse.page(from: data)
+    }
+
     // MARK: - Writing
 
     /// Change something on Flickr. Needs a signed-in account.
