@@ -20,6 +20,8 @@ public final class AppModel {
     // MARK: - State
 
     public private(set) var workspace = Workspace()
+    /// Which of the four tabs the window is showing.
+    public var tab: AppTab = .download
     public private(set) var account: CredentialsVault.StoredAccount?
     public private(set) var download = DownloadState()
     /// The Groups source has two inputs: which group, and what to search for

@@ -34,6 +34,7 @@ struct CaterinaApp: App {
         // little of it as the HIG allows.
         .windowToolbarStyle(.unified)
         .commands {
+            AppTabCommands(model: model)
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appInfo) {
                 Button("About Caterina") { about.show() }

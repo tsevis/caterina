@@ -1,15 +1,16 @@
 import AppKit
-import QuickLook
 import SwiftUI
 
 import FlickrKit
 
-/// The window.
+/// The window: four tabs over one library.
+///
+/// What belongs to the window rather than to a tab lives here — the key sheet,
+/// the launch sequence, and the Dock badge, which has to keep counting while
+/// a download runs behind another tab.
 public struct RootView: View {
     @Bindable var model: AppModel
     let about: AboutWindowController
-
-    @State private var isShowingDownloadSheet = false
 
     public init(model: AppModel, about: AboutWindowController) {
         self.model = model
@@ -17,105 +18,52 @@ public struct RootView: View {
     }
 
     public var body: some View {
-        NavigationSplitView {
-            SourceSidebar(model: model)
-        } detail: {
-            VStack(spacing: 0) {
-                SourceDetailView(model: model, source: model.activeSource)
-                DownloadBar(model: model)
+        content
+            .background(WindowConfigurator(autosaveName: "CaterinaMain",
+                                           minimum: NSSize(width: 820, height: 560)))
+            .toolbar {
+                ToolbarItem(placement: .principal) { tabPicker }
             }
-            .frame(minWidth: 560, minHeight: 420)
-        }
-        .inspector(isPresented: $model.isShowingInspector) {
-            FilterInspector(model: model, source: model.activeSource)
-        }
-        .background(WindowConfigurator(autosaveName: "CaterinaMain",
-                                       minimum: NSSize(width: 820, height: 560)))
-        .toolbar { toolbar }
-        .sheet(isPresented: $model.isShowingOnboarding) {
-            CredentialsForm(model: model, isOnboarding: true) {
-                model.isShowingOnboarding = false
+            .sheet(isPresented: $model.isShowingOnboarding) {
+                CredentialsForm(model: model, isOnboarding: true) {
+                    model.isShowingOnboarding = false
+                }
             }
-        }
-        .sheet(isPresented: $isShowingDownloadSheet) {
-            DownloadSheet(model: model, source: model.activeSource,
-                          isPresented: $isShowingDownloadSheet)
-        }
-        .quickLookPreview($model.previewURL)
-        .task {
-            // The splash first; whatever should happen after launch happens
-            // when it closes, so the order is program order rather than a race
-            // between two `.task` modifiers.
-            // Last session's previews and drag promises, which nothing could
-            // delete at the time.
-            TemporaryFiles.sweep()
+            .task {
+                // The splash first; whatever should happen after launch happens
+                // when it closes, so the order is program order rather than a race
+                // between two `.task` modifiers.
+                // Last session's previews and drag promises, which nothing could
+                // delete at the time.
+                TemporaryFiles.sweep()
 
-            about.showOnLaunchIfWanted {
-                if !model.hasAPIKey { model.isShowingOnboarding = true }
+                about.showOnLaunchIfWanted {
+                    if !model.hasAPIKey { model.isShowingOnboarding = true }
+                }
             }
-        }
-        .onChange(of: model.download.completed) { _, _ in updateDockProgress() }
-        .onChange(of: model.download.isRunning) { _, _ in updateDockProgress() }
+            .onChange(of: model.download.completed) { _, _ in updateDockProgress() }
+            .onChange(of: model.download.isRunning) { _, _ in updateDockProgress() }
     }
 
-    private var state: SectionState { model.state }
-
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItemGroup {
-            // Beside the buttons it describes. In `.navigation` it shared a
-            // slot with the window title and never appeared.
-            Text(selectionSummary)
-                .font(.callout)
-                .monospacedDigit()
-                .foregroundStyle(Theme.inkSecondary)
-                .accessibilityLabel(selectionSummary.isEmpty
-                    ? "Nothing selected" : selectionSummary)
-
-            Button {
-                model.selectAll(in: model.activeSource)
-            } label: {
-                Label("Select All", systemImage: "checkmark.circle")
-            }
-            // ⇧⌘A, not ⌘A: a plain ⌘A here outranks the focused query field,
-            // where it means "select the text I just typed".
-            .keyboardShortcut("a", modifiers: [.command, .shift])
-            .disabled(state.photos.isEmpty)
-            .help("Select every photo on this page (⇧⌘A)")
-
-            Button {
-                model.clearSelection(in: model.activeSource)
-            } label: {
-                Label("Deselect", systemImage: "circle.slash")
-            }
-            .disabled(state.selection.isEmpty)
-            .help("Clear the selection")
-
-            Button {
-                isShowingDownloadSheet = true
-            } label: {
-                Label("Download…", systemImage: "arrow.down.circle")
-            }
-            .keyboardShortcut("d", modifiers: .command)
-            .disabled(state.selection.isEmpty || model.download.isRunning)
-            .help("Download the selected photos")
-
-            Button {
-                model.isShowingInspector.toggle()
-            } label: {
-                Label("Filters", systemImage: "line.3.horizontal.decrease.circle")
-            }
-            .keyboardShortcut("i", modifiers: [.command, .option])
-            .help("Show or hide the filters")
+    @ViewBuilder
+    private var content: some View {
+        switch model.tab {
+        case .download: DownloadTab(model: model)
+        case .upload, .organize, .browse: PlannedTabView(tab: model.tab)
         }
     }
 
-    private var selectionSummary: String {
-        let selected = state.selection.count
-        guard selected > 0 else {
-            return state.photos.isEmpty ? "" : "\(state.photos.count) photos"
+    private var tabPicker: some View {
+        Picker("Tab", selection: $model.tab) {
+            ForEach(AppTab.allCases) { tab in
+                Text(tab.title)
+                    .help("\(tab.purpose) (⌘\(String(tab.shortcut)))")
+                    .tag(tab)
+            }
         }
-        return "\(selected) of \(state.photos.count) selected"
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
     }
 
     /// A badge rather than a drawn progress bar: the Dock tile is 128 points
