@@ -1,0 +1,106 @@
+import Foundation
+import GRDB
+
+import FlickrKit
+
+/// Every photo in your library, in SQLite.
+///
+/// A copy, never the truth: Flickr is. It exists so Organize can filter twenty
+/// thousand photos without twenty thousand calls, and so history can be kept
+/// that Flickr itself discards.
+public final class LibraryStore: Sendable {
+    private let database: DatabaseQueue
+
+    /// The copy on disk, created with its folder if it is not there yet.
+    public convenience init(file: URL) throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try self.init(database: DatabaseQueue(path: file.path))
+    }
+
+    public static func inMemory() throws -> LibraryStore {
+        try LibraryStore(database: DatabaseQueue())
+    }
+
+    private init(database: DatabaseQueue) throws {
+        self.database = database
+        try LibrarySchema.migrator.migrate(database)
+    }
+
+    /// Where the app keeps it: its own Application Support folder, which the
+    /// sandbox puts inside the app's container.
+    public static func defaultFile() throws -> URL {
+        try FileManager.default
+            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Library.sqlite")
+    }
+
+    // MARK: - Writing
+
+    /// Insert or replace, marking each photo as seen by `generation`.
+    public func save(_ photos: [LibraryPhoto], generation: Int) throws {
+        try database.write { db in
+            let statement = try db.cachedStatement(sql: LibrarySchema.upsert)
+            for photo in photos {
+                try statement.execute(arguments: LibrarySchema.arguments(photo, generation: generation))
+            }
+        }
+    }
+
+    /// Remove photos the full sync numbered `generation` did not see. Returns
+    /// how many.
+    @discardableResult
+    public func removePhotos(olderThan generation: Int) throws -> Int {
+        try database.write { db in
+            try db.execute(sql: "DELETE FROM photo WHERE generation < ?", arguments: [generation])
+            return db.changesCount
+        }
+    }
+
+    public func save(_ state: LibrarySyncState) throws {
+        try database.write { db in
+            try db.execute(sql: """
+                INSERT OR REPLACE INTO syncState (id, generation, lastFullSync, changesSince)
+                VALUES (1, ?, ?, ?)
+                """, arguments: [state.generation, state.lastFullSync?.timeIntervalSince1970,
+                                 state.changesSince?.timeIntervalSince1970])
+        }
+    }
+
+    // MARK: - Reading
+
+    public func photos(_ filter: LibraryFilter, order: LibraryOrder = .newestTaken,
+                       limit: Int? = nil, offset: Int = 0) throws -> [LibraryPhoto] {
+        let condition = LibrarySchema.condition(filter)
+        var sql = "SELECT * FROM photo WHERE \(condition.sql) ORDER BY \(LibrarySchema.orderClause(order))"
+        var arguments = condition.arguments
+        if let limit {
+            sql += " LIMIT ? OFFSET ?"
+            arguments += [limit, offset]
+        }
+        return try database.read { db in
+            try Row.fetchAll(db, sql: sql, arguments: arguments).map(LibrarySchema.photo)
+        }
+    }
+
+    public func count(_ filter: LibraryFilter) throws -> Int {
+        let condition = LibrarySchema.condition(filter)
+        return try database.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM photo WHERE \(condition.sql)",
+                             arguments: condition.arguments) ?? 0
+        }
+    }
+
+    public func syncState() throws -> LibrarySyncState {
+        try database.read { db in
+            guard let row = try Row.fetchOne(db, sql: "SELECT * FROM syncState WHERE id = 1") else {
+                return .never
+            }
+            return LibrarySyncState(
+                generation: row["generation"],
+                lastFullSync: (row["lastFullSync"] as Double?).map(Date.init(timeIntervalSince1970:)),
+                changesSince: (row["changesSince"] as Double?).map(Date.init(timeIntervalSince1970:)))
+        }
+    }
+}

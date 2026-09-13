@@ -1,7 +1,7 @@
 import Foundation
 
 /// Asking Flickr for your library: all of it, or what changed.
-public enum LibraryQuery: Sendable, Equatable {
+public enum LibraryQuery: Sendable, Hashable {
     /// Every photo, for a first sync or a full reconcile.
     case everything(page: Int)
     /// Photos whose title, tags, permissions or anything else changed since.
