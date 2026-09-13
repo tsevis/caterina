@@ -124,3 +124,13 @@ import Testing
         #expect(PhotoChange(before: dated, after: undated).writes.isEmpty)
     }
 }
+
+@Suite struct SetTakenTests {
+    @Test func aDateTakenIsSetOutrightAndWrittenWithSetDates() throws {
+        let photo = LibraryPhoto(id: "1", taken: "2020-01-01 00:00:00")
+        let after = PhotoEdit.setTaken("2024-06-01 21:14:05").applied(to: photo)
+        #expect(after.taken == "2024-06-01 21:14:05")
+        let write = try #require(PhotoChange(before: photo, after: after).writes.first)
+        #expect(write.arguments == ["photo_id": "1", "date_taken": "2024-06-01 21:14:05", "date_taken_granularity": "0"])
+    }
+}

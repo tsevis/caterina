@@ -1,0 +1,261 @@
+import Foundation
+import Testing
+
+import CaterinaLibrary
+import FlickrKit
+@testable import CaterinaUI
+
+/// Flickr for Organize: reads back from the library copy, sends writes, and
+/// can hold the not-in-album list until told to answer.
+actor FakeOrganizeFlickr: PhotoWriter, LivePhotoReader, PhotoListSource {
+    private let store: LibraryStore
+    private var refusals: [String: FlickrError]
+    private var notInAlbum: [String]
+    private var held: CheckedContinuation<Void, Never>?
+    private var holding = false
+    private(set) var sent: [FlickrWrite] = []
+    var listFailure: FlickrError?
+    func failLists(with error: FlickrError) { listFailure = error }
+
+    init(store: LibraryStore, notInAlbum: [String] = [], refusals: [String: FlickrError] = [:]) {
+        self.store = store
+        self.notInAlbum = notInAlbum
+        self.refusals = refusals
+    }
+
+    func refuse(_ photoID: String, with error: FlickrError?) { refusals[photoID] = error }
+    func hold() { holding = true }
+    func release() { holding = false; held?.resume(); held = nil }
+    var isHolding: Bool { held != nil }
+
+    func perform(_ write: FlickrWrite, priority: CallPriority) async throws -> Data {
+        if let refusal = refusals[write.arguments["photo_id"] ?? ""] { throw refusal }
+        sent.append(write)
+        return Data(#"{"stat":"ok"}"#.utf8)
+    }
+    func livePhoto(id: String, priority: CallPriority) async throws -> LibraryPhoto {
+        if holding { await withCheckedContinuation { held = $0 } }
+        guard let photo = try store.photos(ids: [id]).first else { throw FlickrError.notFound("gone") }
+        return photo
+    }
+    func geoPermissions(photoID: String, priority: CallPriority) async throws -> LibraryPhoto.GeoPermissions? { nil }
+    func photoList(_ list: PhotoList, page: Int) async throws -> LibraryPage {
+        if holding { await withCheckedContinuation { held = $0 } }
+        if let listFailure { throw listFailure }
+        return LibraryPage(page: 1, pages: 1, total: notInAlbum.count,
+                           photos: notInAlbum.map { LibraryPhoto(id: $0) }, skippedEntries: 0)
+    }
+}
+
+@MainActor
+@Suite struct OrganizeModelTests {
+
+    private func library() throws -> LibraryStore {
+        let store = try LibraryStore.inMemory()
+        try store.save([
+            LibraryPhoto(id: "1", title: "Harbour", tags: ["sea"], taken: "2024-06-01 10:00:00"),
+            LibraryPhoto(id: "2", title: "Hill", taken: "2024-05-01 10:00:00",
+                         location: .init(latitude: 1, longitude: 2, accuracy: 16)),
+            LibraryPhoto(id: "3", title: "Pier", tags: ["sea"], taken: "2023-01-01 10:00:00", media: .video),
+        ], generation: 1)
+        return store
+    }
+
+    private func model(_ store: LibraryStore, _ flickr: FakeOrganizeFlickr? = nil) -> OrganizeModel {
+        OrganizeModel(store: store, flickr: flickr ?? FakeOrganizeFlickr(store: store))
+    }
+
+    // MARK: - Finding photos
+
+    @Test func eachViewShowsItsPhotos() async throws {
+        let model = model(try library())
+        #expect(model.photos.map(\.id) == ["1", "2", "3"])
+        await model.open(.untagged)
+        #expect(model.photos.map(\.id) == ["2"])
+        await model.open(.withLocation)
+        #expect(model.photos.map(\.id) == ["2"])
+        await model.open(.videos)
+        #expect(model.photos.map(\.id) == ["3"])
+        await model.open(.tag("sea"))
+        #expect(model.photos.map(\.id) == ["1", "3"])
+        await model.open(.month("2024-05"))
+        #expect(model.photos.map(\.id) == ["2"])
+        #expect(model.count(of: .untagged) == 1)
+        #expect(model.tags.map(\.tag) == ["sea"])
+    }
+
+    @Test func notInAnAlbumIsReadFromFlickrTheFirstTimeItOpens() async throws {
+        let store = try library()
+        let model = model(store, FakeOrganizeFlickr(store: store, notInAlbum: ["2", "3"]))
+        await model.open(.notInAlbum)
+        #expect(model.photos.map(\.id) == ["2", "3"])
+        #expect(model.notInAlbumReadAt != nil)
+    }
+
+    /// A slow not-in-album read, failing, must not put its complaint on the
+    /// view chosen after it.
+    @Test func aLateNotInAlbumReplyDoesNotLandOnTheViewOpenedSince() async throws {
+        let store = try library()
+        let flickr = FakeOrganizeFlickr(store: store, notInAlbum: ["2"])
+        await flickr.failLists(with: .busy("Flickr is busy right now."))
+        await flickr.hold()
+        let model = model(store, flickr)
+
+        let opening = Task { await model.open(.notInAlbum) }
+        try await waitUntil("the read to start") { await flickr.isHolding }
+        await model.open(.videos)
+        await flickr.release()
+        await opening.value
+
+        #expect(model.scope == .videos)
+        #expect(model.photos.map(\.id) == ["3"])
+        #expect(model.problem == nil)
+    }
+
+    // MARK: - Selection and the tray
+
+    @Test func theTrayKeepsPhotosAcrossViews() async throws {
+        let model = model(try library())
+        model.click("1", modifiers: [])
+        model.click("3", modifiers: .command)
+        model.addSelectionToTray()
+        await model.open(.untagged)
+        model.selectAll()
+        model.addSelectionToTray()
+        model.addSelectionToTray()
+
+        #expect(model.tray == ["1", "3", "2"])
+        #expect(model.trayPhotos.map(\.id) == ["1", "3", "2"])
+        model.removeFromTray(["3"])
+        #expect(model.tray == ["1", "2"])
+        model.clearTray()
+        #expect(model.tray.isEmpty)
+    }
+
+    /// Changing view keeps the tray but not the grid selection.
+    @Test func selectionBelongsToTheView() async throws {
+        let model = model(try library())
+        model.selectAll()
+        await model.open(.videos)
+        #expect(model.selection.isEmpty)
+    }
+
+    // MARK: - Cost before running
+
+    @Test func theEstimateCountsOnlyPhotosTheEditChanges() throws {
+        let model = model(try library())
+        model.selectAll()
+        model.addSelectionToTray()
+
+        let estimate = model.estimate(.addTags(["sea"]))
+
+        #expect(estimate.photos == 1)
+        #expect(estimate.unchanged == 2)
+        #expect(estimate.calls == 2)
+        #expect(estimate.summary == "1 photo · 2 calls · under a minute")
+        #expect(estimate.unrestorable.isEmpty)
+    }
+
+    @Test func anEditThatCannotBeUndoneSaysSo() throws {
+        let model = model(try library())
+        model.selectAll()
+        model.addSelectionToTray()
+        #expect(model.estimate(.setContentType(.screenshot)).unrestorable == ["content type"])
+    }
+
+    @Test func largeBatchesAreEstimatedInMinutesAndHours() {
+        #expect(EditEstimate.describe(seconds: 0) == "a moment")
+        #expect(EditEstimate.describe(seconds: 59) == "under a minute")
+        #expect(EditEstimate.describe(seconds: 799) == "about 13 minutes")
+        #expect(EditEstimate.describe(seconds: 8_199) == "about 2 hours 17 minutes")
+    }
+
+    // MARK: - Running, activity and undo
+
+    @Test func applyingAnEditRunsItAndListsItInActivity() async throws {
+        let store = try library()
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = model(store, flickr)
+        model.selectAll()
+        model.addSelectionToTray()
+
+        await model.apply(.setTitle("Athens {n}"), title: "Set title")
+
+        #expect(await flickr.sent.map { $0.arguments["title"] } == ["Athens 1", "Athens 2", "Athens 3"])
+        #expect(model.activity.first?.batch.title == "Set title")
+        #expect(model.activity.first?.summary == EditBatch.Summary(applied: 3, failed: 0, pending: 0))
+        #expect(model.photos.map(\.title) == ["Athens 1", "Athens 2", "Athens 3"])
+        #expect(model.run == .idle)
+    }
+
+    @Test func refusalsAreListedWithFlickrsReason() async throws {
+        let store = try library()
+        let flickr = FakeOrganizeFlickr(store: store,
+                                        refusals: ["2": .api(code: 1, message: "Photo not found", transient: false)])
+        let model = model(store, flickr)
+        model.selectAll()
+        model.addSelectionToTray()
+
+        await model.apply(.setTitle("A"), title: "Set title")
+
+        let row = try #require(model.activity.first)
+        #expect(row.failures == [.init(photoID: "2", title: "Hill", message: "Photo not found")])
+    }
+
+    @Test func needingWritePermissionPausesUntilApprovedThenResumes() async throws {
+        let store = try library()
+        let flickr = FakeOrganizeFlickr(store: store, refusals: ["1": .permissionNeeded(.write)])
+        let model = model(store, flickr)
+        model.selectAll()
+        model.addSelectionToTray()
+
+        await model.apply(.setTitle("A"), title: "Set title")
+        guard case let .needsPermission(permission, batchID) = model.run else {
+            Issue.record("expected to need permission, got \(model.run)")
+            return
+        }
+        #expect(permission == .write)
+        #expect(model.activity.first?.canResume == true)
+
+        await flickr.refuse("1", with: nil)
+        await model.resume(batchID)
+        #expect(model.activity.first?.summary.applied == 3)
+        #expect(model.run == .idle)
+    }
+
+    @Test func undoPutsBackWhatWasThereAndIsListedToo() async throws {
+        let store = try library()
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = model(store, flickr)
+        model.click("1", modifiers: [])
+        model.addSelectionToTray()
+        await model.apply(.setTitle("Athens"), title: "Set title")
+        let batchID = try #require(model.activity.first?.batch.id)
+        #expect(model.activity.first?.canUndo == true)
+
+        await model.undo(batchID)
+
+        #expect(await flickr.sent.last?.arguments["title"] == "Harbour")
+        #expect(model.activity.map(\.batch.title) == ["Undo Set title", "Set title"])
+        #expect(model.activity.last?.canUndo == false)
+        #expect(model.photos.first { $0.id == "1" }?.title == "Harbour")
+    }
+
+    /// One batch at a time: two runs of the same entries would send twice.
+    @Test func aSecondApplyWhileOneRunsIsRefused() async throws {
+        let store = try library()
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = model(store, flickr)
+        model.selectAll()
+        model.addSelectionToTray()
+        await flickr.hold()
+        let first = Task { await model.apply(.setTitle("A"), title: "Set title") }
+        try await waitUntil("the first batch to start") { await flickr.isHolding }
+
+        await model.apply(.setTitle("B"), title: "Set title")
+        #expect(model.problem == "Wait for the edit that is running to finish.")
+        await flickr.release()
+        await first.value
+        #expect(await flickr.sent.compactMap { $0.arguments["title"] } == ["A", "A", "A"])
+    }
+}

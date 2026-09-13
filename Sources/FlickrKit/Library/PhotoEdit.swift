@@ -37,6 +37,8 @@ public enum PhotoEdit: Sendable, Equatable {
     case setLicense(License)
     /// For a camera whose clock was set to the wrong time zone.
     case shiftTaken(seconds: Int)
+    /// `yyyy-MM-dd HH:mm:ss`; check with `isValidTaken` first.
+    case setTaken(String)
     case setLocation(LibraryPhoto.Location)
     case removeLocation
     case setPermissions(LibraryPhoto.Permissions)
@@ -60,6 +62,7 @@ public enum PhotoEdit: Sendable, Equatable {
         case let .setVisibility(visibility): edited.visibility = visibility
         case let .setLicense(license): edited.license = license
         case let .shiftTaken(seconds): edited.taken = photo.taken.flatMap { TakenDate.shift($0, by: seconds) }
+        case let .setTaken(taken): edited.taken = TakenDate.isValid(taken) ? taken : photo.taken
         case let .setLocation(location): edited.location = location
         case .removeLocation: edited.location = nil
         case let .setPermissions(permissions): edited.permissions = permissions
@@ -74,6 +77,9 @@ public enum PhotoEdit: Sendable, Equatable {
     /// A tag the way Flickr stores it: lowercase letters and digits only, so
     /// "New York" is "newyork". A machine tag (`namespace:predicate=value`)
     /// keeps its structure, lowercased.
+    /// Whether `taken` is a date Flickr takes: `yyyy-MM-dd HH:mm:ss`.
+    public static func isValidTaken(_ taken: String) -> Bool { TakenDate.isValid(taken) }
+
     public static func flickrTag(_ tag: String) -> String {
         let lowered = tag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if lowered.wholeMatch(of: /[a-z_][a-z0-9_]*:[a-z_][a-z0-9_]*=.+/) != nil { return lowered }
@@ -92,6 +98,10 @@ enum TakenDate {
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter
     }()
+
+    static func isValid(_ taken: String) -> Bool {
+        formatter.date(from: taken).map { formatter.string(from: $0) == taken } ?? false
+    }
 
     static func shift(_ taken: String, by seconds: Int) -> String? {
         guard let date = formatter.date(from: taken) else { return nil }

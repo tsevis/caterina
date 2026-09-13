@@ -52,6 +52,8 @@ public final class AppModel {
     public let library: LibraryModel
     public let uploads: UploadModel
     public let browse: BrowseModel
+    /// Nil when the library copy could not be opened: Organize edits from it.
+    public let organize: OrganizeModel?
     /// Read by Browse off the main actor, so kept in a box it can hold.
     private let accountID: AccountIDBox
 
@@ -92,6 +94,8 @@ public final class AppModel {
         self.accountID = accountBox
         self.browse = BrowseModel(store: libraryStore, records: client, stats: client, directory: client, faves: client,
                                   accountID: { accountBox.value })
+        let client = self.client
+        self.organize = libraryStore.map { OrganizeModel(store: $0, flickr: client) }
         self.account = stored?.account
         self.isShowingOnboarding = !(stored?.hasAPIKey ?? false)
     }
@@ -100,6 +104,7 @@ public final class AppModel {
     /// signed out at launch is not an error worth showing.
     public func syncLibrary() async {
         await library.sync(signedIn: isSignedIn)
+        organize?.libraryChanged()
     }
 
     public var hasAPIKey: Bool { stored?.hasAPIKey ?? false }
@@ -426,7 +431,10 @@ public final class AppModel {
         self.stored = next
         // Approving more for the same account keeps what Browse has; a
         // different account starts it afresh.
-        if accountID.value != next.nsid.flatMap({ $0.isEmpty ? nil : $0 }) { browse.reset() }
+        if accountID.value != next.nsid.flatMap({ $0.isEmpty ? nil : $0 }) {
+            browse.reset()
+            organize?.clearTray()
+        }
         accountID.set(next.nsid)
         await client.update(credentials: next.oauth, permission: next.grantedPermission ?? .read)
         self.account = next.account
@@ -441,6 +449,7 @@ public final class AppModel {
         account = nil
         accountID.set(nil)
         browse.reset()
+        organize?.clearTray()
         refreshClient()
         // **Cancel first.** Pressing Reload on You and then signing out left a
         // request in flight whose reply repopulated the grid with the account's
