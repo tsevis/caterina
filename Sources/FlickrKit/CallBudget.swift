@@ -109,9 +109,15 @@ public actor CallBudget {
     }
 
     /// How long `calls` calls at `priority` take from an empty budget.
+    ///
+    /// Spaced calls fill the hour's limit, then each block of `limit` waits
+    /// for the first call of the block before it to leave the window.
     public nonisolated func estimatedDuration(calls: Int, priority: CallPriority) -> Duration {
         guard priority.isSpaced, calls > 1 else { return .zero }
-        return spacing * (calls - 1)
+        let limit = limits.limit(for: priority)
+        guard limit > 0, spacing * limit < window else { return spacing * (calls - 1) }
+        let (blocks, remainder) = (calls - 1).quotientAndRemainder(dividingBy: limit)
+        return window * blocks + spacing * remainder
     }
 
     private func delay(for priority: CallPriority, at instant: Duration) -> Duration {

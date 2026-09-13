@@ -110,6 +110,16 @@ final class FakeClock: @unchecked Sendable {
         #expect(CallBudget.standard.estimatedDuration(calls: 50, priority: .interactive) == .zero)
     }
 
+    /// Past the hourly limit a batch waits for the oldest call to leave the
+    /// window. Worked by hand: calls 0–2,999 go at 0–2,999 s; call 3,000 waits
+    /// for call 0 to leave at 3,600 s; call 6,000 for call 3,000 at 7,200 s;
+    /// call 6,999 goes at 8,199 s.
+    @Test func aBatchPastTheHourlyLimitWaitsForTheWindow() {
+        #expect(CallBudget.standard.estimatedDuration(calls: 3_000, priority: .edit) == .seconds(2_999))
+        #expect(CallBudget.standard.estimatedDuration(calls: 3_001, priority: .edit) == .seconds(3_600))
+        #expect(CallBudget.standard.estimatedDuration(calls: 7_000, priority: .edit) == .seconds(8_199))
+    }
+
     @Test func theStandardLimitsStayUnderFlickrs() {
         let limits = CallBudget.Limits.standard
         #expect(limits.interactive <= 3600)
