@@ -1,0 +1,805 @@
+<title>Caterina Plan</title>
+<meta name="description" content="The plan to turn FlickrDownloader into Caterina: download, upload, organize and browse a Flickr library from one Mac app.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #EDEFF1;
+    --surface: #FFFFFF;
+    --sunk: #E2E5E8;
+    --ink: #1B1E21;
+    --ink-2: #4A5057;
+    --hairline: #CFD4D9;
+    --amber: #C0863C;
+    --amber-ink: #1D1D1F;
+    --amber-text: #8A5914;
+    --amber-wash: rgba(192, 134, 60, 0.13);
+    --ok: #2F7147;
+    --warn: #8C6100;
+    --risk: #A83A27;
+    --ok-wash: rgba(47, 113, 71, 0.12);
+    --warn-wash: rgba(140, 97, 0, 0.12);
+    --risk-wash: rgba(168, 58, 39, 0.11);
+    --win-bar: #E4E7EA;
+    --shadow: 0 1px 2px rgba(20, 24, 28, 0.06), 0 12px 32px -12px rgba(20, 24, 28, 0.18);
+
+    --display: "Bricolage Grotesque", "Avenir Next", "Helvetica Neue", sans-serif;
+    --body: "IBM Plex Sans", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --step--1: 0.8125rem;
+    --step-0: 1rem;
+    --step-1: 1.1875rem;
+    --step-2: 1.5rem;
+    --step-3: 2.125rem;
+    --step-4: clamp(2.5rem, 6vw, 4rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #131518;
+      --surface: #1C1F23;
+      --sunk: #0E1012;
+      --ink: #ECEEF0;
+      --ink-2: #A8AEB4;
+      --hairline: #2F343A;
+      --amber-text: #E0A95C;
+      --amber-wash: rgba(224, 169, 92, 0.13);
+      --ok: #7CC291;
+      --warn: #E2B75A;
+      --risk: #EB8470;
+      --ok-wash: rgba(124, 194, 145, 0.12);
+      --warn-wash: rgba(226, 183, 90, 0.12);
+      --risk-wash: rgba(235, 132, 112, 0.12);
+      --win-bar: #24282D;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #131518;
+    --surface: #1C1F23;
+    --sunk: #0E1012;
+    --ink: #ECEEF0;
+    --ink-2: #A8AEB4;
+    --hairline: #2F343A;
+    --amber-text: #E0A95C;
+    --amber-wash: rgba(224, 169, 92, 0.13);
+    --ok: #7CC291;
+    --warn: #E2B75A;
+    --risk: #EB8470;
+    --ok-wash: rgba(124, 194, 145, 0.12);
+    --warn-wash: rgba(226, 183, 90, 0.12);
+    --risk-wash: rgba(235, 132, 112, 0.12);
+    --win-bar: #24282D;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: var(--step-0);
+    line-height: 1.6;
+    padding-inline: 20px;
+    padding-block: 0 96px;
+  }
+  a { color: var(--amber-text); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 3px; }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  code { background: var(--sunk); padding: 0.08em 0.36em; border-radius: 4px; white-space: nowrap; }
+  h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.12; margin: 0; }
+  h2 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.015em; }
+  h3 { font-size: var(--step-1); font-weight: 700; }
+  p { margin: 0; }
+  .measure { max-width: 66ch; }
+  .eyebrow {
+    font-family: var(--mono); font-size: var(--step--1); letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--amber-text); font-weight: 500;
+  }
+  .muted { color: var(--ink-2); }
+
+  .page { max-width: 1160px; margin-inline: auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 56px; }
+  @media (max-width: 900px) { .page { grid-template-columns: minmax(0, 1fr); gap: 0; } nav.toc { display: none; } }
+
+  nav.toc { position: sticky; top: 0; align-self: start; padding-block: 48px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  nav.toc a {
+    display: block; padding: 5px 10px; border-radius: 6px; color: var(--ink-2);
+    text-decoration: none; font-size: var(--step--1);
+  }
+  nav.toc a:hover { background: var(--sunk); color: var(--ink); }
+  nav.toc .brand { font-family: var(--display); font-weight: 700; font-size: var(--step-1); padding: 0 10px 14px; display: block; }
+
+  main { display: grid; gap: 88px; padding-block: 48px 0; min-width: 0; }
+  section { display: grid; gap: 22px; scroll-margin-top: 24px; }
+  .section-head { display: grid; gap: 10px; }
+
+  /* Hero */
+  .hero { display: grid; gap: 28px; }
+  .hero h1 { font-size: var(--step-4); font-weight: 700; letter-spacing: -0.03em; }
+  .hero h1 .was { display: block; font-size: var(--step-1); font-family: var(--mono); font-weight: 400; letter-spacing: 0; color: var(--ink-2); margin-bottom: 10px; }
+  .hero h1 .was s { text-decoration-color: var(--amber); text-decoration-thickness: 2px; }
+  .lede { font-size: var(--step-1); line-height: 1.55; max-width: 60ch; }
+
+  /* The window: the thesis. Four workspaces in one toolbar. */
+  .window { background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+  .window-bar { background: var(--win-bar); border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+  .lights { display: flex; gap: 7px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; background: var(--hairline); display: block; }
+  .seg { display: flex; background: var(--sunk); border-radius: 8px; padding: 2px; margin-inline: auto; flex-wrap: wrap; }
+  .seg button {
+    font: 500 var(--step--1) var(--body); color: var(--ink-2); background: transparent; border: 0;
+    padding: 5px 14px; border-radius: 6px; cursor: pointer; display: flex; gap: 8px; align-items: baseline;
+  }
+  .seg button kbd { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-2); opacity: 0.8; }
+  .seg button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+  .budget { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-2); display: flex; gap: 8px; align-items: center; }
+  .budget meter { width: 64px; height: 6px; }
+  .window-body { display: grid; grid-template-columns: 150px minmax(0, 1fr) 190px; min-height: 280px; }
+  @media (max-width: 720px) { .window-body { grid-template-columns: minmax(0, 1fr); } .pane-side, .pane-inspect { display: none; } }
+  .pane-side, .pane-inspect { padding: 14px; font-size: var(--step--1); display: grid; align-content: start; gap: 6px; }
+  .pane-side { border-right: 1px solid var(--hairline); }
+  .pane-inspect { border-left: 1px solid var(--hairline); }
+  .pane-side .lbl, .pane-inspect .lbl { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); margin-top: 6px; }
+  .pane-side .row { padding: 3px 8px; border-radius: 5px; }
+  .pane-side .row.on { background: var(--amber-wash); color: var(--amber-text); font-weight: 500; }
+  .pane-main { padding: 14px; display: grid; gap: 12px; align-content: start; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 8px; }
+  .tiles span { aspect-ratio: 1; border-radius: 5px; background: var(--sunk); display: block; position: relative; max-width: 100%; }
+  .tiles span.sel { outline: 2px solid var(--amber); outline-offset: 1px; }
+  .tiles span.up::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: 6px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--amber) var(--p, 60%), var(--hairline) var(--p, 60%)); }
+  .tray { border: 1px dashed var(--hairline); border-radius: 8px; padding: 8px 10px; font-size: var(--step--1); color: var(--ink-2); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .kv { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+  .kv b { font-weight: 600; }
+  .spark { width: 100%; height: 44px; display: block; }
+  .pane-caption { font-size: var(--step--1); color: var(--ink-2); }
+
+  /* Tab summaries */
+  .tabs4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; }
+  @media (max-width: 640px) { .tabs4 { grid-template-columns: minmax(0, 1fr); } }
+  .tabs4 article { background: var(--surface); padding: 22px; display: grid; gap: 10px; align-content: start; }
+  .tabs4 .kbd { font-family: var(--mono); font-size: var(--step--1); color: var(--ink-2); }
+  .tabs4 header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .tabs4 ul { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; }
+
+  .pill { font: 500 0.72rem var(--mono); letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+  .pill.new { background: var(--amber-wash); color: var(--amber-text); }
+  .pill.have { background: var(--ok-wash); color: var(--ok); }
+  .pill.pro { background: var(--warn-wash); color: var(--warn); }
+  .pill.risk { background: var(--risk-wash); color: var(--risk); }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 10px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: var(--step--1); min-width: 620px; }
+  th, td { text-align: left; padding: 10px 14px; vertical-align: top; border-bottom: 1px solid var(--hairline); }
+  tr:last-child td { border-bottom: 0; }
+  th { font-family: var(--mono); font-weight: 500; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); background: var(--sunk); }
+  td code { white-space: normal; word-break: break-word; }
+  td:first-child { font-weight: 500; }
+
+  /* Feature groups */
+  .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 28px 32px; }
+  .group { display: grid; gap: 8px; align-content: start; }
+  .group h3 { font-size: var(--step-0); }
+  .group ul { margin: 0; padding-left: 1.1em; display: grid; gap: 5px; color: var(--ink); }
+  .group .api { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-2); line-height: 1.5; word-break: break-word; }
+
+  .callout { border-left: 3px solid var(--amber); background: var(--amber-wash); padding: 14px 18px; border-radius: 0 8px 8px 0; display: grid; gap: 6px; }
+  .callout.risk { border-color: var(--risk); background: var(--risk-wash); }
+  .callout strong { font-weight: 600; }
+
+  /* Architecture diagram */
+  .arch { display: grid; gap: 10px; }
+  .layer { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 14px; align-items: stretch; }
+  @media (max-width: 640px) { .layer { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
+  .layer .name { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); padding-top: 12px; }
+  .boxes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .box { background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px; padding: 9px 12px; font-size: var(--step--1); display: grid; gap: 2px; flex: 1 1 150px; }
+  .box b { font-family: var(--mono); font-weight: 500; font-size: 0.8rem; }
+  .box.new { border-color: var(--amber); }
+  .box span { color: var(--ink-2); }
+
+  /* Phases: a real sequence, so numbered. */
+  .phases { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: ph; }
+  .phases > li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 18px; padding-block: 22px; border-top: 1px solid var(--hairline); }
+  .phases > li:last-child { border-bottom: 1px solid var(--hairline); }
+  .phases .n { font-family: var(--display); font-weight: 700; font-size: var(--step-3); color: var(--amber-text); line-height: 1; font-variant-numeric: tabular-nums; }
+  .phases .body { display: grid; gap: 10px; }
+  .phases .body ul { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; }
+  .phases .done { font-size: var(--step--1); color: var(--ink-2); }
+  .phases .done b { color: var(--ink); font-weight: 600; }
+
+  /* Decisions */
+  .decisions { display: grid; gap: 12px; }
+  .decision { background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 18px 20px; display: grid; gap: 8px; }
+  .decision .rec { font-size: var(--step--1); }
+  .decision .rec b { color: var(--amber-text); font-weight: 600; }
+
+  footer { color: var(--ink-2); font-size: var(--step--1); border-top: 1px solid var(--hairline); padding-top: 18px; }
+</style>
+
+<div class="page">
+  <nav class="toc" aria-label="Contents">
+    <span class="brand">Caterina</span>
+    <ol>
+      <li><a href="#shape">The four tabs</a></li>
+      <li><a href="#rename">The rename</a></li>
+      <li><a href="#foundation">Shared foundation</a></li>
+      <li><a href="#upload">Upload</a></li>
+      <li><a href="#organize">Organize</a></li>
+      <li><a href="#browse">Browse &amp; Insights</a></li>
+      <li><a href="#limits">What Flickr won't allow</a></li>
+      <li><a href="#phases">Phases</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="#decisions">Your decisions</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <span class="eyebrow">Product plan · 13 September 2026</span>
+      <h1><span class="was"><s>FlickrDownloader</s> →</span>Caterina</h1>
+      <p class="lede">One Mac app for your whole Flickr library: download it, upload to it, organize it, and see how every photo is doing. The name honors Caterina Fake, who co-founded Flickr. The Download tab you already have becomes the first of four.</p>
+
+      <div class="window" role="img" aria-label="Sketch of the Caterina window: a toolbar with four tabs, a sidebar, a photo grid with a batch tray, and an inspector showing views and favorites.">
+        <div class="window-bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="seg" role="tablist" aria-label="Example tabs">
+            <button role="tab" aria-selected="false">Download <kbd>⌘1</kbd></button>
+            <button role="tab" aria-selected="false">Upload <kbd>⌘2</kbd></button>
+            <button role="tab" aria-selected="true">Organize <kbd>⌘3</kbd></button>
+            <button role="tab" aria-selected="false">Browse <kbd>⌘4</kbd></button>
+          </div>
+          <div class="budget" title="Flickr allows 3,600 calls an hour per API key">
+            <meter min="0" max="3600" value="2410" aria-label="API calls left this hour"></meter> 2,410 / 3,600 left
+          </div>
+        </div>
+        <div class="window-body">
+          <div class="pane-side">
+            <span class="lbl">Library</span>
+            <span class="row">All photos</span>
+            <span class="row on">Not in an album</span>
+            <span class="row">Untagged</span>
+            <span class="row">No location</span>
+            <span class="lbl">Albums</span>
+            <span class="row">Athens 2026</span>
+            <span class="row">Mosaics</span>
+          </div>
+          <div class="pane-main">
+            <div class="tiles">
+              <span class="sel"></span><span class="sel"></span><span></span><span class="sel"></span><span></span><span></span>
+              <span></span><span class="up" style="--p: 72%"></span><span></span><span></span><span class="sel"></span><span></span>
+            </div>
+            <div class="tray"><span>4 photos in the batch</span><span class="mono">Add tags · Add to album · Set license · Undo</span></div>
+            <p class="pane-caption">Example state. Not your data.</p>
+          </div>
+          <div class="pane-inspect">
+            <span class="lbl">Last 28 days</span>
+            <svg class="spark" viewBox="0 0 160 44" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M0 36 L20 32 L40 34 L60 24 L80 27 L100 15 L120 19 L140 9 L160 12 L160 44 L0 44 Z" fill="var(--amber-wash)"></path>
+              <path d="M0 36 L20 32 L40 34 L60 24 L80 27 L100 15 L120 19 L140 9 L160 12" fill="none" stroke="var(--amber)" stroke-width="2"></path>
+              <circle cx="160" cy="12" r="3" fill="var(--amber)"></circle>
+            </svg>
+            <div class="kv"><span class="muted">Views</span><b>18,204</b></div>
+            <div class="kv"><span class="muted">Faves</span><b>412</b></div>
+            <div class="kv"><span class="muted">Comments</span><b>37</b></div>
+            <div class="kv"><span class="muted">In pools</span><b>6</b></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section id="shape">
+      <div class="section-head">
+        <span class="eyebrow">The shape of the app</span>
+        <h2>Four tabs, one library underneath</h2>
+        <p class="measure muted">Every tab reads the same local copy of your library, uses the same sign-in and shares the same hourly call allowance. A photo selected in one tab is still selected when you switch to another.</p>
+      </div>
+      <div class="tabs4">
+        <article>
+          <header><h3>Download</h3><span class="pill have">Built</span></header>
+          <p>What FlickrDownloader does today: search, users, groups, filters, batch download. It stays as it is, apart from the rename.</p>
+        </article>
+        <article>
+          <header><h3>Upload</h3><span class="pill new">New</span></header>
+          <ul>
+            <li>Drop files or folders. The queue survives quitting the app.</li>
+            <li>Titles, tags and location come from the file's own IPTC/EXIF.</li>
+            <li>Presets for privacy, license, safety and albums.</li>
+            <li>Finds photos you've already uploaded.</li>
+          </ul>
+        </article>
+        <article>
+          <header><h3>Organize</h3><span class="pill new">New</span></header>
+          <ul>
+            <li>Everything Flickr's Organizr does, as batch edits.</li>
+            <li>Albums: create, reorder, set the cover. Groups: add and remove.</li>
+            <li>Smart views: not in an album, untagged, no location.</li>
+            <li><b>Undo</b> for every edit except deleting a photo. Flickr has no undo.</li>
+          </ul>
+        </article>
+        <article>
+          <header><h3>Browse &amp; Insights</h3><span class="pill new">New</span></header>
+          <ul>
+            <li>A full record for any photo: views, faves (who and when), comments, EXIF, albums, pools.</li>
+            <li>Stats for your own photos, kept past Flickr's 28-day limit.</li>
+            <li>Rankings: most viewed, most faved, rising this week, top referrers.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="rename">
+      <div class="section-head">
+        <span class="eyebrow">Phase 0</span>
+        <h2>The rename, before any feature</h2>
+        <p class="measure">Rename first, in its own commits, with no feature work mixed in. That way the rename diff is a pure rename and all 361 tests stay green through it. Dropping "Flickr" from the app's name also fits Flickr's API terms, which don't let third-party apps use the Flickr name or look official.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>What</th><th>From</th><th>To</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td>App name</td><td><code>FlickrDownloader</code></td><td><code>Caterina</code></td><td>Info.plist, XcodeGen <code>project.yml</code>, Makefile, DMG name, About window.</td></tr>
+            <tr><td>Bundle ID</td><td><code>com.tsevis.FlickrDownloader</code></td><td><code>com.tsevis.Caterina</code></td><td>Starts a new sandbox container. The saved download folder and the Keychain API key don't carry over, so you'd sign in once more. See <a href="#decisions">decision 1</a>.</td></tr>
+            <tr><td>UI module</td><td><code>FlickrDownloaderUI</code></td><td><code>CaterinaUI</code> + one module per tab</td><td><code>DownloadFeature</code>, <code>UploadFeature</code>, <code>OrganizeFeature</code>, <code>BrowseFeature</code>. Keeps files under 400 lines and each tab's tests on their own.</td></tr>
+            <tr><td>Core</td><td><code>FlickrKit</code></td><td><code>FlickrKit</code> (kept)</td><td>Still pure Swift with no AppKit, which <code>make lint</code> enforces. It grows by domain folders, not by one big client.</td></tr>
+            <tr><td>Keychain service</td><td><code>com.tsevis.FlickrDownloader</code></td><td><code>com.tsevis.Caterina</code></td><td>On first launch, try the old item and move it across if the Keychain allows access.</td></tr>
+            <tr><td>Identity</td><td>tungsten amber</td><td>tungsten amber (kept)</td><td>Still not Flickr blue or pink. The icon and key art get the new name. The About window says who Caterina Fake is, and that the app is not affiliated with Flickr.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="foundation">
+      <div class="section-head">
+        <span class="eyebrow">Phase 1 · built once, used by every tab</span>
+        <h2>Shared foundation</h2>
+        <p class="measure">So far the app has only read from Flickr. Uploading and organizing write to it, and once the app can write, a wrong edit can hit a thousand photos at once. That's why these pieces come before any new screen.</p>
+      </div>
+
+      <div class="arch" role="figure" aria-label="Layered architecture">
+        <div class="layer">
+          <span class="name">Tabs</span>
+          <div class="boxes">
+            <div class="box"><b>DownloadFeature</b><span>existing</span></div>
+            <div class="box new"><b>UploadFeature</b><span>queue, presets</span></div>
+            <div class="box new"><b>OrganizeFeature</b><span>batch tray, albums</span></div>
+            <div class="box new"><b>BrowseFeature</b><span>photo record, charts</span></div>
+          </div>
+        </div>
+        <div class="layer">
+          <span class="name">Shared app</span>
+          <div class="boxes">
+            <div class="box new"><b>Activity</b><span>one panel for every running job</span></div>
+            <div class="box new"><b>Selection</b><span>shared across tabs</span></div>
+            <div class="box"><b>Account</b><span>sign-in, Keychain</span></div>
+          </div>
+        </div>
+        <div class="layer">
+          <span class="name">FlickrKit</span>
+          <div class="boxes">
+            <div class="box new"><b>CallBudget</b><span>3,600 calls/hr, shared</span></div>
+            <div class="box new"><b>JobQueue</b><span>persisted, resumable</span></div>
+            <div class="box new"><b>EditJournal</b><span>old value → undo</span></div>
+            <div class="box new"><b>Multipart</b><span>signed uploads</span></div>
+            <div class="box"><b>OAuth1 · ChunkTransport</b><span>existing</span></div>
+          </div>
+        </div>
+        <div class="layer">
+          <span class="name">Local store</span>
+          <div class="boxes">
+            <div class="box new"><b>LibraryMirror</b><span>SQLite: your photos, albums, tags, geo</span></div>
+            <div class="box new"><b>StatsHistory</b><span>daily snapshots, kept forever</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="groups">
+        <div class="group">
+          <h3>Write permission, asked for only when needed</h3>
+          <ul>
+            <li>Sign-in currently asks for <code>perms=read</code>. Uploading and editing need <code>write</code>.</li>
+            <li>The first time you upload or edit, Caterina explains why and sends you back to Flickr to approve write access. It never asks at launch.</li>
+            <li><code>delete</code> is a separate, later approval, asked for only the first time you delete a photo.</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>One call allowance for the whole app</h3>
+          <ul>
+            <li>Flickr allows 3,600 calls an hour per API key. A token bucket shared by every tab keeps the app under that.</li>
+            <li>Priority order: what you're looking at now, then uploads, then batch edits, then background sync.</li>
+            <li>Before a batch runs, it shows the cost: "Adding 3 tags to 800 photos takes 800 calls, about 14 minutes."</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>A local copy of your library</h3>
+          <ul>
+            <li>A full sync uses <code>people.getPhotos</code> with extras at 500 per page, so 20,000 photos take 40 calls.</li>
+            <li>After that, <code>photos.recentlyUpdated</code> since the last sync picks up changes.</li>
+            <li>Organize filters work instantly from this copy, and Insights draws its charts from it.</li>
+            <li class="muted">Storage: GRDB (SQLite, well established) or SwiftData. See <a href="#decisions">decision 3</a>.</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Jobs that survive a quit</h3>
+          <ul>
+            <li>Uploads and batch edits are saved as jobs, one step per photo, and resume on the next launch.</li>
+            <li>Server errors are retried with backoff. Permanent errors stop that photo only, and the report says why.</li>
+            <li>Before a job changes a field, it records the old value. That record is what makes undo possible.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="upload">
+      <div class="section-head">
+        <span class="eyebrow">Tab · Upload</span>
+        <h2>The uploader</h2>
+        <p class="measure">You add files, check the metadata Caterina found in them, pick a preset, and send. Each file lands on Flickr with its title, tags, location, license, albums and groups in one pass, so there's nothing left to fix afterwards.</p>
+      </div>
+      <div class="groups">
+        <div class="group">
+          <h3>Adding files</h3>
+          <ul>
+            <li>Drag and drop files or whole folders. Folder structure can become albums.</li>
+            <li>Import from Photos. This needs the Photos-library sandbox entitlement.</li>
+            <li>Watch folders: anything new in a folder is queued automatically.</li>
+            <li>Before sending, Caterina checks against <code>people.getUploadStatus</code>: file-size limit, remaining free-account slots, remaining monthly bandwidth.</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Metadata before upload</h3>
+          <ul>
+            <li>Reads IPTC title, caption and keywords, plus EXIF date and GPS, with ImageIO on your Mac.</li>
+            <li>A table to edit title, description and tags for many files at once, like a spreadsheet.</li>
+            <li>Filename patterns become titles, e.g. <code>{album} — {n}</code>.</li>
+            <li>A location privacy option: remove GPS from a file, or upload it with location hidden.</li>
+          </ul>
+          <p class="api">people.getUploadStatus · prefs.getPrivacy · prefs.getSafetyLevel · prefs.getContentType · prefs.getGeoPerms · prefs.getHidden</p>
+        </div>
+        <div class="group">
+          <h3>Presets</h3>
+          <ul>
+            <li>A preset bundles who can see the photo, license, safety level, content type, hidden from search, albums and groups.</li>
+            <li>New presets start from your Flickr account's defaults (<code>prefs.*</code>).</li>
+            <li>Examples: "Portfolio, All rights reserved", "Family only", "CC BY for the pool".</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Sending</h3>
+          <ul>
+            <li>Signed multipart POST to <code>up.flickr.com/services/upload/</code>. The photo bytes are left out of the OAuth signature, as the spec requires.</li>
+            <li><code>async=1</code> returns a ticket, and <code>photos.upload.checkTickets</code> polls it. Nothing is held open while Flickr processes the file.</li>
+            <li>Two or three uploads at a time, with pause, resume and reordering.</li>
+            <li>The upload body streams from the file on disk, so a 200MB file isn't loaded into memory.</li>
+          </ul>
+          <p class="api">upload · photos.upload.checkTickets</p>
+        </div>
+        <div class="group">
+          <h3>After upload, one step each</h3>
+          <ul>
+            <li>New album: <code>photosets.create</code> with the first photo as its cover, then <code>photosets.addPhoto</code> for the rest.</li>
+            <li>Groups: <code>groups.pools.add</code>. Each group's posting limit from <code>groups.getInfo</code> is respected.</li>
+            <li>License, location and dates: <code>photos.licenses.setLicense</code>, <code>photos.geo.setLocation</code>, <code>photos.setDates</code>.</li>
+            <li>Album order follows the order you set in the queue: <code>photosets.reorderPhotos</code>.</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Not uploading twice</h3>
+          <ul>
+            <li>A local record matches each file's hash to the Flickr photo ID it became.</li>
+            <li>Photos uploaded some other way are matched by date taken plus original filename, using a <code>photos.search</code> limited to that minute.</li>
+            <li><b>Replace</b>: upload new pixels over an existing photo and keep its views, faves and comments (<code>services/replace/</code>). Flickr may restrict this to Pro accounts, so check live.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="organize">
+      <div class="section-head">
+        <span class="eyebrow">Tab · Organize</span>
+        <h2>Organizr, rebuilt</h2>
+        <p class="measure">Everything in Flickr's web Organizr, working on your Mac and on the local copy of your library. You fill a batch tray, pick an edit, and see the call cost before it runs. Flickr's API has almost no batch methods, so a batch edit is one call per photo. The call allowance and the edit record are what keep that safe.</p>
+      </div>
+
+      <div class="groups">
+        <div class="group">
+          <h3>Finding photos</h3>
+          <ul>
+            <li>Smart views: not in an album, untagged, no location, has location, recently updated.</li>
+            <li>Filter by date taken or uploaded on a month-by-month timeline. Also by camera, tag, license, privacy and views.</li>
+            <li>Saved filters that act like smart albums.</li>
+          </ul>
+          <p class="api">photos.getNotInSet · getUntagged · getWithoutGeoData · getWithGeoData · recentlyUpdated · getCounts</p>
+        </div>
+        <div class="group">
+          <h3>Title, description, tags</h3>
+          <ul>
+            <li>Set or append titles and descriptions, with patterns (<code>{date} · {n}</code>).</li>
+            <li>Tags: add, remove, replace everywhere, rename across your library.</li>
+            <li>People: tag and untag people in photos.</li>
+          </ul>
+          <p class="api">photos.setMeta · setTags · addTags · removeTag · photos.people.add · people.delete</p>
+        </div>
+        <div class="group">
+          <h3>Who can see and do what</h3>
+          <ul>
+            <li>Who can see it: public, friends, family, private.</li>
+            <li>Who can comment and who can add tags.</li>
+            <li>Safety level, content type, hidden from public search.</li>
+            <li>License, including CC 4.0 and public domain.</li>
+          </ul>
+          <p class="api">photos.setPerms · setSafetyLevel · setContentType · photos.licenses.setLicense</p>
+        </div>
+        <div class="group">
+          <h3>Dates, location, rotation</h3>
+          <ul>
+            <li>Shift the date taken by an offset, for a camera clock set to the wrong time zone.</li>
+            <li>Place photos on a MapKit map. Set who can see the location.</li>
+            <li>Rotate. Delete, which needs the extra approval.</li>
+          </ul>
+          <p class="api">photos.setDates · photos.geo.setLocation · geo.removeLocation · geo.setPerms · photos.transform.rotate · photos.delete</p>
+        </div>
+        <div class="group">
+          <h3>Albums</h3>
+          <ul>
+            <li>Create, rename, describe, delete.</li>
+            <li>Drag to reorder the photos in an album, or sort by date taken, views or title.</li>
+            <li>Drag to reorder the albums themselves. Set any photo as the cover.</li>
+            <li>Add or remove photos, or put exactly the batch into an album.</li>
+          </ul>
+          <p class="api">photosets.create · editMeta · delete · addPhoto · removePhotos · editPhotos · reorderPhotos · orderSets · setPrimaryPhoto</p>
+        </div>
+        <div class="group">
+          <h3>Groups and galleries</h3>
+          <ul>
+            <li>Send a batch to several groups. Each group's limits are checked first, and the report lists what each group rejected.</li>
+            <li>Remove photos from pools.</li>
+            <li>Galleries, which hold other people's photos: create them and add from Browse.</li>
+            <li>Collections: shown as a tree, read-only (see <a href="#limits">limits</a>).</li>
+          </ul>
+          <p class="api">people.getGroups · groups.getInfo · groups.pools.add · pools.remove · galleries.create · galleries.addPhoto · collections.getTree</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Undo is the one feature Flickr itself doesn't have.</strong>
+        <p class="measure">Each batch edit writes an entry: photo, field, old value, new value. Undoing the batch writes the old values back and uses the same call allowance. The Activity panel lists recent batches. Deleting a photo is the exception, because Flickr can't restore a deleted photo. Delete gets its own confirmation that names how many photos it will remove, and it's never part of a preset.</p>
+      </div>
+    </section>
+
+    <section id="browse">
+      <div class="section-head">
+        <span class="eyebrow">Tab · Browse &amp; Insights</span>
+        <h2>Every number Flickr has for a photo</h2>
+        <p class="measure">Browse shows any photo, yours or someone else's. Insights adds the private numbers, which Flickr gives only to the owner and only with a Pro account.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Shown</th><th>Source</th><th>Whose photos</th><th>How far back</th></tr></thead>
+          <tbody>
+            <tr><td>Lifetime views</td><td><code>photos.getInfo</code>, or extras <code>views</code> in bulk</td><td>anyone's</td><td>all time</td></tr>
+            <tr><td>Faves: who and when</td><td><code>photos.getFavorites</code> (paged)</td><td>anyone's</td><td>all time, with dates, so charts go back to the first fave</td></tr>
+            <tr><td>Comments</td><td><code>photos.comments.getList</code></td><td>anyone's</td><td>all time, with dates</td></tr>
+            <tr><td>Albums &amp; pools it's in</td><td><code>photos.getAllContexts</code></td><td>anyone's</td><td>current</td></tr>
+            <tr><td>Camera, lens, exposure</td><td><code>photos.getExif</code></td><td>when the owner allows</td><td>—</td></tr>
+            <tr><td>Location, people, sizes, license</td><td><code>photos.geo.getLocation</code> · <code>photos.people.get</code> · <code>getSizes</code></td><td>anyone's</td><td>current</td></tr>
+            <tr><td>Daily views / faves / comments</td><td><code>stats.getPhotoStats</code> <span class="pill pro">Pro</span></td><td>yours</td><td><b>last 28 days only</b></td></tr>
+            <tr><td>Top photos per day</td><td><code>stats.getPopularPhotos</code> <span class="pill pro">Pro</span></td><td>yours</td><td>last 28 days</td></tr>
+            <tr><td>Where views come from</td><td><code>stats.getPhotoDomains</code> · <code>getPhotoReferrers</code> <span class="pill pro">Pro</span></td><td>yours</td><td>last 28 days</td></tr>
+            <tr><td>Totals: photostream, albums, collections</td><td><code>stats.getTotalViews</code> · <code>getPhotostreamStats</code> · <code>getPhotosetStats</code> · <code>getCollectionStats</code> <span class="pill pro">Pro</span></td><td>yours</td><td>last 28 days</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="groups">
+        <div class="group">
+          <h3>Keeping stats past 28 days</h3>
+          <ul>
+            <li>Flickr drops daily stats after 28 days. Caterina saves each day to <code>StatsHistory</code> before it expires.</li>
+            <li>The first run fetches all 28 available days. After that it adds one day per day.</li>
+            <li>This fits the call allowance because it uses <code>getPopularPhotos</code> (100 photos with their stats per page) plus bulk <code>views</code> extras. It doesn't make one call per photo per day.</li>
+            <li>Days when the app isn't running are fetched on the next launch, as long as they're still inside the 28 days. See <a href="#decisions">decision 4</a>.</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>The photo record</h3>
+          <ul>
+            <li>Large preview, then everything from the table above.</li>
+            <li>Charts: views per day, faves over all time, comments on a timeline (Swift Charts).</li>
+            <li>A list of who faved it, linked to their photostreams.</li>
+            <li>Views gained in each group pool the photo is in, estimated from referrers.</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Rankings and Explore</h3>
+          <ul>
+            <li>Sort your library by views, faves, comments, or faves per 1,000 views.</li>
+            <li>Rising: the biggest seven-day gains, from saved history.</li>
+            <li>Albums and groups ranked by the views they bring in.</li>
+            <li>Browse Flickr: Explore (<code>interestingness.getList</code>), your faves, contacts' uploads, any user or group. Any of it can go to Download or into a gallery.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="limits">
+      <div class="section-head">
+        <span class="eyebrow">Stated plainly</span>
+        <h2>What Flickr's API won't allow</h2>
+        <p class="measure">Better to know these now than to find them halfway through a phase. Items marked <em>check live</em> are changes Flickr has made since the docs were written, and they get a live test before the feature that depends on them.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Limit</th><th>What it means for Caterina</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>3,600 calls per hour per API key</td><td>Big batches take minutes, not seconds. Show the cost up front and run in the background.</td><td><span class="pill risk">Hard limit</span></td></tr>
+            <tr><td>No batch write methods</td><td>Editing N photos takes N calls. That's what the call budget and edit record exist for.</td><td><span class="pill risk">Hard limit</span></td></tr>
+            <tr><td>Stats need Pro and cover only 28 days</td><td>Insights shows a clear "needs Flickr Pro" state. Long-term history starts on the day of the first sync.</td><td><span class="pill pro">Pro</span></td></tr>
+            <tr><td>Collections can't be edited</td><td>The API only reads collections (<code>getTree</code>, <code>getInfo</code>). Shown as a tree with a link to edit them on flickr.com.</td><td><span class="pill risk">Hard limit</span></td></tr>
+            <tr><td>Free accounts: 1,000 photos</td><td>Upload checks the remaining space first and refuses a batch that won't fit, before sending anything.</td><td><span class="pill pro">Account</span></td></tr>
+            <tr><td>Deleting can't be undone</td><td>Separate <code>delete</code> approval, its own confirmation, never part of a preset or an undoable batch.</td><td><span class="pill risk">Hard limit</span></td></tr>
+            <tr><td>Replacing a photo; per-photo view and fave extras in search</td><td>Check against the live API before building on them.</td><td><span class="pill new">Check live</span></td></tr>
+            <tr><td>Group posting limits</td><td>Read before sending. A rejected photo is reported per group, and the rest of the batch continues.</td><td><span class="pill new">Handled</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="phases">
+      <div class="section-head">
+        <span class="eyebrow">In order</span>
+        <h2>Phases</h2>
+        <p class="measure">Each phase ships: tests green, signed, installed, usable. None depends on work from a later phase.</p>
+      </div>
+      <ol class="phases">
+        <li>
+          <span class="n">0</span>
+          <div class="body">
+            <h3>Rename and tab layout</h3>
+            <ul>
+              <li>Caterina name, bundle ID, Keychain move, icon and About window.</li>
+              <li>Split the UI into modules, one per tab. Toolbar tab switcher with ⌘1–⌘4. Download becomes tab 1, unchanged.</li>
+              <li>Upload, Organize and Browse appear as empty tabs that say what's coming.</li>
+            </ul>
+            <p class="done"><b>Done when:</b> the app runs as Caterina with Download working exactly as before, and all 361 tests pass under the new module names.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">1</span>
+          <div class="body">
+            <h3>Foundation for writing to Flickr</h3>
+            <ul>
+              <li>Write approval requested when first needed. Signed POST for write methods. Multipart upload body.</li>
+              <li><code>CallBudget</code>, <code>JobQueue</code>, <code>EditJournal</code>, Activity panel.</li>
+              <li><code>LibraryMirror</code> full and incremental sync, shown as "Library: 18,402 photos, synced 2 min ago".</li>
+            </ul>
+            <p class="done"><b>Done when:</b> a sync completes against your real account using only reads, and a live test writes a title to one photo in a test album and undoes it.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">2</span>
+          <div class="body">
+            <h3>Upload: the essentials</h3>
+            <ul>
+              <li>Drag-and-drop queue, IPTC/EXIF reading, the metadata table, presets.</li>
+              <li>Async upload with tickets, resume after quitting, add to album and groups afterwards.</li>
+              <li>Upload-status checks before sending.</li>
+            </ul>
+            <p class="done"><b>Done when:</b> you drop a folder of 50 JPEGs, quit halfway, relaunch, and all 50 are in one new album with the right titles and tags.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">3</span>
+          <div class="body">
+            <h3>Organize</h3>
+            <ul>
+              <li>Smart views, timeline, batch tray showing call cost.</li>
+              <li>Batch metadata, who can see what, license, dates, location on a map, rotation.</li>
+              <li>Album management with drag-to-reorder. Groups. Collections tree, read-only. Undo.</li>
+              <li>Delete, behind its own approval and confirmation.</li>
+            </ul>
+            <p class="done"><b>Done when:</b> everything you do in the web Organizr today can be done here, and undone here.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">4</span>
+          <div class="body">
+            <h3>Browse &amp; Insights</h3>
+            <ul>
+              <li>Photo record for any photo. Faves and comments charted over all time.</li>
+              <li>Pro stats, daily snapshots into <code>StatsHistory</code>, rankings, rising photos, referrers.</li>
+              <li>Explore, faves and contacts as sources, with send to Download or a gallery.</li>
+            </ul>
+            <p class="done"><b>Done when:</b> the record for one of your photos matches flickr.com's numbers, and history keeps growing past day 28.</p>
+          </div>
+        </li>
+        <li>
+          <span class="n">5</span>
+          <div class="body">
+            <h3>Upload: the rest</h3>
+            <ul>
+              <li>Duplicate detection, replace, watch folders, import from Photos.</li>
+              <li>Video uploads, checked against the limits Flickr reports.</li>
+            </ul>
+            <p class="done"><b>Done when:</b> dropping a folder you've uploaded before queues only the files that are new.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="testing">
+      <div class="section-head">
+        <span class="eyebrow">Same rules as now</span>
+        <h2>How it gets tested</h2>
+      </div>
+      <div class="groups">
+        <div class="group">
+          <h3>Offline, and nothing on screen</h3>
+          <ul>
+            <li>Every Flickr method runs against a fake transport, the same way the current 361 tests do.</li>
+            <li>Test first for the call budget, the job queue's resume, the multipart signature, and the undo record.</li>
+            <li>Views are checked by rendering offscreen with <code>ImageRenderer</code>. <code>swift test</code> never opens a window.</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Live tests, and your photos are off limits</h3>
+          <ul>
+            <li>Opt in as now: <code>swift test --filter Live</code>.</li>
+            <li>Write tests only touch a dedicated private test album, and delete what they create.</li>
+            <li>No live test edits, re-licenses or deletes your existing photos. Ever.</li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>Verified by you</h3>
+          <ul>
+            <li>Drag-to-reorder, map placement and drop targets need a real window, like items 4–7 did.</li>
+            <li>Checked with you at hand, or while you're away from the Mac, never while you're using it.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <div class="section-head">
+        <span class="eyebrow">Needed before Phase 0 or 1</span>
+        <h2>Your decisions</h2>
+      </div>
+      <div class="decisions">
+        <div class="decision">
+          <h3>1 · New bundle ID, or keep the old one?</h3>
+          <p class="measure">A new ID (<code>com.tsevis.Caterina</code>) is the cleaner identity. The cost is signing in once more and choosing the download folder again. Keeping the old ID avoids that, but the name FlickrDownloader stays in ~/Library for good.</p>
+          <p class="rec"><b>Recommended:</b> new ID. It's one sign-in, for one user.</p>
+        </div>
+        <div class="decision">
+          <h3>2 · Should deleting photos be in the app at all?</h3>
+          <p class="measure">Delete is the only change in the plan that can't be undone, and it needs its own Flickr approval. It can be left out entirely, leaving deletion to flickr.com.</p>
+          <p class="rec"><b>Recommended:</b> include it, behind its own approval and confirmation, in Phase 3.</p>
+        </div>
+        <div class="decision">
+          <h3>3 · What stores the local library copy?</h3>
+          <p class="measure">GRDB is a mature SQLite library with fast queries and full-text search. It would be the app's first external dependency. SwiftData needs no dependency but is weaker at bulk sync and complex queries.</p>
+          <p class="rec"><b>Recommended:</b> GRDB, kept in its own module so FlickrKit stays dependency-free.</p>
+        </div>
+        <div class="decision">
+          <h3>4 · Save stats when the app isn't open?</h3>
+          <p class="measure">Flickr keeps 28 days, so opening Caterina once every four weeks loses nothing. A small background helper (a login item) would take a snapshot every day without you doing anything.</p>
+          <p class="rec"><b>Recommended:</b> start without a helper. Add one only if gaps show up.</p>
+        </div>
+        <div class="decision">
+          <h3>5 · Import from Photos and video: Phase 5, or sooner?</h3>
+          <p class="measure">Both are real work: the Photos entitlement and picker, and video's separate limits and processing. Uploading from the file system covers most needs first.</p>
+          <p class="rec"><b>Recommended:</b> leave both in Phase 5.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Plan for the project at <span class="mono">~/AI/ClaudeCode/FlickrDownloader</span>. Written against the code at commit <span class="mono">5c5d8fa</span>. Flickr API method names are from Flickr's public API documentation. Items marked <em>check live</em> get a live test before anything is built on them. Caterina isn't affiliated with Flickr or SmugMug.
+    </footer>
+  </main>
+</div>

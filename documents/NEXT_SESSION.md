@@ -1,4 +1,4 @@
-# FlickrDownloader — continuation prompt
+# Caterina (formerly FlickrDownloader) — continuation prompt
 
 Paste everything below as the opening message of a fresh Claude Code session
 with working directory `/Users/tsevis/AI/ClaudeCode/FlickrDownloader`.
@@ -12,6 +12,26 @@ that could not be verified, not to rebuild what works.
 
 Working directory: `/Users/tsevis/AI/ClaudeCode/FlickrDownloader`
 Reference implementation (PyQt6, read-only): `/Users/tsevis/AI/ClaudeCode/FDownloadr`
+
+## Caterina — the direction since 2026-09-13
+
+The app is now **Caterina**: download, upload, organize and browse a Flickr
+library. The plan is `documents/CATERINA_PLAN.html`; the user accepted it and
+all five of its recommended decisions (new bundle id, delete behind its own
+permission, GRDB in its own module, no background stats helper, Photos import
+and video in Phase 5). The user has Flickr **Pro**, so the stats API is usable.
+
+**Phase 0 done:** renamed (bundle `com.tsevis.Caterina`, scheme
+`caterina://auth`, Keychain service `com.tsevis.Caterina`, `CaterinaUI`), and
+four tabs in the toolbar on ⌘1–⌘4 with Download as the first. The user is
+registering a new API key named Caterina with that callback URL.
+
+**Deviation from the plan:** the per-tab modules (`UploadFeature` etc.) are not
+split out yet. Download's files lean on `AppModel` and would need `public` on
+everything for no gain today; split each tab into its module when it gets code.
+
+**Next: Phase 1** — write permission on first need, signed POST, multipart,
+`CallBudget`, `JobQueue`, `EditJournal`, `LibraryMirror`.
 
 ## Read these first
 
