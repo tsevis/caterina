@@ -11,6 +11,9 @@ actor ScriptedTransport: HTTPTransport {
 
     private var replies: [Reply]
     private(set) var requested: [URL] = []
+    /// POSTs, in order. `requested` holds their URLs too, so `callCount`
+    /// counts every call whatever its method.
+    private(set) var posted: [URLRequest] = []
 
     init(_ replies: [Reply]) { self.replies = replies }
 
@@ -32,6 +35,23 @@ actor ScriptedTransport: HTTPTransport {
             items[name] = value
         }
         return items
+    }
+
+    var lastPostedFields: [String: String] {
+        guard let body = posted.last?.httpBody.flatMap({ String(data: $0, encoding: .utf8) })
+        else { return [:] }
+        var fields: [String: String] = [:]
+        for pair in body.split(separator: "&") {
+            let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
+            fields[parts[0].removingPercentEncoding ?? parts[0]] =
+                parts.count > 1 ? (parts[1].removingPercentEncoding ?? parts[1]) : ""
+        }
+        return fields
+    }
+
+    func send(_ request: URLRequest) async throws -> Data {
+        posted.append(request)
+        return try await data(from: request.url!)
     }
 
     func data(from url: URL) async throws -> Data {

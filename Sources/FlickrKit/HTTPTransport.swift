@@ -10,6 +10,8 @@ public typealias Sleeper = @Sendable (Duration) async throws -> Void
 /// and fast.
 public protocol HTTPTransport: Sendable {
     func data(from url: URL) async throws -> Data
+    /// A request that is not a plain GET — Flickr's write methods are POSTed.
+    func send(_ request: URLRequest) async throws -> Data
 }
 
 /// The real one.
@@ -35,8 +37,12 @@ public struct URLSessionTransport: HTTPTransport {
     }
 
     public func data(from url: URL) async throws -> Data {
+        try await send(URLRequest(url: url))
+    }
+
+    public func send(_ request: URLRequest) async throws -> Data {
         do {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw FlickrError.transport("Flickr answered HTTP \(http.statusCode).")
             }

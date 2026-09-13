@@ -200,6 +200,36 @@ public enum OAuth1 {
         return result
     }
 
+    /// The signed request as a form-encoded POST, for Flickr's write methods.
+    ///
+    /// The body is encoded with `percentEncode`, as the query is: form
+    /// encoding's `+` for a space would be read back as data the signature
+    /// never covered.
+    public static func signedPOSTRequest(url: String,
+                                         parameters: [OAuthParameter],
+                                         credentials: Credentials,
+                                         nonce: String = Self.nonce(),
+                                         timestamp: Int = Int(Date().timeIntervalSince1970)
+    ) throws -> URLRequest {
+        let signed = try signedParameters(method: "POST", url: url, parameters: parameters,
+                                          credentials: credentials,
+                                          nonce: nonce, timestamp: timestamp)
+        guard let target = URL(string: try baseStringURI(url)) else {
+            throw SigningError.unusableURL(url)
+        }
+        var request = URLRequest(url: target)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data(formBody(signed).utf8)
+        return request
+    }
+
+    static func formBody(_ parameters: [OAuthParameter]) -> String {
+        parameters
+            .map { "\(percentEncode($0.name))=\(percentEncode($0.value))" }
+            .joined(separator: "&")
+    }
+
     /// A fresh nonce. 16 random bytes, hex — long enough that Flickr never sees
     /// the same one twice within a timestamp.
     public static func nonce() -> String {

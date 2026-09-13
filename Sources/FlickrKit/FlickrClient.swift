@@ -184,28 +184,57 @@ public actor FlickrClient {
         return try FlickrResponse.licenses(from: data)
     }
 
+    // MARK: - Writing
+
+    /// Change something on Flickr. Needs a signed-in account.
+    public func perform(_ write: FlickrWrite) async throws -> Data {
+        guard credentials.token != nil else {
+            throw FlickrError.invalidInput("Sign in to Flickr to change your photos.")
+        }
+        let credentials = self.credentials
+        return try await withRetries(retryingLostConnections: write.repeatable) { transport in
+            let request = try OAuth1.signedPOSTRequest(
+                url: Self.endpoint, parameters: write.parameters, credentials: credentials)
+            return try await transport.send(request)
+        }
+    }
+
     // MARK: - Sending, with retries
 
-    /// Send `parameters`, retrying only what retrying can fix.
-    ///
-    /// A transient Flickr code or a transport error is worth another attempt; a
-    /// permanent error and an unreadable reply are not, and retrying them just
-    /// makes the user wait five seconds for the same message.
     private func send(_ parameters: [OAuthParameter]) async throws -> Data {
+        let credentials = self.credentials
+        return try await withRetries(retryingLostConnections: true) { transport in
+            let url = try OAuth1.signedURL(
+                method: "GET", url: Self.endpoint,
+                parameters: parameters, credentials: credentials)
+            return try await transport.data(from: url)
+        }
+    }
+
+    /// Run `call`, retrying only what retrying can fix.
+    ///
+    /// A transient Flickr code is worth another attempt: `stat=fail` means
+    /// Flickr read the request and did nothing. A lost connection is retried
+    /// only when doing the call twice is harmless. A permanent error and an
+    /// unreadable reply are never retried — that just makes the user wait five
+    /// seconds for the same message. Every attempt is signed afresh, so no two
+    /// share a nonce.
+    private func withRetries(
+        retryingLostConnections: Bool,
+        _ call: @Sendable (HTTPTransport) async throws -> Data
+    ) async throws -> Data {
         var lastError: FlickrError = .busy("Flickr did not answer.")
 
         for attempt in 0..<policy.attempts {
             do {
-                let url = try OAuth1.signedURL(
-                    method: "GET", url: Self.endpoint,
-                    parameters: parameters, credentials: credentials)
-                let data = try await transport.data(from: url)
+                let data = try await call(transport)
                 // Reading the status here is what makes a `stat=fail` blip
                 // retryable: it has to be seen before the caller decodes.
                 try FlickrResponse.throwIfFailed(data)
                 return data
             } catch let error as FlickrError {
                 guard error.isTransient else { throw error }
+                if case .api = error {} else if !retryingLostConnections { throw error }
                 lastError = error
             } catch let error as OAuth1.SigningError {
                 throw FlickrError.invalidInput("Could not build the request: \(error)")
