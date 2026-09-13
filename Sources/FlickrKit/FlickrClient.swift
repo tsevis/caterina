@@ -39,6 +39,8 @@ public actor FlickrClient {
         self.budget = budget
     }
 
+    var hasToken: Bool { credentials.token != nil }
+
     public func update(credentials: OAuth1.Credentials, permission: FlickrPermission = .read) {
         self.credentials = credentials
         self.permission = permission
@@ -276,7 +278,7 @@ public actor FlickrClient {
 
     // MARK: - Sending, with retries
 
-    private func send(_ parameters: [OAuthParameter],
+    func send(_ parameters: [OAuthParameter],
                       priority: CallPriority = .interactive) async throws -> Data {
         let credentials = self.credentials
         return try await withRetries(priority: priority,
