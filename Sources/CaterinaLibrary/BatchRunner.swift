@@ -45,11 +45,7 @@ public struct BatchRunner: Sendable {
             try Task.checkCancellation()
             do {
                 try await apply(entry)
-            } catch let error as FlickrError {
-                // Nothing about this photo: every photo after it would fail the
-                // same way.
-                if case .permissionNeeded = error { throw error }
-                if error.isTransient { throw error }
+            } catch let error as FlickrError where !error.stopsTheBatch {
                 try store.record(entry, as: .failed, message: error.message)
             }
             progress(try store.summary(of: batchID))
@@ -66,11 +62,34 @@ public struct BatchRunner: Sendable {
         case let .conflict(reason):
             try store.record(entry, as: .failed, message: reason)
         case let .change(change):
-            let rebased = try store.replaceChange(of: entry, with: change)
-            for write in change.writes {
-                _ = try await flickr.perform(write, priority: .edit)
-            }
-            try store.record(rebased, as: .applied)
+            // Rebased once only. On a resume after a write reached Flickr
+            // unrecorded, live already shows it: laying the change over live
+            // again would record the new value as the before, and undo would
+            // have nothing to put back.
+            let recorded = entry.isRebased ? entry : try store.replaceChange(of: entry, with: change)
+            try await send(change.writes, for: recorded)
         }
+    }
+
+    /// A refusal after some writes landed leaves the photo `partial`: changed
+    /// in part, so undo still takes it back.
+    private func send(_ writes: [FlickrWrite], for entry: EditEntry) async throws {
+        for (index, write) in writes.enumerated() {
+            do {
+                _ = try await flickr.perform(write, priority: .edit)
+            } catch let error as FlickrError where index > 0 && !error.stopsTheBatch {
+                try store.record(entry, as: .partial, message: error.message)
+                return
+            }
+        }
+        try store.record(entry, as: .applied)
+    }
+}
+
+extension FlickrError {
+    /// Nothing about one photo: every photo after it would fail the same way.
+    var stopsTheBatch: Bool {
+        if case .permissionNeeded = self { return true }
+        return isTransient
     }
 }

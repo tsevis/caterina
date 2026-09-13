@@ -7,6 +7,8 @@ public struct UploadMetadata: Sendable, Equatable, Hashable, Codable {
         case safe = 1, moderate = 2, restricted = 3
     }
 
+    /// `virtualPhotography` is documented for `photos.setContentType` only;
+    /// the upload API lists 1–3.
     public enum ContentType: Int, Sendable, Codable, CaseIterable {
         case photo = 1, screenshot = 2, other = 3, virtualPhotography = 4
     }

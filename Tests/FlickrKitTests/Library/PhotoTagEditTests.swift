@@ -65,3 +65,32 @@ import Testing
         #expect(!PhotoChange(before: photo, after: after).isEmpty)
     }
 }
+
+/// Machine tags (`namespace:predicate=value`) keep their structure in
+/// Flickr's clean form; stripping it made `abc` and `a:b=c` one tag.
+@Suite struct MachineTagTests {
+    @Test func aMachineTagKeepsItsColonAndEquals() {
+        #expect(PhotoEdit.flickrTag("Uploaded:By=FlickrMobile") == "uploaded:by=flickrmobile")
+        #expect(PhotoEdit.flickrTag("New York") == "newyork")
+        #expect(PhotoEdit.flickrTag("a:b") == "ab")
+    }
+
+    @Test func removingAPlainTagLeavesTheMachineTagWithTheSameLetters() {
+        let photo = LibraryPhoto(id: "1", tags: ["abc", "a:b=c"])
+        #expect(PhotoEdit.removeTags(["abc"]).applied(to: photo).tags == ["a:b=c"])
+    }
+}
+
+/// Found in review: a location saved without accuracy comes back from Flickr
+/// at 16, which is not a change made on flickr.com.
+@Suite struct LocationAccuracyRebaseTests {
+    @Test func anUnstatedAccuracyMatchesWhateverFlickrFilledIn() {
+        let local = LibraryPhoto(id: "1", location: .init(latitude: 1, longitude: 2, accuracy: 0))
+        let live = LibraryPhoto(id: "1", location: .init(latitude: 1, longitude: 2, accuracy: 16))
+        let change = PhotoChange(before: local, after: PhotoEdit.removeLocation.applied(to: local))
+        guard case .change = change.rebased(onto: live) else {
+            Issue.record("Accuracy filled in by Flickr is not a conflict")
+            return
+        }
+    }
+}

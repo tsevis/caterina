@@ -7,6 +7,7 @@ public struct EditBatch: Sendable, Equatable, Identifiable {
 
     public struct Summary: Sendable, Equatable {
         public let applied: Int
+        /// Refused outright or in part.
         public let failed: Int
         public let pending: Int
 
@@ -24,13 +25,16 @@ public struct EditBatch: Sendable, Equatable, Identifiable {
     public let createdAt: Date
     /// The batch this one takes back, when it is an undo.
     public let undoes: String?
-    /// Flickr calls the whole batch takes, for the up-front cost.
+    /// Flickr calls still to make, for the up-front cost: an estimate, since
+    /// each photo's writes are settled only once it is read from Flickr.
     public let calls: Int
 }
 
 public struct EditEntry: Sendable, Equatable {
     public enum State: String, Sendable {
         case pending, applied, failed
+        /// Some of the photo's writes landed before Flickr refused one.
+        case partial
     }
 
     public let batchID: String
@@ -40,4 +44,6 @@ public struct EditEntry: Sendable, Equatable {
     public let state: State
     /// Flickr's reason, when it refused.
     public let message: String?
+    /// Laid over the photo as Flickr had it; the before is Flickr's own.
+    public let isRebased: Bool
 }

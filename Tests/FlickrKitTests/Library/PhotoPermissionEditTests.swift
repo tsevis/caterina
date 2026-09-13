@@ -68,6 +68,12 @@ import Testing
         #expect(change.reversed.writes.isEmpty)
         let known = PhotoChange(before: photo, after: PhotoEdit.setTitle("A").applied(to: photo))
         #expect(known.unrestorable.isEmpty)
+        // Read from Flickr before writing, so undo can put these back.
+        let unknown = LibraryPhoto(id: "3")
+        let perms = PhotoChange(before: unknown, after: PhotoEdit.setPermissions(.init(comment: .nobody, addMeta: .nobody))
+            .applied(to: PhotoEdit.setGeoPermissions(.init(isPublic: false, isContact: false, isFriend: false,
+                                                           isFamily: false)).applied(to: unknown)))
+        #expect(perms.unrestorable.isEmpty)
     }
 
     @Test func eachNewFieldConflictsOnItsOwn() {
@@ -95,7 +101,6 @@ import Testing
             return
         }
         #expect(rebased.before.permissions == photo.permissions)
-        #expect(rebased.unrestorable.isEmpty)
         #expect(rebased.reversed.writes.first?.arguments["perm_comment"] == "3")
     }
 

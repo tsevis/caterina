@@ -146,3 +146,71 @@ import FlickrKit
         #expect(await undoing.sent.last?.arguments["is_public"] == "1")
     }
 }
+
+/// Found in review: interruptions between a write reaching Flickr and it
+/// being recorded.
+@Suite struct BatchInterruptionTests {
+
+    /// Flickr says yes to the first write, then the connection drops before
+    /// the batch can record it. The stored before must survive the resume,
+    /// or undo has nothing to put back.
+    @Test func aResumeAfterAWriteLandedStillUndoes() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryStoreTests.photo("1", title: "Harbour")], generation: 1)
+        let batch = try store.createBatch(title: "T", edit: .setTitle("Piraeus"), photos: try store.photos(ids: ["1"]))
+        let landed = ScriptedWriter(store: store, failing: ["1": .transport("The network connection was lost.")])
+        await #expect(throws: FlickrError.self) { _ = try await BatchRunner(writer: landed, store: store).run(batch.id) }
+
+        // Flickr did act: it now has the new title.
+        let edited = LibraryStoreTests.photo("1", title: "Piraeus")
+        _ = try await BatchRunner(writer: ScriptedWriter(store: store, live: ["1": edited]), store: store).run(batch.id)
+
+        let undo = try store.undoBatch(for: batch.id)
+        let flickr = ScriptedWriter(store: store, live: ["1": edited])
+        _ = try await BatchRunner(writer: flickr, store: store).run(undo.id)
+        #expect(await flickr.sent.map { $0.arguments["title"] } == ["Harbour"])
+    }
+
+    /// Two writes, the second refused: the first is on Flickr, so undo must
+    /// be able to take it back.
+    @Test func aPhotoChangedInPartCanBeUndone() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryStoreTests.photo("1", title: "Harbour")], generation: 1)
+        let both = PhotoEdit.setLicense(.by).applied(to: PhotoEdit.setTitle("Piraeus").applied(to:
+            try #require(try store.photos(ids: ["1"]).first)))
+        let batch = try store.createBatch(title: "T", changes: [PhotoChange(before: try #require(try store.photos(ids: ["1"]).first), after: both)])
+        let refusing = RefusingSecondWrite(store: store)
+        #expect(try await BatchRunner(writer: refusing, store: store).run(batch.id).failed == 1)
+        #expect(try store.entries(in: batch.id).first?.state == .partial)
+
+        let undo = try store.undoBatch(for: batch.id)
+        #expect(try store.entries(in: undo.id).count == 1)
+    }
+
+    @Test func theCostCountsOnlyWhatIsStillToDo() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryStoreTests.photo("1"), LibraryStoreTests.photo("2")], generation: 1)
+        let batch = try store.createBatch(title: "T", edit: .setTitle("A"), photos: try store.photos(ids: ["1", "2"]))
+        #expect(batch.calls == 4)
+        let offline = ScriptedWriter(store: store, failingReads: ["2": .transport("lost")])
+        await #expect(throws: FlickrError.self) { _ = try await BatchRunner(writer: offline, store: store).run(batch.id) }
+        #expect(try store.recentBatches(limit: 1).first?.calls == 2)
+    }
+}
+
+/// Accepts a photo's first write and refuses the rest.
+actor RefusingSecondWrite: PhotoWriter, LivePhotoReader {
+    private let store: LibraryStore
+    private var writes = 0
+    init(store: LibraryStore) { self.store = store }
+
+    func perform(_ write: FlickrWrite, priority: CallPriority) async throws -> Data {
+        writes += 1
+        if writes > 1 { throw FlickrError.api(code: 3, message: "Change not allowed", transient: false) }
+        return Data(#"{"stat":"ok"}"#.utf8)
+    }
+    func livePhoto(id: String, priority: CallPriority) async throws -> LibraryPhoto {
+        try #require(try store.photos(ids: [id]).first)
+    }
+    func geoPermissions(photoID: String, priority: CallPriority) async throws -> LibraryPhoto.GeoPermissions? { nil }
+}

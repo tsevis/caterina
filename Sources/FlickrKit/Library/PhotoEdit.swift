@@ -29,7 +29,9 @@ public enum PhotoEdit: Sendable, Equatable {
     case removeTags([String])
     /// One tag respelled or renamed, wherever it is.
     case renameTag(from: String, to: String)
-    /// Exactly these tags, replacing whatever was there.
+    /// These tags in place of the ones the photo had when the batch was made.
+    /// Tags added on flickr.com since the last sync are kept: a batch is laid
+    /// over Flickr's copy as additions and removals (`PhotoChange.rebased`).
     case replaceTags([String])
     case setVisibility(LibraryPhoto.Visibility)
     case setLicense(License)
@@ -70,9 +72,12 @@ public enum PhotoEdit: Sendable, Equatable {
     }
 
     /// A tag the way Flickr stores it: lowercase letters and digits only, so
-    /// "New York" is "newyork".
+    /// "New York" is "newyork". A machine tag (`namespace:predicate=value`)
+    /// keeps its structure, lowercased.
     public static func flickrTag(_ tag: String) -> String {
-        String(tag.lowercased().unicodeScalars.filter(CharacterSet.alphanumerics.contains).map(Character.init))
+        let lowered = tag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if lowered.wholeMatch(of: /[a-z_][a-z0-9_]*:[a-z_][a-z0-9_]*=.+/) != nil { return lowered }
+        return String(lowered.unicodeScalars.filter(CharacterSet.alphanumerics.contains).map(Character.init))
     }
 }
 

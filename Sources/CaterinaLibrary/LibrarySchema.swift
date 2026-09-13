@@ -134,6 +134,11 @@ enum LibrarySchema {
                 t.column("readAt", .double).notNull()
             }
         }
+        migrator.registerMigration("v8-rebased-entries") { db in
+            try db.alter(table: "editEntry") { t in
+                t.add(column: "rebased", .boolean).notNull().defaults(to: false)
+            }
+        }
         return migrator
     }
 

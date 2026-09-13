@@ -6,6 +6,12 @@ import FlickrKit
 /// The edit record: every batch, and each photo's before and after.
 extension LibraryStore {
 
+    /// Record `changes`, leaving out any that change nothing. For edits that
+    /// differ per photo; never for deleting, which cannot be undone.
+    public func createBatch(title: String, changes: [PhotoChange], now: Date = Date()) throws -> EditBatch {
+        try createBatch(title: title, changes: changes, undoes: nil, now: now)
+    }
+
     /// Record `edit` applied to `photos`, leaving out any it would not change.
     public func createBatch(title: String, edit: PhotoEdit, photos: [LibraryPhoto],
                             now: Date = Date()) throws -> EditBatch {
@@ -21,7 +27,7 @@ extension LibraryStore {
     public func undoBatch(for batchID: String, now: Date = Date()) throws -> EditBatch {
         let original = try batch(batchID)
         let changes = try entries(in: batchID)
-            .filter { $0.state == .applied }
+            .filter { $0.state == .applied || $0.state == .partial }
             .reversed()
             .map(\.change.reversed)
         return try createBatch(title: "Undo \(original.title)", changes: changes,
@@ -43,7 +49,8 @@ extension LibraryStore {
             let count = { (state: EditEntry.State) -> Int in
                 counts.first { ($0["state"] as String) == state.rawValue }?["n"] ?? 0
             }
-            return EditBatch.Summary(applied: count(.applied), failed: count(.failed), pending: count(.pending))
+            return EditBatch.Summary(applied: count(.applied), failed: count(.failed) + count(.partial),
+                                     pending: count(.pending))
         }
     }
 
@@ -59,7 +66,7 @@ extension LibraryStore {
         try write { db in
             try db.execute(sql: "UPDATE editEntry SET state = ?, message = ? WHERE batchID = ? AND position = ?",
                            arguments: [state.rawValue, message, entry.batchID, entry.position])
-            guard state == .applied else { return }
+            guard state == .applied || state == .partial else { return }
             let row = try Row.fetchOne(db, sql: "SELECT * FROM photo WHERE id = ?", arguments: [entry.photoID])
             let local = row.map(LibrarySchema.photo)
             let photo = local.map { $0.withEditableFields(of: entry.change.after) } ?? entry.change.after
@@ -73,12 +80,14 @@ extension LibraryStore {
     /// laid over the photo as Flickr has it.
     func replaceChange(of entry: EditEntry, with change: PhotoChange) throws -> EditEntry {
         try write { db in
-            try db.execute(sql: "UPDATE editEntry SET before = ?, after = ? WHERE batchID = ? AND position = ?",
+            try db.execute(sql: """
+                UPDATE editEntry SET before = ?, after = ?, rebased = 1 WHERE batchID = ? AND position = ?
+                """,
                            arguments: [try Self.json(change.before), try Self.json(change.after),
                                        entry.batchID, entry.position])
         }
         return EditEntry(batchID: entry.batchID, position: entry.position, photoID: entry.photoID,
-                         change: change, state: entry.state, message: entry.message)
+                         change: change, state: entry.state, message: entry.message, isRebased: true)
     }
 
     // MARK: - Private
@@ -118,7 +127,8 @@ extension LibraryStore {
                          createdAt: Date(timeIntervalSince1970: row["createdAt"]),
                          undoes: row["undoes"],
                          // One read per photo, to lay the change over Flickr's copy.
-                         calls: changes.reduce(0) { $0 + $1.change.readCalls + $1.change.writes.count })
+                         calls: changes.filter { $0.state == .pending }
+                            .reduce(0) { $0 + $1.change.readCalls + $1.change.writes.count })
     }
 
     private static func entry(_ row: Row) throws -> EditEntry {
@@ -128,7 +138,7 @@ extension LibraryStore {
         return EditEntry(batchID: row["batchID"], position: row["position"], photoID: row["photoID"],
                          change: PhotoChange(before: before, after: after),
                          state: EditEntry.State(rawValue: row["state"]) ?? .pending,
-                         message: row["message"])
+                         message: row["message"], isRebased: row["rebased"])
     }
 
     private static func json(_ photo: LibraryPhoto) throws -> String {

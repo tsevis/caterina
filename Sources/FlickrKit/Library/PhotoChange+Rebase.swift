@@ -26,7 +26,7 @@ extension PhotoChange {
             rebased.license = try field("licence", \.license, live)
             rebased.visibility = try field("who can see", \.visibility, live)
             rebased.taken = try field("date taken", \.taken, live)
-            rebased.location = try field("location", \.location, live)
+            rebased.location = try location(live)
             rebased.permissions = try unreported("who can comment and add tags", \.permissions, live)
             rebased.safety = try unreported("safety level", \.safety, live)
             rebased.contentType = try unreported("content type", \.contentType, live)
@@ -46,6 +46,21 @@ extension PhotoChange {
         guard from != to else { return now }
         guard now == from || now == to else { throw Conflict(field: name) }
         return to
+    }
+
+    /// A location saved with no accuracy (0) comes back from Flickr filled in,
+    /// which is not someone changing it.
+    private func location(_ live: LibraryPhoto) throws(Conflict) -> LibraryPhoto.Location? {
+        let same = { (a: LibraryPhoto.Location?, b: LibraryPhoto.Location?) -> Bool in
+            guard let a, let b else { return a == nil && b == nil }
+            return a.latitude == b.latitude && a.longitude == b.longitude
+                && (a.accuracy == b.accuracy || a.accuracy == 0 || b.accuracy == 0)
+        }
+        guard before.location != after.location else { return live.location }
+        guard same(live.location, before.location) || same(live.location, after.location) else {
+            throw Conflict(field: "location")
+        }
+        return after.location
     }
 
     /// For a field the library copy does not hold: nil before means "not

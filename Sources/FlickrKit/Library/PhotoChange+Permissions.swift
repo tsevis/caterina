@@ -2,14 +2,14 @@ import Foundation
 
 extension PhotoChange {
 
-    /// Fields this change sets whose earlier value Flickr never reported, so
+    /// Fields this change sets whose earlier value Flickr does not report, so
     /// undo cannot put them back. Named for the person reading the warning.
+    /// Comment and location permissions are read before writing, so are not
+    /// here.
     public var unrestorable: [String] {
         [("safety level", before.safety == nil && after.safety != nil),
          ("content type", before.contentType == nil && after.contentType != nil),
-         ("hidden from search", before.hiddenFromSearch == nil && after.hiddenFromSearch != nil),
-         ("who can comment and add tags", before.permissions == nil && after.permissions != nil),
-         ("who can see the location", before.geoPermissions == nil && after.geoPermissions != nil)]
+         ("hidden from search", before.hiddenFromSearch == nil && after.hiddenFromSearch != nil)]
             .filter(\.1).map(\.0)
     }
 

@@ -37,6 +37,9 @@ public struct PhotoChange: Sendable, Equatable {
         return write("flickr.photos.setMeta", ["title": after.title, "description": after.description])
     }
 
+    /// The whole list, raw. Tags other people added are in the list Flickr
+    /// reports and are sent back with it, so they stay — under the owner's
+    /// name, which is the one thing `setTags` cannot avoid.
     private var tags: FlickrWrite? {
         guard before.tags != after.tags else { return nil }
         return write("flickr.photos.setTags", ["tags": UploadMetadata.tagList(after.tags)])
