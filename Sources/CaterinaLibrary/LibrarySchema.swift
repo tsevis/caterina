@@ -105,6 +105,12 @@ enum LibrarySchema {
                 t.column("collections", .integer).notNull()
             }
         }
+        migrator.registerMigration("v5-medium-thumbnails") { db in
+            try db.alter(table: "photo") { t in t.add(column: "mediumURL", .text) }
+            // Rows synced before this have no larger thumbnail: make the next
+            // sync a full one so every photo gets it.
+            try db.execute(sql: "UPDATE syncState SET lastFullSync = NULL")
+        }
         return migrator
     }
 
@@ -117,15 +123,15 @@ enum LibrarySchema {
             photo.uploaded?.timeIntervalSince1970, photo.lastUpdated?.timeIntervalSince1970,
             photo.taken, photo.views, photo.media.rawValue,
             photo.location?.latitude, photo.location?.longitude, photo.location?.accuracy,
-            photo.thumbnailURL, generation,
+            photo.thumbnailURL, generation, photo.mediumURL,
         ]
     }
 
     static let upsert = """
         INSERT OR REPLACE INTO photo
         (id, title, description, tags, license, isPublic, isFriend, isFamily, uploaded,
-         lastUpdated, taken, views, media, latitude, longitude, accuracy, thumbnailURL, generation)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         lastUpdated, taken, views, media, latitude, longitude, accuracy, thumbnailURL, generation, mediumURL)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
     static func photo(_ row: Row) -> LibraryPhoto {
@@ -145,7 +151,8 @@ enum LibrarySchema {
             location: latitude.flatMap { latitude in
                 longitude.map { .init(latitude: latitude, longitude: $0, accuracy: row["accuracy"] ?? 0) }
             },
-            thumbnailURL: row["thumbnailURL"])
+            thumbnailURL: row["thumbnailURL"],
+            mediumURL: row["mediumURL"])
     }
 
     /// The `WHERE` clause and its arguments for `filter`.
@@ -161,6 +168,18 @@ enum LibrarySchema {
             return ("latitude IS NOT NULL", [])
         case let .tagged(tag):
             return (#"tags LIKE ? ESCAPE '\'"#, ["% \(escapeLike(PhotoEdit.flickrTag(tag))) %"])
+        case let .takenIn(period):
+            return (#"taken LIKE ? ESCAPE '\'"#, ["\(escapeLike(period))%"])
+        case let .licensed(license):
+            return ("license = ?", [license.rawValue])
+        case let .seenBy(audience):
+            switch audience {
+            case .everyone: return ("isPublic = 1", [])
+            case .friendsOrFamily: return ("isPublic = 0 AND (isFriend = 1 OR isFamily = 1)", [])
+            case .onlyYou: return ("isPublic = 0 AND isFriend = 0 AND isFamily = 0", [])
+            }
+        case .videos:
+            return ("media = 'video'", [])
         case let .matching(text):
             // SQLite's LIKE folds case for ASCII only; GRDB's Swift lowercase
             // does every alphabet, so both sides are lowered by it.

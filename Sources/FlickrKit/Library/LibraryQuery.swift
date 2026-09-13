@@ -10,9 +10,9 @@ public enum LibraryQuery: Sendable, Hashable {
     /// Flickr's largest page.
     public static let pageSize = 500
 
-    static let extras = [
+    public static let extras = [
         "description", "license", "date_upload", "date_taken", "last_update",
-        "views", "tags", "geo", "media", "url_q",
+        "views", "tags", "geo", "media", "url_q", "url_z", "owner_name",
     ].joined(separator: ",")
 
     var parameters: [OAuthParameter] {

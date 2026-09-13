@@ -51,13 +51,19 @@ public struct LibraryPhoto: Sendable, Equatable, Hashable, Identifiable, Codable
     public internal(set) var media: Media
     public internal(set) var location: Location?
     public internal(set) var thumbnailURL: String?
+    /// 640 pixels on the long side, for grids and timelines.
+    public internal(set) var mediumURL: String?
+    /// For someone else's photo, in a gallery, a group or your faves.
+    public internal(set) var ownerID: String?
+    public internal(set) var ownerName: String?
 
     public init(id: String, title: String = "", description: String = "", tags: [String] = [],
                 license: License? = nil,
                 visibility: Visibility = Visibility(isPublic: true, isFriend: false, isFamily: false),
                 uploaded: Date? = nil, lastUpdated: Date? = nil, taken: String? = nil,
                 views: Int = 0, media: Media = .photo, location: Location? = nil,
-                thumbnailURL: String? = nil) {
+                thumbnailURL: String? = nil, mediumURL: String? = nil,
+                ownerID: String? = nil, ownerName: String? = nil) {
         self.id = id
         self.title = title
         self.description = description
@@ -71,6 +77,9 @@ public struct LibraryPhoto: Sendable, Equatable, Hashable, Identifiable, Codable
         self.media = media
         self.location = location
         self.thumbnailURL = thumbnailURL
+        self.mediumURL = mediumURL
+        self.ownerID = ownerID
+        self.ownerName = ownerName
     }
 }
 

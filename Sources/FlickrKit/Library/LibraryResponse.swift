@@ -3,16 +3,21 @@ import Foundation
 /// Decoding `flickr.people.getPhotos` and `flickr.photos.recentlyUpdated`.
 public enum LibraryResponse {
 
-    public static func page(from data: Data) throws -> LibraryPage {
+    /// `container` is the key the list arrives under: `photos` for nearly
+    /// every method, `photoset` for an album's.
+    public static func page(from data: Data, container key: String = "photos") throws -> LibraryPage {
         try FlickrResponse.throwIfFailed(data)
-        let envelope: Envelope
+        let container: Container
         do {
-            envelope = try JSONDecoder().decode(Envelope.self, from: data)
+            let envelope = try JSONDecoder().decode([String: Lenient].self, from: data)
+            guard let found = envelope[key]?.container else {
+                throw FlickrError.malformedResponse("Flickr's reply contained no photos.")
+            }
+            container = found
+        } catch let error as FlickrError {
+            throw error
         } catch {
             throw FlickrError.malformedResponse("Flickr sent your library in an unexpected shape.")
-        }
-        guard let container = envelope.photos else {
-            throw FlickrError.malformedResponse("Flickr's reply contained no photos.")
         }
         let entries = container.photo ?? []
         let photos = entries.compactMap(\.value).map(\.photo)
@@ -23,8 +28,10 @@ public enum LibraryResponse {
                            skippedEntries: entries.count - photos.count)
     }
 
-    private struct Envelope: Decodable {
-        let photos: Container?
+    /// A top-level value that may be the list, or `stat`, or anything else.
+    private struct Lenient: Decodable {
+        let container: Container?
+        init(from decoder: Decoder) throws { container = try? Container(from: decoder) }
     }
 
     private struct Container: Decodable {
@@ -57,7 +64,10 @@ public enum LibraryResponse {
                 views: fields.number("views") ?? 0,
                 media: fields.text("media").flatMap(LibraryPhoto.Media.init(rawValue:)) ?? .photo,
                 location: fields.location(),
-                thumbnailURL: fields.text("url_q"))
+                thumbnailURL: fields.text("url_q"),
+                mediumURL: fields.text("url_z"),
+                ownerID: fields.text("owner"),
+                ownerName: fields.text("ownername"))
         }
     }
 

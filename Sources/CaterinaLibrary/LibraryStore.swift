@@ -22,7 +22,7 @@ public final class LibraryStore: Sendable {
         try LibraryStore(database: DatabaseQueue())
     }
 
-    private init(database: DatabaseQueue) throws {
+    init(database: DatabaseQueue) throws {
         self.database = database
         try LibrarySchema.migrator.migrate(database)
     }
@@ -90,6 +90,26 @@ public final class LibraryStore: Sendable {
         }
         return try database.read { db in
             try Row.fetchAll(db, sql: sql, arguments: arguments).map(LibrarySchema.photo)
+        }
+    }
+
+    /// Every tag with how many photos carry it, most used first.
+    public func tagCounts() throws -> [TagCount] {
+        let lists = try database.read { db in try String.fetchAll(db, sql: "SELECT tags FROM photo WHERE tags != ''") }
+        let counts = lists.reduce(into: [String: Int]()) { counts, list in
+            for tag in list.split(separator: " ") { counts[String(tag), default: 0] += 1 }
+        }
+        return counts.map { TagCount(tag: $0.key, count: $0.value) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.tag < $1.tag }
+    }
+
+    /// Months photos were taken in, newest first. Undated photos are in none.
+    public func monthCounts() throws -> [MonthCount] {
+        try database.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT substr(taken, 1, 7) AS month, COUNT(*) AS n FROM photo
+                WHERE taken IS NOT NULL GROUP BY month ORDER BY month DESC
+                """).map { MonthCount(month: $0["month"], count: $0["n"]) }
         }
     }
 

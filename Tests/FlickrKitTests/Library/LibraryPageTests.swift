@@ -19,7 +19,8 @@ import Testing
      "datetaken":"2024-06-01 21:14:05","datetakengranularity":0,"datetakenunknown":"0",
      "views":"1842","tags":"piraeus harbour dusk","media":"photo",
      "latitude":37.9421,"longitude":23.6465,"accuracy":"16",
-     "url_q":"https://live.staticflickr.com/65535/53712_a1_q.jpg"}
+     "url_q":"https://live.staticflickr.com/65535/53712_a1_q.jpg",
+     "url_z":"https://live.staticflickr.com/65535/53712_a1_z.jpg","ownername":"tsevis"}
     """
 
     static func page(_ entries: [String], page: Int = 1, pages: Int = 1, total: Int? = nil) -> Data {
@@ -46,6 +47,9 @@ import Testing
         #expect(photo.media == .photo)
         #expect(photo.location == LibraryPhoto.Location(latitude: 37.9421, longitude: 23.6465, accuracy: 16))
         #expect(photo.thumbnailURL == "https://live.staticflickr.com/65535/53712_a1_q.jpg")
+        #expect(photo.mediumURL == "https://live.staticflickr.com/65535/53712_a1_z.jpg")
+        #expect(photo.ownerID == "12037949@N00")
+        #expect(photo.ownerName == "tsevis")
     }
 
     /// Flickr says "no location" as a latitude and longitude of zero.
@@ -98,7 +102,8 @@ import Testing
         #expect(fields["page"] == "3")
         let extras = Set((fields["extras"] ?? "").split(separator: ",").map(String.init))
         #expect(extras.isSuperset(of: ["description", "license", "date_upload", "date_taken",
-                                       "last_update", "views", "tags", "geo", "media", "url_q"]))
+                                       "last_update", "views", "tags", "geo", "media", "url_q",
+                                       "url_z", "owner_name"]))
     }
 
     @Test func changesAreAskedForSinceTheLastSync() {
