@@ -10,11 +10,15 @@ public struct FlickrWrite: Sendable, Equatable {
     public let method: String
     public let arguments: [String: String]
     public let repeatable: Bool
+    /// `write` for nearly everything; `delete` for deleting a photo.
+    public let permission: FlickrPermission
 
-    public init(method: String, arguments: [String: String], repeatable: Bool) {
+    public init(method: String, arguments: [String: String], repeatable: Bool,
+                permission: FlickrPermission = .write) {
         self.method = method
         self.arguments = arguments
         self.repeatable = repeatable
+        self.permission = permission
     }
 
     /// In name order, so the same write always signs the same way.

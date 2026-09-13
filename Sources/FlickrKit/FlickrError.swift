@@ -20,6 +20,9 @@ public enum FlickrError: Error, Equatable, Sendable {
     case notFound(String)
     /// Retries were exhausted while Flickr was still failing transiently.
     case busy(String)
+    /// The signed-in account has not allowed this yet. The fix is a trip to
+    /// Flickr's approval page, not a retry.
+    case permissionNeeded(FlickrPermission)
 
     /// Flickr codes that mean "try again", not "you asked for something wrong".
     ///
@@ -32,7 +35,7 @@ public enum FlickrError: Error, Equatable, Sendable {
         switch self {
         case let .api(_, _, transient): return transient
         case .transport, .busy: return true
-        case .malformedResponse, .invalidInput, .notFound: return false
+        case .malformedResponse, .invalidInput, .notFound, .permissionNeeded: return false
         }
     }
 
@@ -45,6 +48,7 @@ public enum FlickrError: Error, Equatable, Sendable {
         case let .invalidInput(detail): return detail
         case let .notFound(detail): return detail
         case let .busy(detail): return detail
+        case let .permissionNeeded(permission): return permission.reason
         }
     }
 }

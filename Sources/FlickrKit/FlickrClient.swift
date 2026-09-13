@@ -19,22 +19,26 @@ public actor FlickrClient {
     public static let endpoint = "https://api.flickr.com/services/rest/"
 
     private var credentials: OAuth1.Credentials
+    private var permission: FlickrPermission
     private let transport: HTTPTransport
     private let policy: RetryPolicy
     private let sleep: Sleeper
 
     public init(credentials: OAuth1.Credentials,
+                permission: FlickrPermission = .read,
                 transport: HTTPTransport = URLSessionTransport(),
                 policy: RetryPolicy = .standard,
                 sleep: @escaping Sleeper = { try await Task.sleep(for: $0) }) {
         self.credentials = credentials
+        self.permission = permission
         self.transport = transport
         self.policy = policy
         self.sleep = sleep
     }
 
-    public func update(credentials: OAuth1.Credentials) {
+    public func update(credentials: OAuth1.Credentials, permission: FlickrPermission = .read) {
         self.credentials = credentials
+        self.permission = permission
     }
 
     // MARK: - Listing photos
@@ -191,13 +195,24 @@ public actor FlickrClient {
         guard credentials.token != nil else {
             throw FlickrError.invalidInput("Sign in to Flickr to change your photos.")
         }
+        guard write.permission <= permission else {
+            throw FlickrError.permissionNeeded(write.permission)
+        }
         let credentials = self.credentials
-        return try await withRetries(retryingLostConnections: write.repeatable) { transport in
-            let request = try OAuth1.signedPOSTRequest(
-                url: Self.endpoint, parameters: write.parameters, credentials: credentials)
-            return try await transport.send(request)
+        do {
+            return try await withRetries(retryingLostConnections: write.repeatable) { transport in
+                let request = try OAuth1.signedPOSTRequest(
+                    url: Self.endpoint, parameters: write.parameters, credentials: credentials)
+                return try await transport.send(request)
+            }
+        } catch FlickrError.api(code: Self.insufficientPermissions, _, _) {
+            // Revoked on flickr.com since this token was issued.
+            throw FlickrError.permissionNeeded(write.permission)
         }
     }
+
+    /// Flickr's "Insufficient permissions" code.
+    static let insufficientPermissions = 99
 
     // MARK: - Sending, with retries
 

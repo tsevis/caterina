@@ -95,15 +95,20 @@ public struct StoredCredentials: Sendable, Equatable, Codable {
     public var tokenSecret: String?
     public var nsid: String?
     public var username: String?
+    /// Absent from documents saved before permissions were recorded; every
+    /// one of those asked for `read`.
+    public var permission: FlickrPermission?
 
     public init(apiKey: String, apiSecret: String, token: String? = nil,
-                tokenSecret: String? = nil, nsid: String? = nil, username: String? = nil) {
+                tokenSecret: String? = nil, nsid: String? = nil, username: String? = nil,
+                permission: FlickrPermission? = nil) {
         self.apiKey = apiKey
         self.apiSecret = apiSecret
         self.token = token
         self.tokenSecret = tokenSecret
         self.nsid = nsid
         self.username = username
+        self.permission = permission
     }
 
     public var hasAPIKey: Bool { !apiKey.trimmed.isEmpty && !apiSecret.trimmed.isEmpty }
@@ -115,9 +120,24 @@ public struct StoredCredentials: Sendable, Equatable, Codable {
                            tokenSecret: tokenSecret.flatMap { $0.isEmpty ? nil : $0 })
     }
 
+    /// What the stored token allows, or nothing when signed out.
+    public var grantedPermission: FlickrPermission? {
+        isSignedIn ? (permission ?? .read) : nil
+    }
+
     public var account: CredentialsVault.StoredAccount? {
-        guard isSignedIn else { return nil }
-        return CredentialsVault.StoredAccount(nsid: nsid ?? "", username: username ?? "")
+        guard let grantedPermission else { return nil }
+        return CredentialsVault.StoredAccount(nsid: nsid ?? "", username: username ?? "",
+                                              permission: grantedPermission)
+    }
+
+    /// The same key, now holding `account`'s token. A new sign-in replaces the
+    /// old token outright, including when it was only to ask for more.
+    public func signedIn(_ account: OAuthFlow.Account) -> StoredCredentials {
+        StoredCredentials(apiKey: apiKey, apiSecret: apiSecret,
+                          token: account.token, tokenSecret: account.tokenSecret,
+                          nsid: account.nsid, username: account.username,
+                          permission: account.permission)
     }
 
     public func signedOut() -> StoredCredentials {
@@ -144,10 +164,12 @@ public struct CredentialsVault: Sendable {
     public struct StoredAccount: Sendable, Equatable {
         public let nsid: String
         public let username: String
+        public let permission: FlickrPermission
 
-        public init(nsid: String, username: String) {
+        public init(nsid: String, username: String, permission: FlickrPermission = .read) {
             self.nsid = nsid
             self.username = username
+            self.permission = permission
         }
     }
 

@@ -13,7 +13,8 @@ import Testing
 
     private func client(_ transport: ScriptedTransport,
                         credentials: OAuth1.Credentials = Fixtures.credentials) -> FlickrClient {
-        FlickrClient(credentials: credentials, transport: transport, sleep: SleepRecorder().sleep)
+        FlickrClient(credentials: credentials, permission: .write,
+                     transport: transport, sleep: SleepRecorder().sleep)
     }
 
     private let setTitle = FlickrWrite(method: "flickr.photos.setMeta",
@@ -74,9 +75,9 @@ import Testing
 
     @Test func aRefusalIsNotRetried() async throws {
         let transport = ScriptedTransport([
-            .body(Fixtures.failure(code: 99, message: "Insufficient permissions.")),
+            .body(Fixtures.failure(code: 1, message: "Photo not found.")),
         ])
-        await #expect(throws: FlickrError.api(code: 99, message: "Insufficient permissions.",
+        await #expect(throws: FlickrError.api(code: 1, message: "Photo not found.",
                                                transient: false)) {
             _ = try await client(transport).perform(setTitle)
         }

@@ -13,13 +13,17 @@ import FlickrKit
 @MainActor
 public enum FlickrSignIn {
 
+    /// Sign in, or sign in again to allow more: Flickr issues a new token
+    /// either way, and it replaces the old one.
     public static func run(credentials: OAuth1.Credentials,
+                           permission: FlickrPermission = .read,
                            anchor: ASPresentationAnchor) async throws -> OAuthFlow.Account {
         let temporary = try await requestToken(credentials: credentials)
-        let callback = try await authorize(token: temporary.token, anchor: anchor)
+        let callback = try await authorize(token: temporary.token, permission: permission,
+                                           anchor: anchor)
         let verifier = try OAuthFlow.verifier(from: callback, expecting: temporary.token)
-        return try await accessToken(credentials: credentials,
-                                     temporary: temporary, verifier: verifier)
+        return try await accessToken(credentials: credentials, temporary: temporary,
+                                     verifier: verifier, permission: permission)
     }
 
     private static func requestToken(
@@ -31,10 +35,11 @@ public enum FlickrSignIn {
 
     private static func accessToken(credentials: OAuth1.Credentials,
                                     temporary: OAuthFlow.TemporaryToken,
-                                    verifier: String) async throws -> OAuthFlow.Account {
+                                    verifier: String,
+                                    permission: FlickrPermission) async throws -> OAuthFlow.Account {
         let url = try OAuthFlow.accessTokenURL(credentials: credentials,
                                                temporary: temporary, verifier: verifier)
-        return try OAuthFlow.account(from: try await body(of: url))
+        return try OAuthFlow.account(from: try await body(of: url), permission: permission)
     }
 
     /// Every request carries a timeout, including these two.
@@ -67,9 +72,9 @@ public enum FlickrSignIn {
         }
     }
 
-    private static func authorize(token: String,
+    private static func authorize(token: String, permission: FlickrPermission,
                                   anchor: ASPresentationAnchor) async throws -> URL {
-        let url = try OAuthFlow.authorizationURL(token: token)
+        let url = try OAuthFlow.authorizationURL(token: token, permission: permission)
         let presenter = Presenter(anchor: anchor)
         let holder = SessionHolder()
 

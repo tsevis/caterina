@@ -75,6 +75,7 @@ public final class AppModel {
         let stored = vault.load()
         self.stored = stored
         self.client = FlickrClient(credentials: stored?.oauth ?? .empty,
+                                   permission: stored?.grantedPermission ?? .read,
                                    transport: transport, policy: policy)
         self.account = stored?.account
         self.isShowingOnboarding = !(stored?.hasAPIKey ?? false)
@@ -393,15 +394,12 @@ public final class AppModel {
     }
 
     public func signedIn(_ account: OAuthFlow.Account) throws {
-        guard var next = stored else {
+        guard let stored else {
             throw FlickrError.invalidInput("Enter an API key before signing in.")
         }
-        next.token = account.token
-        next.tokenSecret = account.tokenSecret
-        next.nsid = account.nsid
-        next.username = account.username
+        let next = stored.signedIn(account)
         try vault.save(next)
-        stored = next
+        self.stored = next
         refreshClient()
         self.account = next.account
     }
@@ -429,7 +427,8 @@ public final class AppModel {
     /// with, and there is one place the credentials live.
     private func refreshClient() {
         let credentials = stored?.oauth ?? .empty
-        Task { [client] in await client.update(credentials: credentials) }
+        let permission = stored?.grantedPermission ?? .read
+        Task { [client] in await client.update(credentials: credentials, permission: permission) }
     }
 }
 

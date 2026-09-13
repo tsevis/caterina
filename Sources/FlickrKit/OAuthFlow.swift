@@ -13,12 +13,9 @@ public enum OAuthFlow {
     public static let accessTokenEndpoint =
         "https://www.flickr.com/services/oauth/access_token"
 
-    /// The scheme registered on the Flickr app record. Read-only access is all
-    /// this application needs, and asking for more would be asking for more
-    /// than it uses.
+    /// The scheme registered on the Flickr app record.
     public static let callbackScheme = "caterina"
     public static let callbackURL = "\(callbackScheme)://auth"
-    public static let permissions = "read"
 
     public struct TemporaryToken: Sendable, Equatable {
         public let token: String
@@ -35,12 +32,17 @@ public enum OAuthFlow {
         public let tokenSecret: String
         public let nsid: String
         public let username: String
+        /// What was asked for on the authorisation page. Flickr's reply does
+        /// not repeat it.
+        public let permission: FlickrPermission
 
-        public init(token: String, tokenSecret: String, nsid: String, username: String) {
+        public init(token: String, tokenSecret: String, nsid: String, username: String,
+                    permission: FlickrPermission = .read) {
             self.token = token
             self.tokenSecret = tokenSecret
             self.nsid = nsid
             self.username = username
+            self.permission = permission
         }
     }
 
@@ -68,8 +70,10 @@ public enum OAuthFlow {
 
     // MARK: - Step two
 
-    public static func authorizationURL(token: String) throws -> URL {
-        guard let url = URL(string: "\(authorizeEndpoint)?oauth_token=\(token)&perms=\(permissions)")
+    /// Flickr's approval page, asking for `permission` and nothing more.
+    public static func authorizationURL(token: String,
+                                        permission: FlickrPermission = .read) throws -> URL {
+        guard let url = URL(string: "\(authorizeEndpoint)?oauth_token=\(token)&perms=\(permission.rawValue)")
         else { throw FlickrError.invalidInput("Could not build the Flickr sign-in address.") }
         return url
     }
@@ -108,7 +112,8 @@ public enum OAuthFlow {
                                                    tokenSecret: temporary.secret))
     }
 
-    public static func account(from body: String) throws -> Account {
+    public static func account(from body: String,
+                               permission: FlickrPermission = .read) throws -> Account {
         let fields = formEncoded(body)
         if let problem = fields["oauth_problem"] { throw problemError(problem) }
         guard let token = fields["oauth_token"], !token.isEmpty,
@@ -118,7 +123,8 @@ public enum OAuthFlow {
         }
         return Account(token: token, tokenSecret: secret,
                        nsid: fields["user_nsid"] ?? "",
-                       username: fields["username"] ?? "")
+                       username: fields["username"] ?? "",
+                       permission: permission)
     }
 
     // MARK: - Reading what came back
