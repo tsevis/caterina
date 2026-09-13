@@ -40,6 +40,9 @@ public struct RootView: View {
                 about.showOnLaunchIfWanted {
                     if !model.hasAPIKey { model.isShowingOnboarding = true }
                 }
+                // After the splash, and only when signed in: a first launch
+                // has nothing to sync and should not open on a complaint.
+                if model.isSignedIn { await model.syncLibrary() }
             }
             .onChange(of: model.download.completed) { _, _ in updateDockProgress() }
             .onChange(of: model.download.isRunning) { _, _ in updateDockProgress() }
@@ -49,7 +52,12 @@ public struct RootView: View {
     private var content: some View {
         switch model.tab {
         case .download: DownloadTab(model: model)
-        case .upload, .organize, .browse: PlannedTabView(tab: model.tab)
+        case .upload, .browse: PlannedTabView(tab: model.tab)
+        case .organize:
+            VStack(spacing: 0) {
+                PlannedTabView(tab: .organize)
+                LibraryStatusBar(model: model)
+            }
         }
     }
 

@@ -132,7 +132,8 @@ import FlickrKit
         #expect(try store.syncState() == .never)
         let state = LibrarySyncState(generation: 3,
                                      lastFullSync: Date(timeIntervalSince1970: 1_700_000_000),
-                                     changesSince: Date(timeIntervalSince1970: 1_700_000_100))
+                                     changesSince: Date(timeIntervalSince1970: 1_700_000_100),
+                                     lastSynced: Date(timeIntervalSince1970: 1_700_000_400))
         try store.save(state)
         #expect(try store.syncState() == state)
     }

@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import SwiftUI
 
+import CaterinaLibrary
 import FlickrKit
 
 /// Everything the window is showing, and the only thing that changes it.
@@ -46,7 +47,9 @@ public final class AppModel {
     /// eight licences fired eight requests and blanked the grid eight times.
     private let settleTime: Duration
     private let engine: DownloadEngine
-    private var client: FlickrClient
+    private let client: FlickrClient
+    /// The local copy of your library, shared by Organize and Browse.
+    public let library: LibraryModel
 
     /// One in-flight load per source, so loading Groups cannot cancel Search.
     private var loads: [PhotoSource: Task<Void, Never>] = [:]
@@ -62,7 +65,8 @@ public final class AppModel {
                 transport: any HTTPTransport = URLSessionTransport(),
                 engine: DownloadEngine = DownloadEngine(),
                 policy: RetryPolicy = .standard,
-                settleTime: Duration = .milliseconds(500)) {
+                settleTime: Duration = .milliseconds(500),
+                libraryStore: LibraryStore? = nil) {
         self.vault = vault
         self.transport = transport
         self.policy = policy
@@ -77,8 +81,15 @@ public final class AppModel {
         self.client = FlickrClient(credentials: stored?.oauth ?? .empty,
                                    permission: stored?.grantedPermission ?? .read,
                                    transport: transport, policy: policy)
+        self.library = LibraryModel(store: libraryStore, source: client)
         self.account = stored?.account
         self.isShowingOnboarding = !(stored?.hasAPIKey ?? false)
+    }
+
+    /// Bring the library copy up to date. Quiet when there is nothing to do:
+    /// signed out at launch is not an error worth showing.
+    public func syncLibrary() async {
+        await library.sync(signedIn: isSignedIn)
     }
 
     public var hasAPIKey: Bool { stored?.hasAPIKey ?? false }

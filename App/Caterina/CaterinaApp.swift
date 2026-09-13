@@ -8,7 +8,7 @@ struct CaterinaApp: App {
     /// and has to see the same model — a preferences window editing a different
     /// copy of the credentials than the one the app is using would be worse
     /// than having no preferences window at all.
-    @State private var model = AppModel()
+    @State private var model = AppModel(libraryStore: LibraryModel.openDefaultStore())
     /// Shown once at launch, and again from About Caterina. It carries
     /// the statement about whose photographs these are, which has to live
     /// somewhere findable.

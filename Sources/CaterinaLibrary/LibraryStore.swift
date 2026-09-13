@@ -69,10 +69,11 @@ public final class LibraryStore: Sendable {
     public func save(_ state: LibrarySyncState) throws {
         try database.write { db in
             try db.execute(sql: """
-                INSERT OR REPLACE INTO syncState (id, generation, lastFullSync, changesSince)
-                VALUES (1, ?, ?, ?)
+                INSERT OR REPLACE INTO syncState (id, generation, lastFullSync, changesSince, lastSynced)
+                VALUES (1, ?, ?, ?, ?)
                 """, arguments: [state.generation, state.lastFullSync?.timeIntervalSince1970,
-                                 state.changesSince?.timeIntervalSince1970])
+                                 state.changesSince?.timeIntervalSince1970,
+                                 state.lastSynced?.timeIntervalSince1970])
         }
     }
 
@@ -108,7 +109,8 @@ public final class LibraryStore: Sendable {
             return LibrarySyncState(
                 generation: row["generation"],
                 lastFullSync: (row["lastFullSync"] as Double?).map(Date.init(timeIntervalSince1970:)),
-                changesSince: (row["changesSince"] as Double?).map(Date.init(timeIntervalSince1970:)))
+                changesSince: (row["changesSince"] as Double?).map(Date.init(timeIntervalSince1970:)),
+                lastSynced: (row["lastSynced"] as Double?).map(Date.init(timeIntervalSince1970:)))
         }
     }
 }

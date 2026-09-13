@@ -35,6 +35,7 @@ enum LibrarySchema {
                 t.column("generation", .integer).notNull()
                 t.column("lastFullSync", .double)
                 t.column("changesSince", .double)
+                t.column("lastSynced", .double)
             }
         }
         migrator.registerMigration("v2-edit-batches") { db in

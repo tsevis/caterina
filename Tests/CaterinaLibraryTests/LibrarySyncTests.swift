@@ -50,6 +50,7 @@ final class Clock: @unchecked Sendable {
         let state = try store.syncState()
         #expect(state.generation == 1)
         #expect(state.lastFullSync == clock.now)
+        #expect(state.lastSynced == clock.now)
         #expect(state.changesSince == clock.now.addingTimeInterval(-LibrarySync.clockAllowance))
     }
 

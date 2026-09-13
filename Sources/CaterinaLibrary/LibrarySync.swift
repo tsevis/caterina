@@ -80,7 +80,8 @@ public actor LibrarySync {
         let removed = Self.provesDeletions(pass, existing: existing)
             ? try store.removePhotos(olderThan: generation) : 0
         try store.save(LibrarySyncState(generation: generation, lastFullSync: started,
-                                        changesSince: started.addingTimeInterval(-Self.clockAllowance)))
+                                        changesSince: started.addingTimeInterval(-Self.clockAllowance),
+                                        lastSynced: started))
         return .full(saved: pass.saved, removed: removed)
     }
 
@@ -99,7 +100,8 @@ public actor LibrarySync {
             .updated(since: since, page: $0)
         }
         try store.save(LibrarySyncState(generation: state.generation, lastFullSync: state.lastFullSync,
-                                        changesSince: started.addingTimeInterval(-Self.clockAllowance)))
+                                        changesSince: started.addingTimeInterval(-Self.clockAllowance),
+                                        lastSynced: started))
         return .changes(saved: pass.saved)
     }
 

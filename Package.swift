@@ -35,7 +35,7 @@ let package = Package(
         // would be the test runner.
         .target(
             name: "CaterinaUI",
-            dependencies: ["FlickrKit"],
+            dependencies: ["FlickrKit", "CaterinaLibrary"],
             resources: [.copy("Resources")]
         ),
 

@@ -23,11 +23,14 @@ public struct LibrarySyncState: Sendable, Equatable {
     public let lastFullSync: Date?
     /// Where the next incremental sync starts.
     public let changesSince: Date?
+    /// When the last sync of either kind finished, for the window to show.
+    public let lastSynced: Date?
 
-    public init(generation: Int, lastFullSync: Date?, changesSince: Date?) {
+    public init(generation: Int, lastFullSync: Date?, changesSince: Date?, lastSynced: Date? = nil) {
         self.generation = generation
         self.lastFullSync = lastFullSync
         self.changesSince = changesSince
+        self.lastSynced = lastSynced
     }
 
     public static let never = LibrarySyncState(generation: 0, lastFullSync: nil, changesSince: nil)
