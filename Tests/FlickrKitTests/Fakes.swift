@@ -49,6 +49,19 @@ actor ScriptedTransport: HTTPTransport {
         return fields
     }
 
+    /// Uploads, with the body as it was when sent: the client deletes the file
+    /// afterwards.
+    private(set) var uploaded: [(request: URLRequest, body: Data, file: URL)] = []
+
+    func upload(_ request: URLRequest, fromFile file: URL,
+                progress: @escaping @Sendable (Int64, Int64) -> Void) async throws -> Data {
+        let body = (try? Data(contentsOf: file)) ?? Data()
+        uploaded.append((request, body, file))
+        progress(Int64(body.count / 2), Int64(body.count))
+        progress(Int64(body.count), Int64(body.count))
+        return try await data(from: request.url!)
+    }
+
     func send(_ request: URLRequest) async throws -> Data {
         posted.append(request)
         return try await data(from: request.url!)

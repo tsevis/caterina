@@ -12,6 +12,17 @@ public protocol HTTPTransport: Sendable {
     func data(from url: URL) async throws -> Data
     /// A request that is not a plain GET — Flickr's write methods are POSTed.
     func send(_ request: URLRequest) async throws -> Data
+    /// A request whose body is streamed from `file`, reporting bytes sent.
+    func upload(_ request: URLRequest, fromFile file: URL,
+                progress: @escaping @Sendable (Int64, Int64) -> Void) async throws -> Data
+}
+
+extension HTTPTransport {
+    /// Transports that only read — most test doubles — refuse uploads plainly.
+    public func upload(_ request: URLRequest, fromFile file: URL,
+                       progress: @escaping @Sendable (Int64, Int64) -> Void) async throws -> Data {
+        throw FlickrError.transport("This connection cannot upload files.")
+    }
 }
 
 /// The real one.
@@ -21,10 +32,21 @@ public protocol HTTPTransport: Sendable {
 public struct URLSessionTransport: HTTPTransport {
     public static let requestTimeout: TimeInterval = 15
     public static let resourceTimeout: TimeInterval = 60
+    /// An upload may take a long time in total, but not a long silence.
+    public static let uploadIdleTimeout: TimeInterval = 60
+    public static let uploadResourceTimeout: TimeInterval = 4 * 3600
 
     private let session: URLSession
+    /// Separate, because a 60-second resource timeout ends any upload of a
+    /// large photo on an ordinary connection.
+    private let uploadSession: URLSession
 
     public init(session: URLSession? = nil) {
+        let uploads = URLSessionConfiguration.ephemeral
+        uploads.timeoutIntervalForRequest = Self.uploadIdleTimeout
+        uploads.timeoutIntervalForResource = Self.uploadResourceTimeout
+        uploads.waitsForConnectivity = false
+        self.uploadSession = URLSession(configuration: uploads)
         if let session {
             self.session = session
             return
@@ -38,6 +60,22 @@ public struct URLSessionTransport: HTTPTransport {
 
     public func data(from url: URL) async throws -> Data {
         try await send(URLRequest(url: url))
+    }
+
+    public func upload(_ request: URLRequest, fromFile file: URL,
+                       progress: @escaping @Sendable (Int64, Int64) -> Void) async throws -> Data {
+        do {
+            let (data, response) = try await uploadSession.upload(
+                for: request, fromFile: file, delegate: UploadProgress(report: progress))
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                throw FlickrError.transport("Flickr answered HTTP \(http.statusCode).")
+            }
+            return data
+        } catch let error as FlickrError {
+            throw error
+        } catch {
+            throw FlickrError.transport(error.localizedDescription)
+        }
     }
 
     public func send(_ request: URLRequest) async throws -> Data {
@@ -75,5 +113,17 @@ public struct RetryPolicy: Sendable, Equatable {
     func delay(afterAttempt index: Int) -> Duration {
         guard !backoff.isEmpty else { return .zero }
         return backoff[min(index, backoff.count - 1)]
+    }
+}
+
+/// Bytes sent, per task.
+private final class UploadProgress: NSObject, URLSessionTaskDelegate, Sendable {
+    private let report: @Sendable (Int64, Int64) -> Void
+
+    init(report: @escaping @Sendable (Int64, Int64) -> Void) { self.report = report }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+                    totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        report(totalBytesSent, totalBytesExpectedToSend)
     }
 }

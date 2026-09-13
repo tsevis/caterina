@@ -207,6 +207,40 @@ public actor FlickrClient {
         return try LibraryResponse.page(from: data)
     }
 
+    // MARK: - Uploading
+
+    /// Send a photo. Returns Flickr's ticket; the photo id comes later, from
+    /// `checkTickets`, once Flickr has processed the file.
+    ///
+    /// **Never resent after a lost connection**: the photo may already be on
+    /// Flickr, and a second copy is worse than asking the person to try again.
+    public func upload(file: URL, metadata: UploadMetadata,
+                       progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> String {
+        guard credentials.token != nil else { throw FlickrError.permissionNeeded(.write) }
+        guard permission >= .write else { throw FlickrError.permissionNeeded(.write) }
+        let credentials = self.credentials
+        let data = try await withRetries(priority: .upload, retryingLostConnections: false,
+                                         validate: { _ = try UploadResponse.ticket(from: $0) }) { transport in
+            let upload = try UploadRequest.make(file: file, metadata: metadata, credentials: credentials)
+            defer { try? FileManager.default.removeItem(at: upload.body) }
+            return try await transport.upload(upload.request, fromFile: upload.body) { sent, total in
+                if total > 0 { progress(Double(sent) / Double(total)) }
+            }
+        }
+        return try UploadResponse.ticket(from: data)
+    }
+
+    /// Where each upload has got to, several tickets per call.
+    public func checkTickets(_ tickets: [String]) async throws -> [String: TicketStatus] {
+        let data = try await send([
+            OAuthParameter(name: "method", value: "flickr.photos.upload.checkTickets"),
+            OAuthParameter(name: "tickets", value: tickets.joined(separator: ",")),
+            OAuthParameter(name: "format", value: "json"),
+            OAuthParameter(name: "nojsoncallback", value: "1"),
+        ], priority: .upload)
+        return try UploadResponse.tickets(from: data)
+    }
+
     // MARK: - Writing
 
     /// Change something on Flickr. Needs a signed-in account.
@@ -242,9 +276,10 @@ public actor FlickrClient {
 
     // MARK: - Sending, with retries
 
-    private func send(_ parameters: [OAuthParameter]) async throws -> Data {
+    private func send(_ parameters: [OAuthParameter],
+                      priority: CallPriority = .interactive) async throws -> Data {
         let credentials = self.credentials
-        return try await withRetries(priority: .interactive,
+        return try await withRetries(priority: priority,
                                      retryingLostConnections: true) { transport in
             let url = try OAuth1.signedURL(
                 method: "GET", url: Self.endpoint,
@@ -264,6 +299,7 @@ public actor FlickrClient {
     private func withRetries(
         priority: CallPriority,
         retryingLostConnections: Bool,
+        validate: (Data) throws -> Void = FlickrResponse.throwIfFailed,
         _ call: @Sendable (HTTPTransport) async throws -> Data
     ) async throws -> Data {
         var lastError: FlickrError = .busy("Flickr did not answer.")
@@ -275,7 +311,7 @@ public actor FlickrClient {
                 let data = try await call(transport)
                 // Reading the status here is what makes a `stat=fail` blip
                 // retryable: it has to be seen before the caller decodes.
-                try FlickrResponse.throwIfFailed(data)
+                try validate(data)
                 return data
             } catch let error as FlickrError {
                 guard error.isTransient else { throw error }
