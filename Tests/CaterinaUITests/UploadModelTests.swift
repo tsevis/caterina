@@ -1,4 +1,6 @@
+import AppKit
 import CoreGraphics
+import SwiftUI
 import Foundation
 import ImageIO
 import Testing
@@ -143,6 +145,37 @@ actor FakeUploader: PhotoUploader, AlbumLister {
         #expect(model.phase == .finished(UploadBatch.Summary(done: 3, failed: 0, remaining: 0, interrupted: 0)))
     }
 
+    /// Quit mid-upload and the next launch carries on without being asked.
+    @Test func anUnfinishedUploadCarriesOnAtTheNextLaunch() async throws {
+        let folder = try folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = try LibraryStore.inMemory()
+        let first = try model(FakeUploader(needsPermission: true), store: store)
+        await first.add([folder])
+        await first.send()
+        #expect(first.phase == .needsPermission(.write))
+
+        let relaunched = try model(FakeUploader(), store: store)
+        await relaunched.restoreUnfinished()
+
+        #expect(relaunched.activeBatchID == first.activeBatchID)
+        #expect(relaunched.phase == .finished(UploadBatch.Summary(done: 3, failed: 0, remaining: 0, interrupted: 0)))
+    }
+
+    @Test func aFinishedUploadIsNotRestored() async throws {
+        let folder = try folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = try LibraryStore.inMemory()
+        let first = try model(FakeUploader(), store: store)
+        await first.add([folder])
+        await first.send()
+
+        let relaunched = try model(FakeUploader(), store: store)
+        await relaunched.restoreUnfinished()
+        #expect(relaunched.activeBatchID == nil)
+        #expect(relaunched.phase == .editing)
+    }
+
     @Test func nothingToSendIsNotABatch() async throws {
         let uploader = FakeUploader()
         let model = try model(uploader)
@@ -170,5 +203,20 @@ actor FakeUploader: PhotoUploader, AlbumLister {
         let names = UploadPreset.builtIn.map(\.name)
         #expect(names == ["Public", "Friends & family", "Private"])
         #expect(UploadPreset.builtIn[1].metadata.visibility == .init(isPublic: false, isFriend: true, isFamily: true))
+    }
+}
+
+/// The approval prompt, drawn offscreen for each level it can ask for.
+@MainActor
+@Suite struct PermissionRequestRenderTests {
+    @Test(arguments: [FlickrPermission.write, .delete])
+    func thePromptSaysWhatItIsFor(permission: FlickrPermission) throws {
+        let model = AppModel(vault: CredentialsVault(store: MemoryStore(seeded: true)), transport: FakeTransport(body: "{}"))
+        let renderer = ImageRenderer(content: PermissionRequestSheet(model: model, permission: permission,
+                                                                     onApproved: {}, onCancel: {})
+            .background(Color(nsColor: .windowBackgroundColor)))
+        let image = try #require(renderer.nsImage)
+        #expect(image.size.width == 420)
+        #expect(image.size.height > 120)
     }
 }

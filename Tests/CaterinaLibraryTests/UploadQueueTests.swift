@@ -141,6 +141,16 @@ actor ScriptedUploader: PhotoUploader {
 
     /// Quit mid-send and nobody knows whether Flickr has the photo. Sending it
     /// again could make two; it waits for the person to decide.
+    /// Unfinished: anything not yet on Flickr, or on Flickr but not yet in its
+    /// album. Newest first.
+    @Test func unfinishedBatchesAreFound() async throws {
+        let store = try LibraryStore.inMemory()
+        let finished = try queue(store, ["a.jpg"])
+        _ = try await runner(store, ScriptedUploader()).run(finished.id)
+        let waiting = try queue(store, ["b.jpg"])
+        #expect(try store.unfinishedUploadBatchIDs() == [waiting.id])
+    }
+
     @Test func aFileThatWasBeingSentWhenTheAppStoppedIsNotResentBlindly() async throws {
         let store = try LibraryStore.inMemory()
         let batch = try queue(store, ["a.jpg", "b.jpg"])

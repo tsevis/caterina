@@ -123,3 +123,19 @@ extension LibraryStore {
             state: state, inAlbum: row["inAlbum"])
     }
 }
+
+extension LibraryStore {
+    /// Batches with work left: a file not yet sent or processed, an interrupted
+    /// one waiting on the person, or a done photo not yet in its album. Newest
+    /// first.
+    public func unfinishedUploadBatchIDs() throws -> [String] {
+        try read { db in
+            try String.fetchAll(db, sql: """
+                SELECT DISTINCT b.id FROM uploadBatch b JOIN uploadItem i ON i.batchID = b.id
+                WHERE i.state IN ('queued', 'sending', 'processing', 'interrupted')
+                   OR (i.state = 'done' AND i.inAlbum = 0 AND b.albumKind != 'none')
+                ORDER BY b.createdAt DESC, b.rowid DESC
+                """)
+        }
+    }
+}

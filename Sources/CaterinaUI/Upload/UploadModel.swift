@@ -130,6 +130,14 @@ public final class UploadModel {
         }
     }
 
+    /// At launch: take up the newest batch with work left and carry on.
+    public func restoreUnfinished() async {
+        guard activeBatchID == nil, let store,
+              let batchID = try? store.unfinishedUploadBatchIDs().first else { return }
+        activeBatchID = batchID
+        await resume()
+    }
+
     /// Send again a file the person has checked is not on Flickr.
     public func resend(_ item: UploadItem) async {
         try? store?.resend(item)

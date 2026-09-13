@@ -42,7 +42,13 @@ public struct RootView: View {
                 }
                 // After the splash, and only when signed in: a first launch
                 // has nothing to sync and should not open on a complaint.
-                if model.isSignedIn { await model.syncLibrary() }
+                if model.isSignedIn {
+                    // Side by side: an upload carried over from last time must
+                    // not hold the library sync until it finishes.
+                    async let uploads: Void = model.uploads.restoreUnfinished()
+                    async let library: Void = model.syncLibrary()
+                    _ = await (uploads, library)
+                }
             }
             .onChange(of: model.download.completed) { _, _ in updateDockProgress() }
             .onChange(of: model.download.isRunning) { _, _ in updateDockProgress() }
@@ -52,7 +58,8 @@ public struct RootView: View {
     private var content: some View {
         switch model.tab {
         case .download: DownloadTab(model: model)
-        case .upload, .browse: PlannedTabView(tab: model.tab)
+        case .upload: UploadTab(model: model)
+        case .browse: PlannedTabView(tab: model.tab)
         case .organize:
             VStack(spacing: 0) {
                 PlannedTabView(tab: .organize)

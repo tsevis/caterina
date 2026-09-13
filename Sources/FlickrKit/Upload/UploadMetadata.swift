@@ -51,7 +51,7 @@ public struct UploadMetadata: Sendable, Equatable, Hashable, Codable {
 
     /// Space-separated, with a tag that contains a space in double quotes —
     /// Flickr's own syntax for one tag of several words.
-    static func tagList(_ tags: [String]) -> String {
+    public static func tagList(_ tags: [String]) -> String {
         tags.map { $0.replacingOccurrences(of: "\"", with: "") }
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             .map { $0.contains(" ") ? "\"\($0)\"" : $0 }
