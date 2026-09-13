@@ -37,6 +37,16 @@ public final class AccountDirectory {
         self.accountID = accountID
     }
 
+    func reset() {
+        albums = []
+        collections = []
+        galleries = []
+        groups = []
+        contacts = []
+        problem = nil
+        loaded = []
+    }
+
     /// Read what `scope` lists, unless already read. `refresh` reads again.
     func load(_ scope: BrowseScope, refresh: Bool = false) async {
         guard refresh || !loaded.contains(scope) else { return }
@@ -47,7 +57,10 @@ public final class AccountDirectory {
             case .collections: collections = try await source.collections()
             case .galleries: galleries = try await source.galleries()
             case .groups:
-                guard let id = accountID() else { return }
+                guard let id = accountID() else {
+                    problem = "Sign in to Flickr to see your groups."
+                    return
+                }
                 groups = try await source.groups(of: id).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             case .people: contacts = try await allContacts()
             default: return

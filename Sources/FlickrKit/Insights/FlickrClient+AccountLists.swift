@@ -24,18 +24,32 @@ extension FlickrClient {
 
     /// Your galleries, newest first. Galleries hold other people's photos.
     public func galleries() async throws -> [Gallery] {
-        let data = try await call("flickr.galleries.getList", ["continuation": "0", "per_page": "500"])
+        var all: [Gallery] = []
+        var page = 1
+        var pages = 1
+        repeat {
+            let reply = try await galleryPage(page)
+            all += reply.galleries
+            pages = reply.pages
+            page += 1
+        } while page <= pages
+        return all
+    }
+
+    private func galleryPage(_ page: Int) async throws -> (galleries: [Gallery], pages: Int) {
+        let data = try await call("flickr.galleries.getList",
+                                  ["continuation": "0", "per_page": "500", "page": String(page)])
         struct Envelope: Decodable { let galleries: Galleries }
-        struct Galleries: Decodable { let gallery: [FlickrResponse.Lenient<Entry>]? }
+        struct Galleries: Decodable { let pages: FlickrResponse.LooseInt?; let gallery: [FlickrResponse.Lenient<Entry>]? }
         struct Entry: Decodable {
             let id: String; let title: InsightsResponse.Text?; let description: InsightsResponse.Text?
             let count_photos: FlickrResponse.LooseInt?; let count_videos: FlickrResponse.LooseInt?
         }
-        return (try InsightsResponse.decode(Envelope.self, data, "your galleries").galleries.gallery ?? [])
-            .compactMap(\.value).map {
-                Gallery(id: $0.id, title: $0.title?._content ?? "", description: $0.description?._content ?? "",
-                        itemCount: ($0.count_photos?.value ?? 0) + ($0.count_videos?.value ?? 0))
-            }
+        let reply = try InsightsResponse.decode(Envelope.self, data, "your galleries").galleries
+        return ((reply.gallery ?? []).compactMap(\.value).map {
+            Gallery(id: $0.id, title: $0.title?._content ?? "", description: $0.description?._content ?? "",
+                    itemCount: ($0.count_photos?.value ?? 0) + ($0.count_videos?.value ?? 0))
+        }, max(1, reply.pages?.value ?? 1))
     }
 
     /// Your collections, as the tree you built on flickr.com.

@@ -58,15 +58,23 @@ public struct MonthCount: Sendable, Equatable, Hashable, Identifiable {
 
     /// "June 2024".
     public var title: String {
+        guard let date = Self.parser.date(from: month) else { return month }
+        return Self.formatter.string(from: date)
+    }
+
+    private static let parser: DateFormatter = {
         let parser = DateFormatter()
         parser.locale = Locale(identifier: "en_US_POSIX")
         parser.dateFormat = "yyyy-MM"
-        guard let date = parser.date(from: month) else { return month }
+        return parser
+    }()
+
+    private static let formatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: date)
-    }
+        return formatter
+    }()
 }
 
 /// In what order.

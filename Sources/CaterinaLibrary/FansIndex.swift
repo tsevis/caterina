@@ -58,16 +58,29 @@ public actor FansIndex {
     }
 
     public func run(now: Date = Date(), photoLimit: Int = 200) async throws -> Outcome {
+        try store.forgetFavesOfRemovedPhotos()
         var read = 0
         var saved = 0
         for photoID in try store.photosNeedingFaves(before: now.addingTimeInterval(-Self.rereadAfter), limit: photoLimit) {
             try Task.checkCancellation()
-            let faves = try await allFaves(of: photoID)
+            let faves: [Fave]
+            do {
+                faves = try await allFaves(of: photoID)
+            } catch let error as FlickrError where !error.isTransient && !Self.stopsTheRun(error) {
+                // About this photo only — gone, or hidden. Recorded as read
+                // with no faves so the photos behind it get their turn.
+                faves = []
+            }
             try store.replaceFaves(faves, of: photoID, readAt: now)
             read += 1
             saved += faves.count
         }
         return Outcome(photosRead: read, favesSaved: saved)
+    }
+
+    private static func stopsTheRun(_ error: FlickrError) -> Bool {
+        if case .permissionNeeded = error { return true }
+        return false
     }
 
     private func allFaves(of photoID: String) async throws -> [Fave] {
@@ -106,6 +119,13 @@ extension LibraryStore {
             }
             try db.execute(sql: "INSERT OR REPLACE INTO faveScan (photoID, readAt) VALUES (?, ?)",
                            arguments: [photoID, readAt.timeIntervalSince1970])
+        }
+    }
+
+    func forgetFavesOfRemovedPhotos() throws {
+        try write { db in
+            try db.execute(sql: "DELETE FROM fave WHERE photoID NOT IN (SELECT id FROM photo)")
+            try db.execute(sql: "DELETE FROM faveScan WHERE photoID NOT IN (SELECT id FROM photo)")
         }
     }
 

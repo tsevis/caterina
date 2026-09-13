@@ -7,37 +7,48 @@ public enum LibraryResponse {
     /// every method, `photoset` for an album's.
     public static func page(from data: Data, container key: String = "photos") throws -> LibraryPage {
         try FlickrResponse.throwIfFailed(data)
+        let top = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard top?[key] != nil else {
+            throw FlickrError.malformedResponse("Flickr's reply contained no photos.")
+        }
         let container: Container
         do {
-            let envelope = try JSONDecoder().decode([String: Lenient].self, from: data)
-            guard let found = envelope[key]?.container else {
-                throw FlickrError.malformedResponse("Flickr's reply contained no photos.")
-            }
-            container = found
-        } catch let error as FlickrError {
-            throw error
+            let decoder = JSONDecoder()
+            decoder.userInfo[Keyed.key] = key
+            container = try decoder.decode(Keyed.self, from: data).container
         } catch {
-            throw FlickrError.malformedResponse("Flickr sent your library in an unexpected shape.")
+            throw FlickrError.malformedResponse("Flickr sent the photos in an unexpected shape.")
         }
         let entries = container.photo ?? []
         let photos = entries.compactMap(\.value).map(\.photo)
-        return LibraryPage(page: max(1, container.page?.value ?? 1),
-                           pages: max(1, container.pages?.value ?? 1),
+        let page = max(1, container.page?.value ?? 1)
+        // `people.getPhotosOf` says only whether another page follows.
+        let pages = container.pages?.value ?? (container.has_next_page?.value == 1 ? page + 1 : page)
+        return LibraryPage(page: page,
+                           pages: max(1, pages),
                            total: max(0, container.total?.value ?? 0),
                            photos: photos,
                            skippedEntries: entries.count - photos.count)
     }
 
-    /// A top-level value that may be the list, or `stat`, or anything else.
-    private struct Lenient: Decodable {
-        let container: Container?
-        init(from decoder: Decoder) throws { container = try? Container(from: decoder) }
+    /// The list under whichever key the method uses, with its real decoding
+    /// error if its shape is wrong.
+    private struct Keyed: Decodable {
+        static let key = CodingUserInfoKey(rawValue: "container")!
+        let container: Container
+
+        init(from decoder: Decoder) throws {
+            let name = decoder.userInfo[Self.key] as? String ?? "photos"
+            let keyed = try decoder.container(keyedBy: FlickrResponse.DynamicKey.self)
+            container = try keyed.decode(Container.self, forKey: FlickrResponse.DynamicKey(stringValue: name)!)
+        }
     }
 
     private struct Container: Decodable {
         let page: FlickrResponse.LooseInt?
         let pages: FlickrResponse.LooseInt?
         let total: FlickrResponse.LooseInt?
+        let has_next_page: FlickrResponse.LooseInt?
         let photo: [FlickrResponse.Lenient<Entry>]?
     }
 

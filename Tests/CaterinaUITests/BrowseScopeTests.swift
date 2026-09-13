@@ -7,6 +7,9 @@ import FlickrKit
 
 actor FakeDirectory: AccountDirectorySource {
     private(set) var listed: [(PhotoList, Int)] = []
+    private let delay: Duration
+
+    init(delay: Duration = .zero) { self.delay = delay }
 
     func albums(page: Int) async throws -> AlbumPage {
         AlbumPage(page: 1, pages: 1, albums: [Album(id: "a1", title: "Athens", description: "", photoCount: 2, coverPhotoID: "1", views: 9)])
@@ -21,6 +24,7 @@ actor FakeDirectory: AccountDirectorySource {
     }
     func photoList(_ list: PhotoList, page: Int) async throws -> LibraryPage {
         listed.append((list, page))
+        if delay > .zero { try await Task.sleep(for: delay) }
         let ids = page == 1 ? ["r1", "r2"] : ["r3"]
         return LibraryPage(page: page, pages: 2, total: 3,
                            photos: ids.map { LibraryPhoto(id: $0, title: $0, ownerName: "someone") }, skippedEntries: 0)
@@ -124,6 +128,51 @@ actor FakeDirectory: AccountDirectorySource {
         #expect(model.items.map(\.photo.id) == ["2"])
         await model.open(.people)
         #expect(model.fans.map(\.username) == ["Ann"])
+    }
+
+    /// A library view pages like a Flickr one: a year with 1,200 photos shows
+    /// all of them, 500 at a time.
+    @Test func aLargeLibraryViewLoadsMore() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save((0..<1_200).map { LibraryPhoto(id: String(format: "%04d", $0), taken: "2019-01-01 00:00:00") },
+                       generation: 1)
+        let model = try model(store)
+        await model.open(.library(.takenIn("2019"), title: "2019"))
+        #expect(model.items.count == 500)
+        #expect(model.canLoadMore)
+        await model.loadMore()
+        await model.loadMore()
+        #expect(model.items.count == 1_200)
+        #expect(Set(model.items.map(\.id)).count == 1_200)
+        #expect(!model.canLoadMore)
+    }
+
+    /// Leaving a Flickr list and coming back before its reply must not show
+    /// the first page twice.
+    @Test func aReplyForAScopeLeftBehindIsDropped() async throws {
+        let model = try model(nil, FakeDirectory(delay: .milliseconds(80)))
+        async let first: Void = model.open(.remote(.explore, title: "Explore"))
+        try await Task.sleep(for: .milliseconds(10))
+        async let second: Void = model.open(.remote(.yourFaves, title: "Your faves"))
+        try await Task.sleep(for: .milliseconds(10))
+        async let third: Void = model.open(.remote(.explore, title: "Explore"))
+        _ = await (first, second, third)
+        #expect(model.items.map(\.id) == ["r1", "r2"])
+        #expect(!model.isLoading)
+    }
+
+    /// Signed in as someone else, nothing of the last account remains.
+    @Test func resettingForgetsTheLastAccount() async throws {
+        let model = try model()
+        await model.open(.albums)
+        await model.open(.remote(.explore, title: "Explore"))
+        model.reset()
+        #expect(model.directory.albums.isEmpty)
+        #expect(model.items.isEmpty == false || model.scope == .ranking(.mostViewed))
+        #expect(!model.canGoBack)
+        #expect(model.record == .none)
+        await model.open(.albums)
+        #expect(model.directory.albums.map(\.title) == ["Athens"])
     }
 
     @Test func goingBackReturnsToWhereTheBrowsingCameFrom() async throws {

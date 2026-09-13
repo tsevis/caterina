@@ -50,6 +50,26 @@ import Testing
         #expect(page.photos.first?.mediumURL == "z")
     }
 
+    /// `people.getPhotosOf` has no page count, only whether more follow.
+    @Test func aListThatOnlySaysMoreFollowsStillPages() throws {
+        let data = Data(#"{"photos":{"page":2,"has_next_page":1,"perpage":10,"photo":[\#(photo)]},"stat":"ok"}"#.utf8)
+        #expect(try LibraryResponse.page(from: data).pages == 3)
+    }
+
+    @Test func aListOfTheWrongShapeSaysSo() {
+        #expect(throws: FlickrError.malformedResponse("Flickr sent the photos in an unexpected shape.")) {
+            _ = try LibraryResponse.page(from: Data(#"{"photos":"nope","stat":"ok"}"#.utf8))
+        }
+    }
+
+    @Test func everyPageOfGalleriesIsRead() async throws {
+        let transport = ScriptedTransport([
+            .body(#"{"galleries":{"page":1,"pages":2,"gallery":[{"id":"1","title":{"_content":"A"}}]},"stat":"ok"}"#),
+            .body(#"{"galleries":{"page":2,"pages":2,"gallery":[{"id":"2","title":{"_content":"B"}}]},"stat":"ok"}"#),
+        ])
+        #expect(try await client(transport).galleries().map(\.id) == ["1", "2"])
+    }
+
     // MARK: - Structures
 
     @Test func yourGroups() async throws {

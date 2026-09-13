@@ -7,15 +7,18 @@ import FlickrKit
 actor ScriptedFaves: FaveSource {
     private let faves: [String: [Fave]]
     private let perPage: Int
+    private let failures: [String: FlickrError]
     private(set) var asked: [String] = []
 
-    init(_ faves: [String: [Fave]], perPage: Int = 50) {
+    init(_ faves: [String: [Fave]], perPage: Int = 50, failing failures: [String: FlickrError] = [:]) {
         self.faves = faves
         self.perPage = perPage
+        self.failures = failures
     }
 
     func favorites(photoID: String, page: Int, priority: CallPriority) async throws -> FavePage {
         asked.append("\(photoID)#\(page)")
+        if let failure = failures[photoID] { throw failure }
         let all = faves[photoID] ?? []
         let pages = max(1, Int((Double(all.count) / Double(perPage)).rounded(.up)))
         let slice = Array(all.dropFirst((page - 1) * perPage).prefix(perPage))
@@ -92,6 +95,37 @@ actor ScriptedFaves: FaveSource {
         _ = try await FansIndex(source: ScriptedFaves(["popular": [fave("bob", 2)]]), store: store)
             .run(now: now.addingTimeInterval(8 * 86_400), photoLimit: 3)
         #expect(try store.topFans(limit: 10).map(\.nsid) == ["bob"])
+    }
+
+    /// A photo Flickr will not show — deleted since the last sync — must not
+    /// stand at the front of the queue for ever.
+    @Test func aPhotoFlickrRefusesIsPassedOver() async throws {
+        let store = try library()
+        let source = ScriptedFaves(["middle": [fave("ann", 1)]],
+                                   failing: ["popular": .api(code: 1, message: "Photo not found", transient: false)])
+        let outcome = try await FansIndex(source: source, store: store).run(now: now, photoLimit: 2)
+        #expect(outcome == .init(photosRead: 2, favesSaved: 1))
+
+        let next = ScriptedFaves([:])
+        _ = try await FansIndex(source: next, store: store).run(now: now.addingTimeInterval(60), photoLimit: 5)
+        #expect(await next.asked == ["quiet#1"])
+    }
+
+    /// Flickr busy or the network gone is about every photo: the run stops.
+    @Test func flickrBeingUnreachableStopsTheRun() async throws {
+        let store = try library()
+        let source = ScriptedFaves([:], failing: ["popular": .busy("Flickr is busy right now.")])
+        await #expect(throws: FlickrError.self) {
+            _ = try await FansIndex(source: source, store: store).run(now: now, photoLimit: 3)
+        }
+    }
+
+    /// Faves of a photo no longer in the library are forgotten.
+    @Test func favesOfPhotosNoLongerInTheLibraryAreForgotten() async throws {
+        let store = try library()
+        try store.replaceFaves([fave("ann", 1)], of: "deleted", readAt: now)
+        _ = try await FansIndex(source: ScriptedFaves([:]), store: store).run(now: now, photoLimit: 0)
+        #expect(try store.topFans(limit: 10).isEmpty)
     }
 
     /// A photo with 40,000 faves is read to a cap, not for 800 calls.

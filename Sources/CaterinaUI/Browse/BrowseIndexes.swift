@@ -167,27 +167,49 @@ struct CollectionsIndex: View {
             ContentUnavailableView("No collections", systemImage: "square.stack.3d.up",
                                    description: Text("Collections are made on flickr.com; Flickr's API can read them but not change them."))
         } else {
-            List(browse.directory.collections, children: \.childrenOrNil) { collection in
-                DisclosureGroup {
-                    ForEach(collection.albums) { album in
-                        Button { open(album) } label: { Label(album.title, systemImage: "rectangle.stack") }
-                            .buttonStyle(.plain)
-                    }
-                } label: {
-                    Label(collection.title, systemImage: "square.stack.3d.up")
+            List(browse.directory.collections.map(CollectionNode.init), children: \.children) { node in
+                switch node.kind {
+                case .collection:
+                    Label(node.title, systemImage: "square.stack.3d.up")
+                case .album:
+                    Button { open(id: String(node.id.dropFirst("album-".count)), title: node.title) } label: { Label(node.title, systemImage: "rectangle.stack") }
+                        .buttonStyle(.plain)
                 }
             }
         }
     }
 
-    private func open(_ album: PhotoCollection.AlbumRef) {
+    private func open(id: String, title: String) {
         guard let account = browse.accountID() else { return }
-        Task { await browse.open(.remote(.album(id: album.id, ownerID: account), title: album.title)) }
+        Task { await browse.open(.remote(.album(id: id, ownerID: account), title: title)) }
     }
 }
 
-extension PhotoCollection {
-    var childrenOrNil: [PhotoCollection]? { children.isEmpty ? nil : children }
+/// One row of the collections tree: a collection holding collections and
+/// albums, or an album. One tree, so one disclosure triangle per level.
+struct CollectionNode: Identifiable, Hashable {
+    enum Kind: Hashable { case collection, album }
+
+    let id: String
+    let title: String
+    let kind: Kind
+    let children: [CollectionNode]?
+
+    init(_ collection: PhotoCollection) {
+        id = collection.id
+        title = collection.title
+        kind = .collection
+        let nested = collection.children.map(CollectionNode.init)
+            + collection.albums.map { CollectionNode(album: $0) }
+        children = nested.isEmpty ? nil : nested
+    }
+
+    private init(album: PhotoCollection.AlbumRef) {
+        id = "album-\(album.id)"
+        title = album.title
+        kind = .album
+        children = nil
+    }
 }
 
 struct GalleriesIndex: View {

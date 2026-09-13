@@ -424,6 +424,9 @@ public final class AppModel {
         let next = stored.signedIn(account)
         try vault.save(next)
         self.stored = next
+        // Approving more for the same account keeps what Browse has; a
+        // different account starts it afresh.
+        if accountID.value != next.nsid.flatMap({ $0.isEmpty ? nil : $0 }) { browse.reset() }
         accountID.set(next.nsid)
         await client.update(credentials: next.oauth, permission: next.grantedPermission ?? .read)
         self.account = next.account
@@ -437,6 +440,7 @@ public final class AppModel {
         }
         account = nil
         accountID.set(nil)
+        browse.reset()
         refreshClient()
         // **Cancel first.** Pressing Reload on You and then signing out left a
         // request in flight whose reply repopulated the grid with the account's
@@ -482,8 +486,13 @@ final class AccountIDBox: @unchecked Sendable {
     private let lock = NSLock()
     private var stored: String?
 
-    init(_ value: String?) { stored = value }
+    init(_ value: String?) { stored = Self.meaningful(value) }
 
     var value: String? { lock.withLock { stored } }
-    func set(_ value: String?) { lock.withLock { stored = value } }
+    func set(_ value: String?) { lock.withLock { stored = Self.meaningful(value) } }
+
+    /// An empty NSID is none: sent as `user_id=""` it asks Flickr for nobody.
+    private static func meaningful(_ value: String?) -> String? {
+        value.flatMap { $0.isEmpty ? nil : $0 }
+    }
 }

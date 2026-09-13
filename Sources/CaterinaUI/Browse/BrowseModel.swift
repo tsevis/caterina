@@ -50,7 +50,9 @@ public final class BrowseModel {
     }
 
     public var availableLayouts: [BrowseLayout] {
-        BrowseLayout.allCases.filter { layout in
+        // Still arriving: offer everything rather than take away the chosen one.
+        guard !items.isEmpty else { return BrowseLayout.allCases }
+        return BrowseLayout.allCases.filter { layout in
             switch layout {
             case .list, .grid: true
             case .timeline: items.contains { $0.photo.taken != nil }
@@ -79,6 +81,8 @@ public final class BrowseModel {
     private var history: [BrowseScope] = []
     private var loadTask: Task<Void, Never>?
     var remotePage = 0
+    /// Bumped by every change of scope; a reply for an older one is dropped.
+    private(set) var generation = 0
 
     public init(store: LibraryStore?, records: PhotoRecordSource, stats: StatsSource,
                 directory: AccountDirectorySource, faves: FaveSource = NoFaves(),
@@ -93,7 +97,28 @@ public final class BrowseModel {
         self.fansIndex = store.map { FansIndex(source: faves, store: $0) }
         self.directory = AccountDirectory(source: directory, accountID: accountID)
         accountHistory = (try? store?.accountHistory()) ?? []
-        items = (try? localItems(for: scope)) ?? []
+        if let store {
+            items = (try? Self.rankedItems(for: scope, store: store, now: now, rising: false)) ?? []
+        }
+    }
+
+    /// Forget the account: signed out, or signed in as someone else.
+    public func reset() {
+        loadTask?.cancel()
+        generation += 1
+        history = []
+        scope = .ranking(.mostViewed)
+        items = []
+        canLoadMore = false
+        isLoading = false
+        problem = nil
+        tags = []
+        months = []
+        fans = []
+        recentFaves = []
+        selectedPhotoID = nil
+        record = .none
+        directory.reset()
     }
 
     // MARK: - Moving around
@@ -118,13 +143,19 @@ public final class BrowseModel {
     public func reload() async { await show(scope) }
 
     private func show(_ scope: BrowseScope) async {
+        generation += 1
+        let generation = self.generation
         self.scope = scope
         problem = nil
         canLoadMore = false
+        isLoading = false
         remotePage = 0
-        await fill(scope)
+        await fill(scope, generation: generation)
+        guard isCurrent(generation) else { return }
         if !availableLayouts.contains(layout) { layout = .grid }
     }
+
+    func isCurrent(_ generation: Int) -> Bool { generation == self.generation }
 
     // MARK: - One photo
 
@@ -193,7 +224,7 @@ public final class BrowseModel {
             statsPhase = .failed((error as? FlickrError)?.message ?? error.localizedDescription)
         }
         accountHistory = (try? store?.accountHistory()) ?? accountHistory
-        if case .ranking = scope { items = (try? localItems(for: scope)) ?? items }
+        if case .ranking = scope { await reload() }
     }
 
     /// Read another batch of photos' faves into the fans index, in the
@@ -201,10 +232,13 @@ public final class BrowseModel {
     public func readFaves(photoLimit: Int = 200) async {
         guard let fansIndex else { return }
         _ = try? await fansIndex.run(now: now(), photoLimit: photoLimit)
-        if scope == .people { await fill(.people) }
+        if scope == .people { await fill(.people, generation: generation) }
     }
 
-    func setLoading(_ loading: Bool) { isLoading = loading }
+    func setLoading(_ loading: Bool, generation: Int) {
+        guard isCurrent(generation) else { return }
+        isLoading = loading
+    }
     func setProblem(_ message: String?) { problem = message }
     func setItems(_ items: [BrowseItem], more: Bool) { self.items = items; canLoadMore = more }
     func setIndexes(tags: [TagCount]? = nil, months: [MonthCount]? = nil, fans: [Fan]? = nil, recent: [FaveEvent]? = nil) {

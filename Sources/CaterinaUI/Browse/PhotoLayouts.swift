@@ -90,19 +90,14 @@ struct PhotoMapLayout: View {
     /// being readable or quick.
     static let pinLimit = 2_000
 
-    private var located: [BrowseItem] {
-        Array(browse.items.filter { $0.photo.location != nil }.prefix(Self.pinLimit))
-    }
-
     var body: some View {
+        let located = browse.items.filter { $0.photo.location != nil }
         Map(selection: photoSelection(browse)) {
-            ForEach(located) { item in
+            ForEach(located.prefix(Self.pinLimit)) { item in
                 if let location = item.photo.location {
                     Annotation(item.photo.title, coordinate: CLLocationCoordinate2D(latitude: location.latitude,
                                                                                     longitude: location.longitude)) {
-                        RowThumbnail(address: item.photo.thumbnailURL, size: browse.selectedPhotoID == item.photo.id ? 56 : 32)
-                            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white, lineWidth: 2))
-                            .shadow(radius: 2)
+                        MapPin(item: item, browse: browse)
                     }
                     .tag(item.photo.id)
                 }
@@ -110,7 +105,7 @@ struct PhotoMapLayout: View {
         }
         .mapControls { MapZoomStepper(); MapCompass(); MapScaleView() }
         .overlay(alignment: .bottomLeading) {
-            if browse.items.filter({ $0.photo.location != nil }).count > Self.pinLimit {
+            if located.count > Self.pinLimit {
                 Text("Showing the first \(Self.pinLimit.formatted()) located photos")
                     .font(.caption).padding(6).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5)).padding(10)
             }
@@ -220,5 +215,18 @@ struct RowThumbnail: View {
                 image = await ThumbnailStore.shared.image(for: address)
             }
             .accessibilityHidden(true)
+    }
+}
+
+/// A pin reads the selection itself, so choosing a photo redraws pins, not
+/// the whole map's content.
+struct MapPin: View {
+    let item: BrowseItem
+    let browse: BrowseModel
+
+    var body: some View {
+        RowThumbnail(address: item.photo.thumbnailURL, size: browse.selectedPhotoID == item.photo.id ? 56 : 32)
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white, lineWidth: 2))
+            .shadow(radius: 2)
     }
 }

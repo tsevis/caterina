@@ -113,6 +113,17 @@ public final class LibraryStore: Sendable {
         }
     }
 
+    /// Photos by id, in the order given; ids not in the copy are left out.
+    public func photos(ids: [String]) throws -> [LibraryPhoto] {
+        guard !ids.isEmpty else { return [] }
+        let found = try database.read { db in
+            try Row.fetchAll(db, sql: "SELECT * FROM photo WHERE id IN (\(databaseQuestionMarks(count: ids.count)))",
+                             arguments: StatementArguments(ids)).map(LibrarySchema.photo)
+        }
+        let byID = Dictionary(found.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return ids.compactMap { byID[$0] }
+    }
+
     public func photo(id: String) throws -> LibraryPhoto? {
         try database.read { db in
             try Row.fetchOne(db, sql: "SELECT * FROM photo WHERE id = ?", arguments: [id]).map(LibrarySchema.photo)
