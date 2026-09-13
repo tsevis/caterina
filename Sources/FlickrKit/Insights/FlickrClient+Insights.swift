@@ -6,6 +6,13 @@ extension FlickrClient {
         try InsightsResponse.info(from: await call("flickr.photos.getInfo", ["photo_id": id]))
     }
 
+    /// The photo as Flickr has it now, for laying an edit over
+    /// (`PhotoChange.rebased(onto:)`).
+    public func livePhoto(id: String, priority: CallPriority) async throws -> LibraryPhoto {
+        try InsightsResponse.info(from: await call("flickr.photos.getInfo", ["photo_id": id],
+                                                   priority: priority)).libraryPhoto
+    }
+
     /// Flickr's largest page of faves is 50.
     public func favorites(photoID: String, page: Int) async throws -> FavePage {
         try await favorites(photoID: photoID, page: page, priority: .interactive)

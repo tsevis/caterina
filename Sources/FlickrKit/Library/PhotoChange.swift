@@ -39,7 +39,7 @@ public struct PhotoChange: Sendable, Equatable {
 
     private var tags: FlickrWrite? {
         guard before.tags != after.tags else { return nil }
-        return write("flickr.photos.setTags", ["tags": after.tags.joined(separator: " ")])
+        return write("flickr.photos.setTags", ["tags": UploadMetadata.tagList(after.tags)])
     }
 
     private var visibility: FlickrWrite? {

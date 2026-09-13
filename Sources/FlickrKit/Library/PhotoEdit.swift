@@ -10,6 +10,10 @@ public enum PhotoEdit: Sendable, Equatable {
     case setDescription(String)
     case addTags([String])
     case removeTags([String])
+    /// One tag respelled or renamed, wherever it is.
+    case renameTag(from: String, to: String)
+    /// Exactly these tags, replacing whatever was there.
+    case replaceTags([String])
     case setVisibility(LibraryPhoto.Visibility)
     case setLicense(License)
     /// For a camera whose clock was set to the wrong time zone.
@@ -23,10 +27,10 @@ public enum PhotoEdit: Sendable, Equatable {
         case let .setTitle(title): edited.title = title
         case let .appendToTitle(suffix): edited.title = photo.title + suffix
         case let .setDescription(description): edited.description = description
-        case let .addTags(tags): edited.tags = Self.adding(tags, to: photo.tags)
-        case let .removeTags(tags):
-            let removed = Set(tags.map(Self.flickrTag))
-            edited.tags = photo.tags.filter { !removed.contains($0) }
+        case let .addTags(tags): edited.tags = TagList.adding(tags, to: photo.tags)
+        case let .removeTags(tags): edited.tags = TagList.removing(tags, from: photo.tags)
+        case let .renameTag(tag, replacement): edited.tags = TagList.renaming(tag, to: replacement, in: photo.tags)
+        case let .replaceTags(tags): edited.tags = TagList.replacing(with: tags)
         case let .setVisibility(visibility): edited.visibility = visibility
         case let .setLicense(license): edited.license = license
         case let .shiftTaken(seconds): edited.taken = photo.taken.flatMap { TakenDate.shift($0, by: seconds) }
@@ -40,12 +44,6 @@ public enum PhotoEdit: Sendable, Equatable {
     /// "New York" is "newyork".
     public static func flickrTag(_ tag: String) -> String {
         String(tag.lowercased().unicodeScalars.filter(CharacterSet.alphanumerics.contains).map(Character.init))
-    }
-
-    private static func adding(_ tags: [String], to existing: [String]) -> [String] {
-        tags.map(flickrTag).filter { !$0.isEmpty }.reduce(existing) { list, tag in
-            list.contains(tag) ? list : list + [tag]
-        }
     }
 }
 

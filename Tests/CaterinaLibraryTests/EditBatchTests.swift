@@ -4,21 +4,6 @@ import Testing
 import FlickrKit
 @testable import CaterinaLibrary
 
-/// Sends writes from a script, and remembers them.
-actor ScriptedWriter: PhotoWriter {
-    private let failures: [String: FlickrError]
-    private(set) var sent: [FlickrWrite] = []
-
-    /// `failures` is keyed on photo id.
-    init(failing failures: [String: FlickrError] = [:]) { self.failures = failures }
-
-    func perform(_ write: FlickrWrite, priority: CallPriority) async throws -> Data {
-        sent.append(write)
-        if let failure = failures[write.arguments["photo_id"] ?? ""] { throw failure }
-        return Data(#"{"stat":"ok"}"#.utf8)
-    }
-}
-
 @Suite struct EditBatchTests {
 
     private func library(_ ids: [String]) throws -> LibraryStore {
@@ -51,13 +36,14 @@ actor ScriptedWriter: PhotoWriter {
         try store.save([LibraryStoreTests.photo("2", title: "Photo 2", tags: ["old", "sea"])], generation: 1)
         let batch = try batch(store, ["1", "2"], .addTags(["sea"]))
         #expect(try store.entries(in: batch.id).map(\.photoID) == ["1"])
-        #expect(batch.calls == 1)
+        // One read to check the photo as Flickr has it, one write.
+        #expect(batch.calls == 2)
     }
 
     @Test func runningABatchSendsItsWritesAndUpdatesTheLocalCopy() async throws {
         let store = try library(["1", "2"])
         let batch = try batch(store, ["1", "2"], .addTags(["sea"]))
-        let writer = ScriptedWriter()
+        let writer = ScriptedWriter(store: store)
 
         let summary = try await BatchRunner(writer: writer, store: store).run(batch.id)
 
@@ -71,7 +57,7 @@ actor ScriptedWriter: PhotoWriter {
     @Test func aRefusedPhotoIsRecordedAndTheRestCarryOn() async throws {
         let store = try library(["1", "2", "3"])
         let batch = try batch(store, ["1", "2", "3"], .setTitle("New"))
-        let writer = ScriptedWriter(failing: ["2": .api(code: 1, message: "Photo not found", transient: false)])
+        let writer = ScriptedWriter(store: store, failing: ["2": .api(code: 1, message: "Photo not found", transient: false)])
 
         let summary = try await BatchRunner(writer: writer, store: store).run(batch.id)
 
@@ -89,12 +75,12 @@ actor ScriptedWriter: PhotoWriter {
         let batch = try batch(store, ["1", "2"], .setTitle("New"))
 
         await #expect(throws: FlickrError.permissionNeeded(.write)) {
-            _ = try await BatchRunner(writer: ScriptedWriter(failing: ["1": .permissionNeeded(.write)]),
+            _ = try await BatchRunner(writer: ScriptedWriter(store: store, failing: ["1": .permissionNeeded(.write)]),
                                       store: store).run(batch.id)
         }
         #expect(try store.summary(of: batch.id) == EditBatch.Summary(applied: 0, failed: 0, pending: 2))
 
-        let summary = try await BatchRunner(writer: ScriptedWriter(), store: store).run(batch.id)
+        let summary = try await BatchRunner(writer: ScriptedWriter(store: store), store: store).run(batch.id)
         #expect(summary == EditBatch.Summary(applied: 2, failed: 0, pending: 0))
     }
 
@@ -103,7 +89,7 @@ actor ScriptedWriter: PhotoWriter {
     @Test func aLostConnectionPausesTheBatchRatherThanFailingEveryPhoto() async throws {
         let store = try library(["1", "2", "3"])
         let batch = try batch(store, ["1", "2", "3"], .setTitle("New"))
-        let writer = ScriptedWriter(failing: ["2": .busy("Flickr is busy right now.")])
+        let writer = ScriptedWriter(store: store, failing: ["2": .busy("Flickr is busy right now.")])
 
         await #expect(throws: FlickrError.busy("Flickr is busy right now.")) {
             _ = try await BatchRunner(writer: writer, store: store).run(batch.id)
@@ -114,10 +100,10 @@ actor ScriptedWriter: PhotoWriter {
     @Test func undoWritesBackWhatWasThere() async throws {
         let store = try library(["1", "2"])
         let batch = try batch(store, ["1", "2"], .addTags(["sea"]))
-        _ = try await BatchRunner(writer: ScriptedWriter(), store: store).run(batch.id)
+        _ = try await BatchRunner(writer: ScriptedWriter(store: store), store: store).run(batch.id)
 
         let undo = try store.undoBatch(for: batch.id)
-        let writer = ScriptedWriter()
+        let writer = ScriptedWriter(store: store)
         _ = try await BatchRunner(writer: writer, store: store).run(undo.id)
 
         #expect(undo.undoes == batch.id)
@@ -131,7 +117,7 @@ actor ScriptedWriter: PhotoWriter {
     @Test func undoLeavesOutPhotosThatWereNeverChanged() async throws {
         let store = try library(["1", "2"])
         let batch = try batch(store, ["1", "2"], .setTitle("New"))
-        _ = try await BatchRunner(writer: ScriptedWriter(failing: ["2": .api(code: 1, message: "x", transient: false)]),
+        _ = try await BatchRunner(writer: ScriptedWriter(store: store, failing: ["2": .api(code: 1, message: "x", transient: false)]),
                                   store: store).run(batch.id)
         let undo = try store.undoBatch(for: batch.id)
         #expect(try store.entries(in: undo.id).map(\.photoID) == ["1"])
@@ -148,7 +134,7 @@ actor ScriptedWriter: PhotoWriter {
         let store = try library(["1", "2"])
         let batch = try batch(store, ["1", "2"], .setTitle("New"))
         let seen = Counted()
-        _ = try await BatchRunner(writer: ScriptedWriter(), store: store).run(batch.id) { seen.add($0) }
+        _ = try await BatchRunner(writer: ScriptedWriter(store: store), store: store).run(batch.id) { seen.add($0) }
         #expect(seen.values == [EditBatch.Summary(applied: 1, failed: 0, pending: 1),
                                 EditBatch.Summary(applied: 2, failed: 0, pending: 0)])
     }

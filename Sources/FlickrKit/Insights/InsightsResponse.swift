@@ -29,10 +29,13 @@ enum InsightsResponse {
             let tags: Tags?
             let location: Location?
             let urls: URLs?
+            let media: String?
         }
         struct Owner: Decodable { let nsid: String?; let username: String?; let realname: String? }
         struct Visibility: Decodable { let ispublic: LooseInt?; let isfriend: LooseInt?; let isfamily: LooseInt? }
-        struct Dates: Decodable { let posted: LooseInt?; let taken: String?; let takenunknown: LooseInt? }
+        struct Dates: Decodable {
+            let posted: LooseInt?; let taken: String?; let takenunknown: LooseInt?; let lastupdate: LooseInt?
+        }
         struct Tags: Decodable { let tag: [Tag]? }
         struct Tag: Decodable { let raw: String?; let _content: String? }
         struct Location: Decodable {
@@ -64,7 +67,9 @@ enum InsightsResponse {
             visibility: .init(isPublic: flag(photo.visibility?.ispublic), isFriend: flag(photo.visibility?.isfriend),
                               isFamily: flag(photo.visibility?.isfamily)),
             location: location, place: place.isEmpty ? nil : place.joined(separator: ", "),
-            pageURL: photo.urls?.url?.first { $0.type == "photopage" }?._content.flatMap(URL.init(string:)))
+            pageURL: photo.urls?.url?.first { $0.type == "photopage" }?._content.flatMap(URL.init(string:)),
+            lastUpdated: photo.dates?.lastupdate?.value.map { Date(timeIntervalSince1970: TimeInterval($0)) },
+            media: photo.media.flatMap(LibraryPhoto.Media.init(rawValue:)) ?? .photo)
     }
 
     static func favorites(from data: Data) throws -> FavePage {

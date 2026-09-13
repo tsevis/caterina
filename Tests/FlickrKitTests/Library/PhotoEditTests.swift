@@ -26,11 +26,12 @@ import Testing
         #expect(PhotoEdit.removeTags(["piraeus", "absent"]).applied(to: photo).tags == ["dusk"])
     }
 
-    /// Flickr stores tags lowercased without spaces; comparing any other way
-    /// adds "Dusk" beside "dusk".
+    /// Flickr matches tags lowercased without spaces; comparing any other way
+    /// adds "Dusk" beside "dusk". A new tag keeps the spelling it was typed
+    /// with (`PhotoTagEditTests`).
     @Test func tagsCompareTheWayFlickrStoresThem() {
         #expect(PhotoEdit.addTags(["Dusk", "New York"]).applied(to: photo).tags
-                == ["piraeus", "dusk", "newyork"])
+                == ["piraeus", "dusk", "New York"])
     }
 
     @Test func aTakenDateShiftsByWholeSeconds() {

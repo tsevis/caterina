@@ -30,10 +30,13 @@ public struct PhotoInfo: Sendable, Equatable {
     /// "Orford, United Kingdom", from Flickr's reverse geocoding.
     public let place: String?
     public let pageURL: URL?
+    public let lastUpdated: Date?
+    public let media: LibraryPhoto.Media
 
     public init(id: String, title: String, description: String, owner: Owner, views: Int, commentCount: Int,
                 license: License?, tags: [String], posted: Date?, taken: String?,
-                visibility: LibraryPhoto.Visibility, location: LibraryPhoto.Location?, place: String?, pageURL: URL?) {
+                visibility: LibraryPhoto.Visibility, location: LibraryPhoto.Location?, place: String?, pageURL: URL?,
+                lastUpdated: Date? = nil, media: LibraryPhoto.Media = .photo) {
         self.id = id
         self.title = title
         self.description = description
@@ -48,6 +51,15 @@ public struct PhotoInfo: Sendable, Equatable {
         self.location = location
         self.place = place
         self.pageURL = pageURL
+        self.lastUpdated = lastUpdated
+        self.media = media
+    }
+
+    /// The fields an edit reads and writes, with tags as they were typed.
+    public var libraryPhoto: LibraryPhoto {
+        LibraryPhoto(id: id, title: title, description: description, tags: tags, license: license,
+                     visibility: visibility, uploaded: posted, lastUpdated: lastUpdated, taken: taken,
+                     media: media, location: location)
     }
 }
 

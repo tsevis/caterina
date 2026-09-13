@@ -56,13 +56,26 @@ extension LibraryStore {
         try write { db in
             try db.execute(sql: "UPDATE editEntry SET state = ?, message = ? WHERE batchID = ? AND position = ?",
                            arguments: [state.rawValue, message, entry.batchID, entry.position])
-            if state == .applied {
-                let generation = try Int.fetchOne(db, sql: "SELECT generation FROM photo WHERE id = ?",
-                                                  arguments: [entry.photoID]) ?? 0
-                try db.execute(sql: LibrarySchema.upsert,
-                               arguments: LibrarySchema.arguments(entry.change.after, generation: generation))
-            }
+            guard state == .applied else { return }
+            let row = try Row.fetchOne(db, sql: "SELECT * FROM photo WHERE id = ?", arguments: [entry.photoID])
+            let local = row.map(LibrarySchema.photo)
+            let photo = local.map { $0.withEditableFields(of: entry.change.after) } ?? entry.change.after
+            try db.execute(sql: LibrarySchema.upsert,
+                           arguments: LibrarySchema.arguments(photo.withCleanTags,
+                                                              generation: row?["generation"] ?? 0))
         }
+    }
+
+    /// The entry with `change` in place of what was recorded: the same edit,
+    /// laid over the photo as Flickr has it.
+    func replaceChange(of entry: EditEntry, with change: PhotoChange) throws -> EditEntry {
+        try write { db in
+            try db.execute(sql: "UPDATE editEntry SET before = ?, after = ? WHERE batchID = ? AND position = ?",
+                           arguments: [try Self.json(change.before), try Self.json(change.after),
+                                       entry.batchID, entry.position])
+        }
+        return EditEntry(batchID: entry.batchID, position: entry.position, photoID: entry.photoID,
+                         change: change, state: entry.state, message: entry.message)
     }
 
     // MARK: - Private
@@ -101,7 +114,8 @@ extension LibraryStore {
         return EditBatch(id: id, title: row["title"],
                          createdAt: Date(timeIntervalSince1970: row["createdAt"]),
                          undoes: row["undoes"],
-                         calls: changes.reduce(0) { $0 + $1.change.writes.count })
+                         // One read per photo, to lay the change over Flickr's copy.
+                         calls: changes.reduce(0) { $0 + 1 + $1.change.writes.count })
     }
 
     private static func entry(_ row: Row) throws -> EditEntry {
