@@ -1,63 +1,5 @@
 import Foundation
 
-/// Streaming bytes from a URL, in chunks.
-///
-/// A protocol so cancellation and partial-file behaviour can be tested without
-/// a network — a stalled transfer in a test is a stream that suspends, not a
-/// real socket left open.
-public protocol ChunkTransport: Sendable {
-    func chunks(from url: URL) async throws -> AsyncThrowingStream<Data, any Error>
-}
-
-/// The real one. **Every transfer carries a timeout**; one without a timeout
-/// hung the reference application forever, with a progress bar and no way out.
-public struct URLSessionChunkTransport: ChunkTransport {
-    public static let requestTimeout: TimeInterval = 30
-    public static let resourceTimeout: TimeInterval = 600
-    public static let chunkSize = 64 * 1024
-
-    private let session: URLSession
-
-    public init(session: URLSession? = nil) {
-        if let session {
-            self.session = session
-            return
-        }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = Self.requestTimeout
-        configuration.timeoutIntervalForResource = Self.resourceTimeout
-        self.session = URLSession(configuration: configuration)
-    }
-
-    public func chunks(from url: URL) async throws -> AsyncThrowingStream<Data, any Error> {
-        let (bytes, response) = try await session.bytes(from: url)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw FlickrError.transport("The photo server answered HTTP \(http.statusCode).")
-        }
-
-        return AsyncThrowingStream { continuation in
-            let task = Task {
-                var buffer = Data()
-                buffer.reserveCapacity(Self.chunkSize)
-                do {
-                    for try await byte in bytes {
-                        buffer.append(byte)
-                        if buffer.count >= Self.chunkSize {
-                            continuation.yield(buffer)
-                            buffer.removeAll(keepingCapacity: true)
-                        }
-                    }
-                    if !buffer.isEmpty { continuation.yield(buffer) }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-}
-
 // MARK: - Results
 
 public struct DownloadOutcome: Sendable, Equatable, Identifiable {
@@ -123,6 +65,8 @@ public struct DownloadReport: Sendable, Equatable {
 public actor DownloadEngine {
     private let transport: ChunkTransport
 
+    static let simultaneousTransfers = 4
+
     public init(transport: ChunkTransport = URLSessionChunkTransport()) {
         self.transport = transport
     }
@@ -131,9 +75,6 @@ public actor DownloadEngine {
                          writingCredits: Bool = true,
                          onProgress: @Sendable (DownloadProgress) -> Void = { _ in }
     ) async -> DownloadReport {
-        var outcomes: [DownloadOutcome] = []
-        var saved: [(String, Photo)] = []
-
         // The folder was chosen in a panel and is about to be written to for
         // as long as the batch takes. A symlink here would redirect every file
         // in it, which the per-file `O_NOFOLLOW` cannot see.
@@ -143,31 +84,48 @@ public actor DownloadEngine {
                 requested: photos.count, wasCancelled: false)
         }
 
-        for photo in photos {
-            if Task.isCancelled {
-                return finish(outcomes: outcomes, saved: saved, requested: photos.count,
-                              cancelled: true, directory: directory,
-                              writingCredits: writingCredits)
-            }
-
-            guard let outcome = await save(photo, to: directory, variant: variant) else {
-                // Cancelled mid-transfer: the partial file is already gone.
-                return finish(outcomes: outcomes, saved: saved, requested: photos.count,
-                              cancelled: true, directory: directory,
-                              writingCredits: writingCredits)
-            }
-
-            outcomes.append(outcome)
-            if let path = outcome.path {
-                saved.append((path.lastPathComponent, photo))
-            }
-            onProgress(DownloadProgress(completed: outcomes.count,
-                                        total: photos.count, outcome: outcome))
+        let finished = await transferAll(photos, to: directory, variant: variant,
+                                         onProgress: onProgress)
+        // In the order they were asked for, not the order they finished in.
+        let ordered = finished.outcomes.sorted { $0.index < $1.index }
+        let saved = ordered.compactMap { entry in
+            entry.outcome.path.map { ($0.lastPathComponent, photos[entry.index]) }
         }
+        return finish(outcomes: ordered.map(\.outcome), saved: saved,
+                      requested: photos.count,
+                      cancelled: finished.wasCancelled || Task.isCancelled,
+                      directory: directory, writingCredits: writingCredits)
+    }
 
-        return finish(outcomes: outcomes, saved: saved, requested: photos.count,
-                      cancelled: Task.isCancelled, directory: directory,
-                      writingCredits: writingCredits)
+    /// Up to `simultaneousTransfers` photos at once; a new one starts only when
+    /// one finishes, and none starts after cancellation.
+    private func transferAll(_ photos: [Photo], to directory: URL, variant: PhotoVariant,
+                             onProgress: @Sendable (DownloadProgress) -> Void
+    ) async -> (outcomes: [(index: Int, outcome: DownloadOutcome)], wasCancelled: Bool) {
+        await withTaskGroup(of: (Int, DownloadOutcome?).self) { group in
+            var outcomes: [(index: Int, outcome: DownloadOutcome)] = []
+            var wasCancelled = false
+            var next = 0
+
+            func startNext() {
+                guard next < photos.count, !Task.isCancelled else { return }
+                let index = next
+                next += 1
+                group.addTask { (index, await self.save(photos[index], to: directory,
+                                                        variant: variant)) }
+            }
+
+            for _ in 0..<Self.simultaneousTransfers { startNext() }
+            for await (index, outcome) in group {
+                // `nil`: cancelled mid-transfer, and the partial file is gone.
+                guard let outcome else { wasCancelled = true; continue }
+                outcomes.append((index, outcome))
+                onProgress(DownloadProgress(completed: outcomes.count,
+                                            total: photos.count, outcome: outcome))
+                startNext()
+            }
+            return (outcomes, wasCancelled || next < photos.count)
+        }
     }
 
     /// Write the credits for whatever actually landed, and report.

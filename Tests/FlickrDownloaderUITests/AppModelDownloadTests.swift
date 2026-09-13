@@ -99,18 +99,18 @@ import FlickrKit
         model.select(["1", "2", "3"], in: .search)
 
         model.startDownload(from: .search, to: folder, variant: .medium)
-        // Wait for the first photo to be on disk, so what is cancelled is the
-        // second one mid-transfer rather than the batch before it started.
-        try await waitUntil("the first photo to land") {
+        // Transfers run side by side: wait for 1 and 3 to be on disk, so what
+        // is cancelled is the second one mid-transfer.
+        try await waitUntil("photos 1 and 3 to land") {
             (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
-                .contains { !$0.hasSuffix(".part") } == true
+                .filter { $0.hasSuffix(".jpg") }.count == 2
         }
         await model.finishDownloadBeforeClosing()
 
         let report = try #require(model.download.report)
         #expect(report.wasCancelled)
-        #expect(report.summary == "Saved 1 of 3")
-        #expect(try files(in: folder) == ["Photo 1_1.jpg"])
+        #expect(report.summary == "Saved 2 of 3")
+        #expect(try files(in: folder) == ["Photo 1_1.jpg", "Photo 3_3.jpg"])
     }
 
     @Test func theReportCanBeDismissed() async throws {

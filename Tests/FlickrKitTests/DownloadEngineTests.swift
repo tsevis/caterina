@@ -248,22 +248,24 @@ struct StubChunkTransport: ChunkTransport {
             await engine.download([photo("1"), photo("2"), photo("3")],
                                   to: folder, variant: .original)
         }
-        // Wait for the first photo to actually land, rather than guessing how
-        // long that takes: a fixed interval fails whenever the machine is busy.
-        try await waitFor("the first photo to be saved") {
-            (try? files(in: folder))?.contains { !$0.hasSuffix(".part") } == true
+        // Transfers run side by side, so photo 3 finishes while 2 stalls.
+        // Wait for both to land rather than guessing how long that takes: a
+        // fixed interval fails whenever the machine is busy.
+        try await waitFor("photos 1 and 3 to be saved") {
+            (try? files(in: folder))?.filter { !$0.hasSuffix(".part") }.count == 2
         }
         task.cancel()
         let report = await task.value
 
         #expect(report.wasCancelled)
-        #expect(report.saved == 1)
+        #expect(report.saved == 2)
         #expect(report.requested == 3)
-        #expect(report.summary == "Saved 1 of 3")
-        #expect(try files(in: folder) == ["Photo 1_1.jpg"])
-        // One photograph saved before a cancel needs crediting just as much as
+        #expect(report.summary == "Saved 2 of 3")
+        #expect(try files(in: folder) == ["Photo 1_1.jpg", "Photo 3_3.jpg"])
+        // Photographs saved before a cancel need crediting just as much as
         // forty would have.
         #expect(credits(in: folder)?.contains("Photo 1_1.jpg") == true)
+        #expect(credits(in: folder)?.contains("Photo 3_3.jpg") == true)
         #expect(try !files(in: folder).contains { $0.hasSuffix(".part") })
     }
 
