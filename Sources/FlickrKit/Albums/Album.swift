@@ -25,6 +25,12 @@ public struct AlbumPage: Sendable, Equatable {
     public let page: Int
     public let pages: Int
     public let albums: [Album]
+
+    public init(page: Int, pages: Int, albums: [Album]) {
+        self.page = page
+        self.pages = pages
+        self.albums = albums
+    }
 }
 
 /// The writes that change albums.

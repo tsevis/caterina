@@ -147,3 +147,10 @@ public struct UploadRunner: Sendable {
         }
     }
 }
+
+/// Your albums, to choose one to upload into.
+public protocol AlbumLister: Sendable {
+    func albums(page: Int) async throws -> AlbumPage
+}
+
+extension FlickrClient: AlbumLister {}
