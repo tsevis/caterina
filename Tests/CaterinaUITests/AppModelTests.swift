@@ -118,9 +118,8 @@ import FlickrKit
     /// second one's results on screen, not whichever answered last.
     @Test func aSlowFirstReplyDoesNotOverwriteAFastSecondOne() async throws {
         let transport = FakeTransport(
-            body: Fixtures.page(ids: ["late"]),
-            secondBody: Fixtures.page(ids: ["current"]),
-            delayFirstBy: .milliseconds(250))
+            body: Fixtures.page(ids: ["current"]),
+            slowReply: (text: "first", body: Fixtures.page(ids: ["late"]), after: .milliseconds(250)))
         let model = model(transport)
 
         model.setInput("first", for: .search)
@@ -194,15 +193,23 @@ import FlickrKit
 actor FakeTransport: HTTPTransport {
     private let body: String
     private let secondBody: String?
-    private let delayFirstBy: Duration?
+    /// **Keyed on the search text, not on arrival order.** Two submits start
+    /// two tasks, and the second can reach the transport first; a fake that
+    /// slowed "the first request" then slowed the wrong search, one run in six.
+    private let slowReply: (text: String, body: String, after: Duration)?
     private(set) var requested: [URL] = []
 
     var callCount: Int { requested.count }
 
-    init(body: String, secondBody: String? = nil, delayFirstBy: Duration? = nil) {
+    init(body: String, secondBody: String? = nil,
+         slowReply: (text: String, body: String, after: Duration)? = nil) {
         self.body = body
         self.secondBody = secondBody
-        self.delayFirstBy = delayFirstBy
+        self.slowReply = slowReply
+    }
+
+    func send(_ request: URLRequest) async throws -> Data {
+        try await data(from: request.url!)
     }
 
     var lastQueryItems: [String: String] {
@@ -229,9 +236,9 @@ actor FakeTransport: HTTPTransport {
         let answer = chosen.replacingOccurrences(
             of: "\"page\":1", with: "\"page\":\(requestedPage)")
 
-        if requested.count == 1, let delayFirstBy {
-            try? await Task.sleep(for: delayFirstBy)
-            return Data(body.utf8)
+        if let slowReply, lastQueryItems["text"] == slowReply.text {
+            try? await Task.sleep(for: slowReply.after)
+            return Data(slowReply.body.utf8)
         }
         return Data(answer.utf8)
     }
