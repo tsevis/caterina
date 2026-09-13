@@ -50,7 +50,7 @@ final class Clock: @unchecked Sendable {
         let state = try store.syncState()
         #expect(state.generation == 1)
         #expect(state.lastFullSync == clock.now)
-        #expect(state.changesSince == clock.now)
+        #expect(state.changesSince == clock.now.addingTimeInterval(-LibrarySync.clockAllowance))
     }
 
     /// Changes are asked for from when the last sync *started*: a photo edited
@@ -68,8 +68,57 @@ final class Clock: @unchecked Sendable {
 
         #expect(outcome == .changes(saved: 1))
         #expect(await source.asked == [.updated(since: started, page: 1)])
-        #expect(try store.syncState().changesSince == clock.now)
+        #expect(try store.syncState().changesSince == clock.now.addingTimeInterval(-LibrarySync.clockAllowance))
         #expect(try store.syncState().lastFullSync == started)
+    }
+
+    /// A photo Flickr sent that could not be read was still seen, just not
+    /// understood; removing it would delete a photo that exists.
+    @Test func aFullSyncWithUnreadableEntriesRemovesNothing() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryStoreTests.photo("unreadable-now")], generation: 0)
+        let source = ScriptedLibrary([.everything(page: 1): .success(LibraryPage(
+            page: 1, pages: 1, total: 2, photos: [LibraryStoreTests.photo("1")], skippedEntries: 1))])
+
+        let outcome = try await LibrarySync(source: source, store: store, now: { Date() }).run()
+
+        #expect(outcome == .full(saved: 1, removed: 0))
+        #expect(try store.count(.all) == 2)
+    }
+
+    /// Photos deleted on Flickr mid-sync shift later pages up, so a photo can
+    /// slide onto a page already fetched and never be seen. Fewer photos than
+    /// Flickr counted means the pass is not proof of anything.
+    @Test func aFullSyncThatSawFewerThanFlickrCountedRemovesNothing() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryStoreTests.photo("slid")], generation: 0)
+        let source = ScriptedLibrary([
+            .everything(page: 1): .success(LibraryPage(page: 1, pages: 2, total: 4,
+                                                       photos: [LibraryStoreTests.photo("1"), LibraryStoreTests.photo("2")],
+                                                       skippedEntries: 0)),
+            .everything(page: 2): .success(LibraryPage(page: 2, pages: 2, total: 3,
+                                                       photos: [LibraryStoreTests.photo("2")], skippedEntries: 0)),
+        ])
+
+        let outcome = try await LibrarySync(source: source, store: store, now: { Date() }).run()
+
+        #expect(outcome == .full(saved: 3, removed: 0))
+        #expect(try store.photos(.all).map(\.id).contains("slid"))
+    }
+
+    /// Two syncs at once would interleave generations and undo each other's
+    /// state; the second waits for the first and shares its result.
+    @Test func aSecondSyncWhileOneRunsSharesIt() async throws {
+        let store = try LibraryStore.inMemory()
+        let source = SlowLibrary()
+        let sync = LibrarySync(source: source, store: store, now: { Date() })
+
+        async let first = sync.run()
+        async let second = sync.run()
+        let outcomes = try await [first, second]
+
+        #expect(outcomes[0] == outcomes[1])
+        #expect(await source.calls == 1)
     }
 
     /// Changes never report a deletion, so a full pass runs weekly to notice.
@@ -134,6 +183,15 @@ final class Clock: @unchecked Sendable {
 
         #expect(seen.values == [LibrarySync.Progress(fetched: 2, total: 4),
                                 LibrarySync.Progress(fetched: 4, total: 4)])
+    }
+}
+
+actor SlowLibrary: LibrarySource {
+    private(set) var calls = 0
+    func library(_ query: LibraryQuery, priority: CallPriority) async throws -> LibraryPage {
+        calls += 1
+        try await Task.sleep(for: .milliseconds(100))
+        return LibraryPage(page: 1, pages: 1, total: 1, photos: [LibraryStoreTests.photo("1")], skippedEntries: 0)
     }
 }
 

@@ -393,14 +393,17 @@ public final class AppModel {
         refreshClient()
     }
 
-    public func signedIn(_ account: OAuthFlow.Account) throws {
+    /// Store the new token and wait until the client holds it: a write retried
+    /// straight after approving more permission must not go out with the old
+    /// one.
+    public func signedIn(_ account: OAuthFlow.Account) async throws {
         guard let stored else {
             throw FlickrError.invalidInput("Enter an API key before signing in.")
         }
         let next = stored.signedIn(account)
         try vault.save(next)
         self.stored = next
-        refreshClient()
+        await client.update(credentials: next.oauth, permission: next.grantedPermission ?? .read)
         self.account = next.account
     }
 
@@ -421,6 +424,9 @@ public final class AppModel {
     }
 
     public func credentials() -> OAuth1.Credentials? { stored?.oauth }
+
+    /// What the current sign-in allows; signing in again asks for no less.
+    public var grantedPermission: FlickrPermission { stored?.grantedPermission ?? .read }
 
     /// Hand the existing actor its new credentials rather than building a
     /// second one: a request already in flight keeps the client it started

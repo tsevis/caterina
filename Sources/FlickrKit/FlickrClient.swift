@@ -220,6 +220,9 @@ public actor FlickrClient {
         guard write.permission <= permission else {
             throw FlickrError.permissionNeeded(write.permission)
         }
+        guard write.overridesReservedParameters == false else {
+            throw FlickrError.invalidInput("\(write.method) was built with a parameter the client sets itself.")
+        }
         let credentials = self.credentials
         do {
             return try await withRetries(priority: priority,

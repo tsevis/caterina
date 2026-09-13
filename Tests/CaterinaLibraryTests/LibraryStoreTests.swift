@@ -71,6 +71,20 @@ import FlickrKit
         #expect(Set(try store.photos(.matching("harbour")).map(\.id)) == ["1", "2", "3"])
     }
 
+    /// SQLite's own `LIKE` folds case for ASCII only.
+    @Test func searchIgnoresCaseInEveryAlphabet() throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([Self.photo("1", title: "ΑΘΗΝΑ τη νύχτα"), Self.photo("2", title: "Ärger")], generation: 1)
+        #expect(try store.photos(.matching("αθηνα")).map(\.id) == ["1"])
+        #expect(try store.photos(.matching("ärger")).map(\.id) == ["2"])
+    }
+
+    @Test func aTagIsFoundHoweverItIsTyped() throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([Self.photo("1", tags: ["newyork"])], generation: 1)
+        #expect(try store.photos(.tagged("New York")).map(\.id) == ["1"])
+    }
+
     /// `%` and `_` typed into search are characters, not wildcards.
     @Test func searchTreatsWildcardsAsText() throws {
         let store = try LibraryStore.inMemory()

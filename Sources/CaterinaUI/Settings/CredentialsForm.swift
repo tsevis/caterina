@@ -114,8 +114,11 @@ struct CredentialsForm: View {
         Task {
             defer { isWorking = false }
             do {
-                let account = try await FlickrSignIn.run(credentials: credentials, anchor: anchor)
-                try model.signedIn(account)
+                // Signing in again must not quietly give up write access.
+                let account = try await FlickrSignIn.run(credentials: credentials,
+                                                         permission: model.grantedPermission,
+                                                         anchor: anchor)
+                try await model.signedIn(account)
                 // Only now is the sheet finished with.
                 onFinished()
             } catch {

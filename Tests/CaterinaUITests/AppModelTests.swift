@@ -171,6 +171,21 @@ import FlickrKit
         #expect(!model.hasAPIKey)
     }
 
+    /// Approving write access replaces the token, and the new level is what
+    /// the next sign-in asks for, so it is never quietly given up.
+    @Test func approvingMorePermissionIsKeptAndSaved() async throws {
+        let store = MemoryStore(seeded: true)
+        let model = AppModel(vault: CredentialsVault(store: store), transport: FakeTransport(body: "{}"))
+        #expect(model.grantedPermission == .read)
+
+        try await model.signedIn(OAuthFlow.Account(token: "t2", tokenSecret: "s2", nsid: "1@N00",
+                                                   username: "c", permission: .write))
+
+        #expect(model.grantedPermission == .write)
+        #expect(model.account?.permission == .write)
+        #expect(CredentialsVault(store: store).load()?.grantedPermission == .write)
+    }
+
     @Test func signingOutClearsTheYouSource() async throws {
         let store = MemoryStore(seeded: true)
         try store.set("tok", for: "oauth-token")

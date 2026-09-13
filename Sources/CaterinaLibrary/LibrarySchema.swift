@@ -111,11 +111,16 @@ enum LibrarySchema {
         case .withLocation:
             return ("latitude IS NOT NULL", [])
         case let .tagged(tag):
-            return (#"tags LIKE ? ESCAPE '\'"#, ["% \(escapeLike(tag.lowercased())) %"])
+            return (#"tags LIKE ? ESCAPE '\'"#, ["% \(escapeLike(PhotoEdit.flickrTag(tag))) %"])
         case let .matching(text):
-            let pattern = "%\(escapeLike(text))%"
-            return (#"(title LIKE ? ESCAPE '\' OR description LIKE ? ESCAPE '\' OR tags LIKE ? ESCAPE '\')"#,
-                    [pattern, pattern, pattern])
+            // SQLite's LIKE folds case for ASCII only; GRDB's Swift lowercase
+            // does every alphabet, so both sides are lowered by it.
+            let pattern = "%\(escapeLike(text.lowercased()))%"
+            return (#"""
+                (swiftLowercaseString(title) LIKE ? ESCAPE '\'
+                 OR swiftLowercaseString(description) LIKE ? ESCAPE '\'
+                 OR tags LIKE ? ESCAPE '\')
+                """#, [pattern, pattern, pattern])
         }
     }
 

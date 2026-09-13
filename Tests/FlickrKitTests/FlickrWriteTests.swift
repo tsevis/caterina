@@ -84,6 +84,17 @@ import Testing
         #expect(await transport.callCount == 1)
     }
 
+    /// A write carrying its own `method` or `oauth_*` would be signed and sent
+    /// with that parameter twice.
+    @Test func aWriteCannotOverrideTheParametersTheClientSets() async throws {
+        let transport = ScriptedTransport(always: #"{"stat":"ok"}"#)
+        for name in ["method", "format", "nojsoncallback", "oauth_token"] {
+            let write = FlickrWrite(method: "flickr.photos.setMeta", arguments: [name: "x"], repeatable: true)
+            await #expect(throws: FlickrError.self) { _ = try await client(transport).perform(write) }
+        }
+        #expect(await transport.callCount == 0)
+    }
+
     @Test func writingNeedsASignedInAccount() async throws {
         let transport = ScriptedTransport(always: #"{"stat":"ok"}"#)
         await #expect(throws: FlickrError.self) {

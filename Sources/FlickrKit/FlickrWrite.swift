@@ -21,6 +21,12 @@ public struct FlickrWrite: Sendable, Equatable {
         self.permission = permission
     }
 
+    /// Parameters the client adds; one in `arguments` would be signed and sent
+    /// twice.
+    var overridesReservedParameters: Bool {
+        arguments.keys.contains { ["method", "format", "nojsoncallback"].contains($0) || $0.hasPrefix("oauth_") }
+    }
+
     /// In name order, so the same write always signs the same way.
     var parameters: [OAuthParameter] {
         [OAuthParameter(name: "method", value: method)]
