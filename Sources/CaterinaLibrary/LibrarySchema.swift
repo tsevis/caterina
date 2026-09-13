@@ -57,6 +57,32 @@ enum LibrarySchema {
                 t.primaryKey(["batchID", "position"])
             }
         }
+        migrator.registerMigration("v3-uploads") { db in
+            try db.create(table: "uploadBatch") { t in
+                t.primaryKey("id", .text)
+                t.column("createdAt", .double).notNull().indexed()
+                // "none", "new" or "existing"; with the title or id it needs.
+                t.column("albumKind", .text).notNull()
+                t.column("albumTitle", .text)
+                // For "new", filled in once the album has been made.
+                t.column("albumID", .text)
+            }
+            try db.create(table: "uploadItem") { t in
+                t.column("batchID", .text).notNull().references("uploadBatch", onDelete: .cascade)
+                t.column("position", .integer).notNull()
+                t.column("path", .text).notNull()
+                // A security-scoped bookmark, so a relaunch can still read a
+                // file that was dropped on the window.
+                t.column("bookmark", .blob)
+                t.column("metadata", .text).notNull()
+                t.column("state", .text).notNull()
+                t.column("ticket", .text)
+                t.column("photoID", .text)
+                t.column("inAlbum", .boolean).notNull().defaults(to: false)
+                t.column("message", .text)
+                t.primaryKey(["batchID", "position"])
+            }
+        }
         return migrator
     }
 
