@@ -68,7 +68,7 @@ struct StubChunkTransport: ChunkTransport {
 
     private func directory() throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("flickrdownloader-tests-\(UUID().uuidString)")
+            .appendingPathComponent("caterina-tests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

@@ -16,7 +16,7 @@ public enum OAuthFlow {
     /// The scheme registered on the Flickr app record. Read-only access is all
     /// this application needs, and asking for more would be asking for more
     /// than it uses.
-    public static let callbackScheme = "flickrdownloader"
+    public static let callbackScheme = "caterina"
     public static let callbackURL = "\(callbackScheme)://auth"
     public static let permissions = "read"
 

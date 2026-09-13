@@ -3,7 +3,7 @@ import SwiftUI
 import Testing
 
 import FlickrKit
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// The empty band below the last row is still the grid.
 @MainActor

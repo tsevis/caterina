@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 import FlickrKit
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// Search, select, download — against the real Flickr, with real files landing
 /// on a real disk.
@@ -31,7 +31,7 @@ struct LiveEndToEndTests {
 
     private func directory() throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("flickrdownloader-live-\(UUID().uuidString)")
+            .appendingPathComponent("caterina-live-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

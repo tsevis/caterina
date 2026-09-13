@@ -3,7 +3,7 @@ import Testing
 import UniformTypeIdentifiers
 
 import FlickrKit
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// What a dragged photo promises the Finder.
 ///
@@ -62,7 +62,7 @@ import FlickrKit
 
     private func directory() throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("flickrdownloader-folder-\(UUID().uuidString)")
+            .appendingPathComponent("caterina-folder-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

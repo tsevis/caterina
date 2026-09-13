@@ -5,8 +5,8 @@ import Testing
 
 /// The credits written beside a download.
 ///
-/// **The promise this keeps.** The splash reads "Photos off Flickr, with their
-/// licences attached" and tells the reader that a Creative Commons licence
+/// **The promise this keeps.** The splash promises that downloads keep their
+/// licences attached, and tells the reader that a Creative Commons licence
 /// still asks for attribution — while what used to land on disk was
 /// `title_id.jpg` and nothing else, so complying meant finding every photograph
 /// on Flickr again by hand.

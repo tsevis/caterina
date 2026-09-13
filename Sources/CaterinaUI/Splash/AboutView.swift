@@ -150,10 +150,10 @@ public struct AboutView: View {
                     .frame(height: Self.logoFrameHeight)
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("FlickrDownloader")
+                    Text("Caterina")
                         .font(.system(size: Self.titleSize, weight: .semibold))
                         .tracking(-0.6)
-                    Text("Photos off Flickr, with their licences attached")
+                    Text("Your Flickr library, whole")
                         .font(.system(size: Self.subtitleSize, weight: .regular))
                         .opacity(0.85)
                 }
@@ -248,11 +248,11 @@ public struct AboutView: View {
     // MARK: - The text
 
     static let about = """
-    Flickr holds several billion photographs, and getting more than one of them \
-    onto a disk has always meant clicking through a page at a time. This searches \
-    Flickr, or a person's photostream, or a group's pool, and downloads whatever \
-    you select — at the size you pick, with the photo's id in the filename so \
-    nothing quietly overwrites anything else.
+    Named for Caterina Fake, who co-founded Flickr in 2004. It searches Flickr, \
+    or a person's photostream, or a group's pool, and downloads whatever you \
+    select — at the size you pick, with the photo's id in the filename so \
+    nothing quietly overwrites anything else. Uploading, organizing and the \
+    numbers behind your own photographs are being built.
 
     The photographs are not yours. The licence shown beside a photo is the one \
     Flickr publishes for it: All Rights Reserved means exactly that, and a \

@@ -1,15 +1,15 @@
 import SwiftUI
 
-import FlickrDownloaderUI
+import CaterinaUI
 
 @main
-struct FlickrDownloaderApp: App {
+struct CaterinaApp: App {
     /// Owned here rather than by `RootView` because Settings is a second scene
     /// and has to see the same model — a preferences window editing a different
     /// copy of the credentials than the one the app is using would be worse
     /// than having no preferences window at all.
     @State private var model = AppModel()
-    /// Shown once at launch, and again from About FlickrDownloader. It carries
+    /// Shown once at launch, and again from About Caterina. It carries
     /// the statement about whose photographs these are, which has to live
     /// somewhere findable.
     @State private var about = AboutWindowController()
@@ -21,7 +21,7 @@ struct FlickrDownloaderApp: App {
         // One window: there is one workspace, and a New that opened a second
         // copy of the same four sources would be a menu item that teaches
         // distrust.
-        Window("FlickrDownloader", id: "main") {
+        Window("Caterina", id: "main") {
             RootView(model: model, about: about)
                 .onAppear {
                     delegate.beforeQuit = { await model.finishDownloadBeforeClosing() }
@@ -36,7 +36,7 @@ struct FlickrDownloaderApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appInfo) {
-                Button("About FlickrDownloader") { about.show() }
+                Button("About Caterina") { about.show() }
             }
         }
 

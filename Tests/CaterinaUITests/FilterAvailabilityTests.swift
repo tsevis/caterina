@@ -2,7 +2,7 @@ import SwiftUI
 import Testing
 
 import FlickrKit
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// Which filter sections a source can use.
 ///

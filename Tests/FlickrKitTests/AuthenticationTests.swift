@@ -17,9 +17,9 @@ import Testing
 
     @Test func theRequestTokenCallCarriesTheCallbackNotOOB() throws {
         let url = try OAuthFlow.requestTokenURL(credentials: credentials,
-                                                callback: "flickrdownloader://auth")
+                                                callback: "caterina://auth")
         let query = try #require(url.query)
-        #expect(query.contains("oauth_callback=flickrdownloader%3A%2F%2Fauth"))
+        #expect(query.contains("oauth_callback=caterina%3A%2F%2Fauth"))
         #expect(!query.contains("oob"))
         #expect(url.absoluteString.hasPrefix(OAuthFlow.requestTokenEndpoint))
     }
@@ -60,28 +60,28 @@ import Testing
     // MARK: - The callback
 
     @Test func theVerifierIsReadFromTheCallback() throws {
-        let url = URL(string: "flickrdownloader://auth?oauth_token=72157-abc&oauth_verifier=123-456")!
+        let url = URL(string: "caterina://auth?oauth_token=72157-abc&oauth_verifier=123-456")!
         #expect(try OAuthFlow.verifier(from: url, expecting: "72157-abc") == "123-456")
     }
 
     /// The callback is opened by a browser and its contents are not ours. A
     /// token that is not the one we asked for must not be exchanged.
     @Test func aCallbackForADifferentTokenIsRefused() {
-        let url = URL(string: "flickrdownloader://auth?oauth_token=someone-else&oauth_verifier=1")!
+        let url = URL(string: "caterina://auth?oauth_token=someone-else&oauth_verifier=1")!
         #expect(throws: FlickrError.self) {
             _ = try OAuthFlow.verifier(from: url, expecting: "72157-abc")
         }
     }
 
     @Test func aCallbackWithNoVerifierIsRefused() {
-        let url = URL(string: "flickrdownloader://auth?oauth_token=72157-abc")!
+        let url = URL(string: "caterina://auth?oauth_token=72157-abc")!
         #expect(throws: FlickrError.self) {
             _ = try OAuthFlow.verifier(from: url, expecting: "72157-abc")
         }
     }
 
     @Test func aUserWhoDeclinedIsNotAnError() {
-        let url = URL(string: "flickrdownloader://auth?oauth_problem=user_refused")!
+        let url = URL(string: "caterina://auth?oauth_problem=user_refused")!
         #expect(throws: FlickrError.self) {
             _ = try OAuthFlow.verifier(from: url, expecting: "72157-abc")
         }

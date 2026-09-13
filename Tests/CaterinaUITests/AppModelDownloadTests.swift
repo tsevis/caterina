@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 import FlickrKit
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// The download side of the model, headlessly.
 @MainActor
@@ -10,7 +10,7 @@ import FlickrKit
 
     private func directory() throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("flickrdownloader-model-\(UUID().uuidString)")
+            .appendingPathComponent("caterina-model-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

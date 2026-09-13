@@ -1,10 +1,10 @@
-# Generated into FlickrDownloader.xcodeproj by:
+# Generated into Caterina.xcodeproj by:
 #   xcodegen generate --spec App/project.yml
 #
 # The project is a thin shell. Every line of logic lives in the FlickrKit
 # package one directory up, so `swift build` and `swift test` work without
 # Xcode and the tests never need a window.
-name: FlickrDownloader
+name: Caterina
 options:
   bundleIdPrefix: com.tsevis
   deploymentTarget:
@@ -16,28 +16,28 @@ packages:
     path: ..
 
 targets:
-  FlickrDownloader:
+  Caterina:
     type: application
     platform: macOS
     sources:
-      - path: FlickrDownloader
+      - path: Caterina
     dependencies:
       - package: FlickrKit
-        product: FlickrDownloaderUI
+        product: CaterinaUI
       - package: FlickrKit
         product: FlickrKit
     settings:
       base:
-        PRODUCT_NAME: FlickrDownloader
-        PRODUCT_BUNDLE_IDENTIFIER: com.tsevis.FlickrDownloader
+        PRODUCT_NAME: Caterina
+        PRODUCT_BUNDLE_IDENTIFIER: com.tsevis.Caterina
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-        INFOPLIST_FILE: FlickrDownloader/Info.plist
+        INFOPLIST_FILE: Caterina/Info.plist
         # Drawn by Scripts/make-icon.py: the contact sheet the splash shows and
         # the app makes. Ten sizes, and the small ones are a different drawing
         # rather than a blurrier one — nine tiles at 16 points is mush.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_ENTITLEMENTS: FlickrDownloader/FlickrDownloader.entitlements
+        CODE_SIGN_ENTITLEMENTS: Caterina/Caterina.entitlements
         # Apple Developer Program team.
         DEVELOPMENT_TEAM: TN899J6HRF
         # Developer ID, manual, no provisioning profile: direct distribution

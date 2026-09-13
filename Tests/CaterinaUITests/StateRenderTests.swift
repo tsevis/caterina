@@ -3,7 +3,7 @@ import SwiftUI
 import Testing
 
 import FlickrKit
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// Draws the states the grid spends its life in, offscreen, and leaves copies
 /// to look at.
@@ -15,7 +15,7 @@ import FlickrKit
 @Suite struct StateRenderTests {
 
     private static let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("flickrdownloader-states", isDirectory: true)
+        .appendingPathComponent("caterina-states", isDirectory: true)
 
     private func write<V: View>(_ view: V, _ name: String,
                                 size: CGSize = CGSize(width: 640, height: 420)) throws -> NSBitmapImageRep {

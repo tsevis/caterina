@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// Contrast, measured in both appearances rather than asserted in a comment.
 ///

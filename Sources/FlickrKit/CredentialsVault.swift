@@ -18,9 +18,14 @@ public protocol SecretStore: Sendable {
 /// `.env` file, and not source: an API secret in any of those is readable by
 /// anything running as the user and survives in backups.
 public struct KeychainSecretStore: SecretStore {
+    /// Caterina's own. A key saved by FlickrDownloader, under that app's
+    /// service, is not read: Caterina is registered at Flickr with a key of
+    /// its own.
+    public static let defaultService = "com.tsevis.Caterina"
+
     private let service: String
 
-    public init(service: String = "com.tsevis.FlickrDownloader") {
+    public init(service: String = defaultService) {
         self.service = service
     }
 

@@ -1,7 +1,7 @@
 import AppKit
 import Testing
 
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// The splash's pictures, checked without drawing a window.
 ///

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// Draws the splash offscreen and looks at the pixels.
 ///
@@ -63,7 +63,7 @@ import Testing
         let bitmap = try #require(render())
         let png = try #require(bitmap.representation(using: .png, properties: [:]))
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("flickrdownloader-splash.png")
+            .appendingPathComponent("caterina-splash.png")
         try png.write(to: url)
         #expect(FileManager.default.fileExists(atPath: url.path))
     }

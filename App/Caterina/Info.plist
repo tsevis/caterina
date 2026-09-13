@@ -36,12 +36,12 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.tsevis.FlickrDownloader.oauth</string>
+			<string>com.tsevis.Caterina.oauth</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>flickrdownloader</string>
+				<string>caterina</string>
 			</array>
 		</dict>
 	</array>

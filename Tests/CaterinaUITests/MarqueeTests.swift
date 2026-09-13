@@ -1,7 +1,7 @@
 import CoreGraphics
 import Testing
 
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// Sweeping, as arithmetic.
 @Suite struct MarqueeTests {

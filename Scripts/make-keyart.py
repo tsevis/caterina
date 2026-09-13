@@ -110,7 +110,7 @@ def draw(scale: int) -> Image.Image:
 
 
 def main() -> None:
-    out = Path(__file__).resolve().parent.parent / "Sources/FlickrDownloaderUI/Resources"
+    out = Path(__file__).resolve().parent.parent / "Sources/CaterinaUI/Resources"
     out.mkdir(parents=True, exist_ok=True)
     for scale in (1, 2, 3):
         name = "ContactSheetAbout.png" if scale == 1 else f"ContactSheetAbout@{scale}x.png"

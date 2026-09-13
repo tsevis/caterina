@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// The remembered folder after a relaunch.
 ///
@@ -52,7 +52,7 @@ import Testing
 
     private func directory(_ name: String) throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("flickrdownloader-\(name)-\(UUID().uuidString)")
+            .appendingPathComponent("caterina-\(name)-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
@@ -64,7 +64,7 @@ import Testing
         let folder = try directory("before")
         let data = DownloadFolder.bookmark(for: folder, options: [])
         let moved = folder.deletingLastPathComponent()
-            .appendingPathComponent("flickrdownloader-after-\(UUID().uuidString)")
+            .appendingPathComponent("caterina-after-\(UUID().uuidString)")
         try FileManager.default.moveItem(at: folder, to: moved)
         defer { try? FileManager.default.removeItem(at: moved) }
 

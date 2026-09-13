@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 import FlickrKit
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// What the browser hands back, and what it means.
 ///
@@ -16,7 +16,7 @@ import FlickrKit
 @Suite struct SignInCallbackTests {
 
     @Test func aCallbackURLIsTheAnswer() throws {
-        let url = URL(string: "flickrdownloader://auth?oauth_token=a&oauth_verifier=b")!
+        let url = URL(string: "caterina://auth?oauth_token=a&oauth_verifier=b")!
         let result = FlickrSignIn.outcome(callback: url, error: nil)
         #expect(try result.get() == url)
     }
@@ -63,7 +63,7 @@ import FlickrKit
     /// The mapping must work from an arbitrary queue, because that is where it
     /// is called from.
     @Test func itWorksFromABackgroundQueue() async throws {
-        let url = URL(string: "flickrdownloader://auth?oauth_verifier=x")!
+        let url = URL(string: "caterina://auth?oauth_verifier=x")!
         let answered: URL = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
                 let result = FlickrSignIn.outcome(callback: url, error: nil)

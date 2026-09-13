@@ -1,4 +1,4 @@
-# FlickrDownloader
+# Caterina
 
 A native macOS app that bulk-downloads photos from Flickr — search results, a
 person's photostream, a group's pool, or your own account — at a size you pick,
@@ -16,13 +16,13 @@ costs nothing.
 2. On the app's record at Flickr, set the **callback URL** to exactly:
 
    ```
-   flickrdownloader://auth
+   caterina://auth
    ```
 
    This is what lets sign-in hand the verifier straight back to the app instead
    of making you copy a nine-digit code out of a browser. The same value is
-   registered in `App/FlickrDownloader/Info.plist` under `CFBundleURLTypes`.
-3. Launch FlickrDownloader and paste the key and secret into the sheet it opens.
+   registered in `App/Caterina/Info.plist` under `CFBundleURLTypes`.
+3. Launch Caterina and paste the key and secret into the sheet it opens.
 
 The key, the secret and the access token are kept in the macOS **Keychain**.
 They are never written to a file, to `UserDefaults`, or into source.
@@ -50,7 +50,7 @@ Requires macOS 15 and Swift 6.
 ```
 Sources/
   FlickrKit/            pure Swift — no SwiftUI, no AppKit, fully testable
-  FlickrDownloaderUI/   the SwiftUI layer, and the splash's artwork
+  CaterinaUI/         the SwiftUI layer, and the splash's artwork
 App/                    a thin Xcode shell: Info.plist, entitlements, @main
 Tests/                  233 tests — the bulk in FlickrKit, none opening a window
 ```
@@ -113,7 +113,7 @@ Each of these was a defect in the reference application, and each has a test.
 
 ## Known limitation: the sign-in callback
 
-Sign-in returns through the custom URL scheme `flickrdownloader://auth`. macOS
+Sign-in returns through the custom URL scheme `caterina://auth`. macOS
 has no ownership model for custom schemes — any app can register the same one,
 and which app receives the redirect is not guaranteed. Two things limit what
 that is worth to an attacker: the callback's request token is checked against

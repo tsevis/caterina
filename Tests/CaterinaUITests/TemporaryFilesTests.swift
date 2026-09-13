@@ -2,7 +2,7 @@ import ImageIO
 import Foundation
 import Testing
 
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// Cleaning up after Quick Look and drag-out.
 @Suite struct TemporaryFilesTests {

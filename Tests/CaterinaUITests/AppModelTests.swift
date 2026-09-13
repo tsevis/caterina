@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 import FlickrKit
-@testable import FlickrDownloaderUI
+@testable import CaterinaUI
 
 /// The window's state machine, exercised headlessly — no window is created by
 /// anything here.

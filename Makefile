@@ -1,14 +1,14 @@
-# FlickrDownloader
+# Caterina
 #
 # `make test` is offline and headless and opens no window. Keep it that way.
 
 SPEC      := App/project.yml
-PROJECT   := App/FlickrDownloader.xcodeproj
-SCHEME    := FlickrDownloader
+PROJECT   := App/Caterina.xcodeproj
+SCHEME    := Caterina
 DERIVED   := .build/xcode
-APP       := $(DERIVED)/Build/Products/Release/FlickrDownloader.app
+APP       := $(DERIVED)/Build/Products/Release/Caterina.app
 SIGN      := ../sign-and-notarize.sh
-ENTS      := App/FlickrDownloader/FlickrDownloader.entitlements
+ENTS      := App/Caterina/Caterina.entitlements
 
 .PHONY: all build test coverage lint project app run sign sign-only clean
 

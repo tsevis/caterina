@@ -54,7 +54,7 @@ final class GatedTransport: ChunkTransport, @unchecked Sendable {
 
     private func directory() throws -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("flickrdownloader-concurrency-\(UUID().uuidString)")
+            .appendingPathComponent("caterina-concurrency-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

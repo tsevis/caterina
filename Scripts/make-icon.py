@@ -10,7 +10,7 @@ The structure changes with the drawn size rather than being scaled down: nine
 tiles at 16 points is mush, so the small sizes carry four. That is a different
 drawing, not a blurrier one.
 
-Writes App/FlickrDownloader/Assets.xcassets/AppIcon.appiconset and
+Writes App/Caterina/Assets.xcassets/AppIcon.appiconset and
 documents/icon.png.
 """
 from __future__ import annotations
@@ -114,7 +114,7 @@ SIZES = [(16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2),
 
 def main() -> None:
     here = Path(__file__).resolve().parent.parent
-    out = here / "App/FlickrDownloader/Assets.xcassets/AppIcon.appiconset"
+    out = here / "App/Caterina/Assets.xcassets/AppIcon.appiconset"
     out.mkdir(parents=True, exist_ok=True)
 
     images = []

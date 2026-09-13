@@ -10,7 +10,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     products: [
         .library(name: "FlickrKit", targets: ["FlickrKit"]),
-        .library(name: "FlickrDownloaderUI", targets: ["FlickrDownloaderUI"]),
+        .library(name: "CaterinaUI", targets: ["CaterinaUI"]),
     ],
     targets: [
         .target(name: "FlickrKit"),
@@ -20,12 +20,12 @@ let package = Package(
         // resolves the same way in the app and in a test, where `Bundle.main`
         // would be the test runner.
         .target(
-            name: "FlickrDownloaderUI",
+            name: "CaterinaUI",
             dependencies: ["FlickrKit"],
             resources: [.copy("Resources")]
         ),
 
         .testTarget(name: "FlickrKitTests", dependencies: ["FlickrKit"]),
-        .testTarget(name: "FlickrDownloaderUITests", dependencies: ["FlickrDownloaderUI"]),
+        .testTarget(name: "CaterinaUITests", dependencies: ["CaterinaUI"]),
     ]
 )

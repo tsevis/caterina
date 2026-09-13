@@ -29,7 +29,7 @@ public struct RootView: View {
         .inspector(isPresented: $model.isShowingInspector) {
             FilterInspector(model: model, source: model.activeSource)
         }
-        .background(WindowConfigurator(autosaveName: "FlickrDownloaderMain",
+        .background(WindowConfigurator(autosaveName: "CaterinaMain",
                                        minimum: NSSize(width: 820, height: 560)))
         .toolbar { toolbar }
         .sheet(isPresented: $model.isShowingOnboarding) {
