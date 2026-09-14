@@ -15,7 +15,7 @@ public struct PendingDelete: Sendable, Equatable {
 extension OrganizeModel {
 
     /// Flickr has no trash, so this is the only time a delete can be taken back.
-    public nonisolated static let defaultDeleteGrace: Duration = .seconds(30)
+    public nonisolated static let defaultDeleteGrace: Duration = .seconds(60)
 
     // MARK: - Deleting, after a wait
 

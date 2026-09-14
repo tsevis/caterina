@@ -138,7 +138,7 @@ import FlickrKit
         #expect(undoable.contains("undo it"))
 
         let deleting = ApplyBar.confirmationMessage(title: "Delete", estimate: plain, isDelete: true)
-        #expect(deleting.contains("30 seconds"))
+        #expect(deleting.contains("60 seconds"))
         #expect(deleting.contains("cannot be undone"))
     }
 }
