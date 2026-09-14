@@ -80,6 +80,8 @@ public final class LibraryModel {
     static func status(count: Int, lastSynced: Date?, at instant: Date) -> String {
         let photos = "\(count.formatted(.number.locale(Self.locale))) \(count == 1 ? "photo" : "photos")"
         guard let lastSynced else { return "\(photos) · never synced" }
+        // Under a minute, and a clock a moment ahead, read as now.
+        guard instant.timeIntervalSince(lastSynced) >= 60 else { return "\(photos) · synced just now" }
         let formatter = RelativeDateTimeFormatter()
         formatter.locale = Self.locale
         formatter.unitsStyle = .full

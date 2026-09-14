@@ -248,11 +248,11 @@ public struct AboutView: View {
     // MARK: - The text
 
     static let about = """
-    Named for Caterina Fake, who co-founded Flickr in 2004. It searches Flickr, \
-    or a person's photostream, or a group's pool, and downloads whatever you \
-    select — at the size you pick, with the photo's id in the filename so \
-    nothing quietly overwrites anything else. Uploading, organizing and the \
-    numbers behind your own photographs are being built.
+    Named for Caterina Fake, who co-founded Flickr in 2004. It downloads from \
+    Flickr at the size you pick, uploads with titles, tags and albums already \
+    set, organizes your library in batches (tags, albums, groups, who can see \
+    what) with every change but deletion undoable, and browses the numbers \
+    behind your own photographs.
 
     The photographs are not yours. The licence shown beside a photo is the one \
     Flickr publishes for it: All Rights Reserved means exactly that, and a \

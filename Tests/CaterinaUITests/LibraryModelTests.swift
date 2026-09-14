@@ -89,6 +89,9 @@ actor OnePageLibrary: LibrarySource {
         #expect(LibraryModel.status(count: 18_402, lastSynced: now, at: now.addingTimeInterval(120))
                 == "18,402 photos · synced 2 minutes ago")
         #expect(LibraryModel.status(count: 1, lastSynced: nil, at: now) == "1 photo · never synced")
+        // A sync that just finished is not "in 0 seconds".
+        #expect(LibraryModel.status(count: 3, lastSynced: now, at: now) == "3 photos · synced just now")
+        #expect(LibraryModel.status(count: 3, lastSynced: now.addingTimeInterval(2), at: now) == "3 photos · synced just now")
     }
 }
 
