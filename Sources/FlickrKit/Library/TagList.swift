@@ -9,11 +9,14 @@ import Foundation
 enum TagList {
 
     static func adding(_ tags: [String], to existing: [String]) -> [String] {
-        tags.reduce(existing) { list, tag in
+        var seen = Set(existing.map(PhotoEdit.flickrTag))
+        var added: [String] = []
+        for tag in tags {
             let clean = PhotoEdit.flickrTag(tag)
-            guard !clean.isEmpty, !list.contains(where: { PhotoEdit.flickrTag($0) == clean }) else { return list }
-            return list + [trimmed(tag)]
+            guard !clean.isEmpty, seen.insert(clean).inserted else { continue }
+            added.append(trimmed(tag))
         }
+        return existing + added
     }
 
     static func removing(_ tags: [String], from existing: [String]) -> [String] {

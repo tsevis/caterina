@@ -92,7 +92,10 @@ public enum PhotoEdit: Sendable, Equatable {
     /// keeps its structure, lowercased.
     public static func flickrTag(_ tag: String) -> String {
         let lowered = tag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if lowered.wholeMatch(of: /[a-z_][a-z0-9_]*:[a-z_][a-z0-9_]*=.+/) != nil { return lowered }
+        // The pattern only where it could match: it is slow, and this runs for
+        // every tag of every photo in a tray.
+        if lowered.contains(":"), lowered.contains("="),
+           lowered.wholeMatch(of: /[a-z_][a-z0-9_]*:[a-z_][a-z0-9_]*=.+/) != nil { return lowered }
         return String(lowered.unicodeScalars.filter(CharacterSet.alphanumerics.contains).map(Character.init))
     }
 }

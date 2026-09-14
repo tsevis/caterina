@@ -4,6 +4,12 @@ import Observation
 import CaterinaLibrary
 import FlickrKit
 
+struct EstimateCache {
+    let edits: [PhotoEdit]
+    let tray: [LibraryPhoto]
+    let estimate: EditEstimate
+}
+
 /// Every photo id in an album, in album order.
 public protocol AlbumContents: Sendable {
     func albumPhotoIDs(albumID: String, ownerID: String, priority: CallPriority) async throws -> [String]
@@ -67,7 +73,7 @@ public final class OrganizeModel {
 
     public internal(set) var selection = GridSelection()
     /// Photo ids, in the order they went in. Kept across views.
-    public private(set) var tray: [String] = []
+    public internal(set) var tray: [String] = []
     public private(set) var trayPhotos: [LibraryPhoto] = []
 
     // MARK: Changing
@@ -80,6 +86,7 @@ public final class OrganizeModel {
     let budget: CallBudget
     let accountID: @Sendable () -> String?
     var runTask: Task<Void, Never>?
+    @ObservationIgnored var estimateCache: EstimateCache?
     /// Bumped by every change of view; a reply for an older one is dropped.
     var generation = 0
 

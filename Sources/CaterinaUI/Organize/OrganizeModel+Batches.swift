@@ -17,8 +17,15 @@ extension OrganizeModel {
     public func estimate(_ edit: PhotoEdit) -> EditEstimate { estimate([edit]) }
 
     /// What `edits`, one after another, would do to the tray.
+    /// Remembered for the same edits and tray: a redraw that changes neither
+    /// (progress, selection) costs nothing, with a whole library in the tray.
     public func estimate(_ edits: [PhotoEdit]) -> EditEstimate {
-        EditEstimate.of(changes(for: edits), budget: budget)
+        if let cached = estimateCache, cached.edits == edits, cached.tray == trayPhotos {
+            return cached.estimate
+        }
+        let estimate = EditEstimate.of(changes(for: edits), budget: budget)
+        estimateCache = EstimateCache(edits: edits, tray: trayPhotos, estimate: estimate)
+        return estimate
     }
 
     public func apply(_ edit: PhotoEdit, title: String) async { await apply([edit], title: title) }

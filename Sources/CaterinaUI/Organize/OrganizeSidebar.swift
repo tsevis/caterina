@@ -9,6 +9,7 @@ struct OrganizeSidebar: View {
     @State private var tagFilter = ""
     @State private var searchText = ""
     @State private var timelineByPosted = false
+    @State private var removing: String?
 
     private var selection: Binding<OrganizeScope?> {
         Binding(get: { organize.scope }, set: { scope in
@@ -67,9 +68,14 @@ struct OrganizeSidebar: View {
                 TextField("Filter tags", text: $tagFilter).textFieldStyle(.roundedBorder)
                 ForEach(shownTags) { tag in
                     Label(tag.tag, systemImage: "tag").badge(tag.count).tag(OrganizeScope.tag(tag.tag))
+                        .contextMenu {
+                            Button("Remove Tag Everywhere…") { removing = tag.tag }
+                                .disabled(organize.isRunning)
+                        }
                 }
             }
         }
+        .removeTagEverywhereDialog(organize: organize, tag: $removing)
         .task {
             await organize.loadAlbums()
             await organize.loadCollections()

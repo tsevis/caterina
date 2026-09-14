@@ -490,3 +490,117 @@ final class AccountBox: @unchecked Sendable {
         #expect(await flickr.sent.last?.method == "flickr.galleries.removePhoto")
     }
 }
+
+/// Whole views and whole-library tag removal, past the 600 photos a grid loads.
+@MainActor
+@Suite struct WholeViewTests {
+
+    private func library(_ count: Int) throws -> LibraryStore {
+        let store = try LibraryStore.inMemory()
+        try store.save((1...count).map { LibraryPhoto(id: "\($0)", title: "P\($0)", tags: $0 % 2 == 0 ? ["sea", "Blue"] : ["blue"],
+                                                      taken: String(format: "2024-01-01 %02d:%02d:%02d", ($0 / 3600) % 24, ($0 / 60) % 60, $0 % 60)) },
+                       generation: 1)
+        return store
+    }
+
+    @Test func theWholeViewGoesInTheTrayNotJustWhatIsLoaded() async throws {
+        let store = try library(OrganizeModel.pageSize + 150)
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { "me" })
+        await model.open(.tag("sea"))
+        #expect(model.viewCount == 375)
+
+        model.click("2", modifiers: [])
+        model.addSelectionToTray()
+        await model.addEntireViewToTray()
+
+        #expect(model.tray.count == 375)
+        #expect(model.tray.first == "2")
+        #expect(Set(model.tray).count == 375)
+    }
+
+    @Test func theWholeAllPhotosViewTooInItsOrder() async throws {
+        let store = try library(OrganizeModel.pageSize + 5)
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { "me" })
+        await model.addEntireViewToTray()
+        #expect(model.tray.count == OrganizeModel.pageSize + 5)
+        #expect(model.tray == model.photos.map(\.id) + model.tray.dropFirst(model.photos.count))
+    }
+
+    @Test func anAlbumViewAddsEveryPhotoInTheAlbum() async throws {
+        let store = try library(3)
+        let flickr = FakeOrganizeFlickr(store: store, albums: [.init(id: "A", title: "A", description: "", cover: "3", photos: ["3", "1"])])
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+        await model.open(.album(id: "A", title: "A"))
+        #expect(model.viewCount == 2)
+        await model.addEntireViewToTray()
+        #expect(model.tray == ["3", "1"])
+    }
+
+    /// Removing a tag everywhere touches only photos that carry it, in any
+    /// spelling, leaves the tray alone, and says the cost first.
+    @Test func aTagIsRemovedFromEveryPhotoThatHasIt() async throws {
+        let store = try library(OrganizeModel.pageSize + 150)
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+        let kept = try #require(model.photos.first?.id)
+        model.click(kept, modifiers: [])
+        model.addSelectionToTray()
+
+        let estimate = model.estimateRemovingEverywhere("blue")
+        #expect(estimate.photos == 750)
+        #expect(estimate.calls == 1_500)
+
+        await model.removeTagEverywhere("blue")
+
+        #expect(await flickr.sent.count == 750)
+        #expect(try store.photos(.tagged("blue")).isEmpty)
+        #expect(try store.photos(.tagged("sea")).count == 375)
+        #expect(model.tray == [kept])
+        let row = try #require(model.activity.first)
+        #expect(row.batch.title == "Remove tag “blue” from 750 photos")
+        #expect(row.canUndo)
+    }
+
+    @Test func aTagNobodyHasCostsNothingAndSendsNothing() async throws {
+        let store = try library(3)
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+        #expect(model.estimateRemovingEverywhere("absent").photos == 0)
+        await model.removeTagEverywhere("absent")
+        #expect(await flickr.sent.isEmpty)
+        #expect(model.activity.isEmpty)
+    }
+}
+
+@MainActor
+@Suite struct LargeTrayTests {
+    /// The estimate is redrawn as someone types; a whole library in the tray
+    /// must not make typing lag.
+    @Test func estimatingEighteenThousandPhotosIsQuick() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save((1...18_000).map { LibraryPhoto(id: "\($0)", title: "P", tags: ["a", "b"]) }, generation: 1)
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { "me" })
+        await model.addEntireViewToTray()
+        #expect(model.tray.count == 18_000)
+        let clock = ContinuousClock()
+        // A debug build; a release build is several times quicker. It was 7 s
+        // before tag cleaning stopped running a pattern on every tag.
+        let took = clock.measure { _ = model.estimate(.addTags(["New York"])) }
+        #expect(took < .seconds(1.5), "estimate took \(took)")
+        let again = clock.measure { _ = model.estimate(.addTags(["New York"])) }
+        #expect(again < .milliseconds(50), "a repeat took \(again)")
+    }
+}
+
+@MainActor
+@Suite struct RemoveTagSignedOutTests {
+    @Test func removingATagEverywhereNeedsASignedInAccount() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "1", tags: ["sea"])], generation: 1)
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { nil })
+        await model.removeTagEverywhere("sea")
+        #expect(await flickr.sent.isEmpty)
+        #expect(model.problem == "Sign in to Flickr to change your photos.")
+    }
+}

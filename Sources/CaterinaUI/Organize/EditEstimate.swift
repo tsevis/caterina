@@ -24,8 +24,10 @@ public struct EditEstimate: Sendable, Equatable {
     }
 
     static func of(_ changes: [PhotoChange], budget: CallBudget) -> EditEstimate {
-        let changing = changes.filter { !$0.isEmpty }
-        let calls = changing.reduce(0) { $0 + $1.readCalls + $1.writes.count }
+        // Writes are worked out once per photo: they are the expensive part.
+        let counted = changes.map { ($0, $0.writes.count) }
+        let changing = counted.filter { $0.1 > 0 }.map(\.0)
+        let calls = counted.reduce(0) { $0 + ($1.1 > 0 ? $1.0.readCalls + $1.1 : 0) }
         let unrestorable = changing.flatMap(\.unrestorable).reduce(into: [String]()) { list, field in
             if !list.contains(field) { list.append(field) }
         }

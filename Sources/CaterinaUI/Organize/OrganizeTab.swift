@@ -111,6 +111,13 @@ struct OrganizeContent: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(organize.photos.isEmpty)
+                Button("Add All \(organize.viewCount.formatted()) to Tray") {
+                    Task { await organize.addEntireViewToTray() }
+                }
+                .buttonStyle(.borderless)
+                .disabled(organize.viewCount == 0)
+                .help("Every photo in this view, including those not loaded yet")
+                if case let .tag(tag) = organize.scope { RemoveTagEverywhereButton(organize: organize, tag: tag) }
                 Spacer()
                 if organize.scope.albumID != nil { AlbumActions(organize: organize) }
                 if organize.scope == .notInAlbum { NotInAlbumStatus(organize: organize) }
