@@ -14,6 +14,7 @@ struct OrganizeTab: View {
     /// other.
     @State private var permissionRequest: PermissionRequest?
     @State private var groupShare: GroupShareModel?
+    @State private var searchText = ""
 
     var body: some View {
         if let organize = model.organize {
@@ -33,6 +34,16 @@ struct OrganizeTab: View {
                 }
             }
             .toolbar { toolbar(organize) }
+            .searchable(text: $searchText, placement: .toolbar, prompt: "Search your photos")
+            .task(id: searchText) {
+                // A pause in typing, not every keystroke.
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                await organize.search(searchText)
+            }
+            .onChange(of: organize.scope) { _, scope in
+                if case .search = scope {} else if !searchText.isEmpty { searchText = "" }
+            }
             .onChange(of: organize.run) { _, run in
                 if case let .needsPermission(permission, batchID) = run {
                     permissionRequest = PermissionRequest(permission: permission, batchID: batchID)

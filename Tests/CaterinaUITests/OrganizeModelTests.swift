@@ -111,7 +111,9 @@ actor FakeOrganizeFlickr: OrganizeFlickr {
                          children: [PhotoCollection(id: "c2", title: "Greece", description: "",
                                                     albums: [.init(id: "A", title: "Athens")], children: [])])]
     }
+    private(set) var lastList: PhotoList?
     func photoList(_ list: PhotoList, page: Int) async throws -> LibraryPage {
+        lastList = list
         if holding { await withCheckedContinuation { held = $0 } }
         if let listFailure { throw listFailure }
         return LibraryPage(page: 1, pages: 1, total: notInAlbum.count,
@@ -602,5 +604,40 @@ final class AccountBox: @unchecked Sendable {
         await model.removeTagEverywhere("sea")
         #expect(await flickr.sent.isEmpty)
         #expect(model.problem == "Sign in to Flickr to change your photos.")
+    }
+}
+
+@MainActor
+@Suite struct SearchAndPeopleTests {
+
+    private func setUp(photosOf: [String] = []) throws -> (OrganizeModel, FakeOrganizeFlickr) {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "1", title: "Harbour at night"), LibraryPhoto(id: "2", title: "Hill"),
+                        LibraryPhoto(id: "3", title: "Harbour")], generation: 1)
+        let flickr = FakeOrganizeFlickr(store: store, notInAlbum: photosOf)
+        return (OrganizeModel(store: store, flickr: flickr, accountID: { "me" }), flickr)
+    }
+
+    /// Typing searches at once; clearing the field goes back to where you were.
+    @Test func searchingAsYouTypeAndClearingReturns() async throws {
+        let (model, _) = try setUp()
+        await model.open(.untagged)
+        await model.search("harbour")
+        #expect(model.scope == .search("harbour"))
+        #expect(Set(model.photos.map(\.id)) == ["1", "3"])
+        await model.search("harbour night")
+        #expect(model.photos.map(\.id) == ["1"])
+        await model.search("  ")
+        #expect(model.scope == .untagged)
+    }
+
+    /// Everyone's photos of a person are asked for with you as the owner,
+    /// and only photos in your library go in the tray.
+    @Test func yourPhotosOfAPersonGoInTheTray() async throws {
+        let (model, flickr) = try setUp(photosOf: ["3", "1", "someone-elses"])
+        let count = await model.addPhotosOf(FlickrPerson(nsid: "12@N01", username: "Ann"))
+        #expect(count == 2)
+        #expect(model.tray == ["3", "1"])
+        #expect(await flickr.lastList == .photosOfIn(userID: "12@N01", ownerID: "me"))
     }
 }

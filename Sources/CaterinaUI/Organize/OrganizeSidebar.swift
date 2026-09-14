@@ -7,7 +7,6 @@ import FlickrKit
 struct OrganizeSidebar: View {
     let organize: OrganizeModel
     @State private var tagFilter = ""
-    @State private var searchText = ""
     @State private var timelineByPosted = false
     @State private var removing: String?
 
@@ -20,13 +19,6 @@ struct OrganizeSidebar: View {
 
     var body: some View {
         List(selection: selection) {
-            TextField("Search titles, descriptions, tags", text: $searchText)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !text.isEmpty else { return }
-                    Task { await organize.open(.search(text)) }
-                }
             Section("Library") {
                 ForEach(OrganizeScope.smartViews, id: \.self) { row($0) }
             }

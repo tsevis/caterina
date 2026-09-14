@@ -285,14 +285,19 @@ enum LibrarySchema {
         case .notInAlbum:
             return ("id IN (SELECT photoID FROM notInAlbum)", [])
         case let .matching(text):
+            // Every word, each in the title, the description or a tag.
             // SQLite's LIKE folds case for ASCII only; GRDB's Swift lowercase
             // does every alphabet, so both sides are lowered by it.
-            let pattern = "%\(escapeLike(text.lowercased()))%"
-            return (#"""
+            let words = text.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
+            guard !words.isEmpty else { return ("1", []) }
+            let clause = #"""
                 (swiftLowercaseString(title) LIKE ? ESCAPE '\'
                  OR swiftLowercaseString(description) LIKE ? ESCAPE '\'
                  OR tags LIKE ? ESCAPE '\')
-                """#, [pattern, pattern, pattern])
+                """#
+            let patterns = words.flatMap { Array(repeating: "%\(escapeLike($0))%", count: 3) }
+            return (Array(repeating: clause, count: words.count).joined(separator: " AND "),
+                    StatementArguments(patterns))
         }
     }
 

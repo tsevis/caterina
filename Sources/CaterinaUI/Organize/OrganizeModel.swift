@@ -87,6 +87,8 @@ public final class OrganizeModel {
     let accountID: @Sendable () -> String?
     var runTask: Task<Void, Never>?
     @ObservationIgnored var estimateCache: EstimateCache?
+    /// Where to return when the search field is cleared.
+    var scopeBeforeSearch: OrganizeScope?
     /// Bumped by every change of view; a reply for an older one is dropped.
     var generation = 0
 

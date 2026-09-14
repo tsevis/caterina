@@ -22,6 +22,8 @@ import Testing
         (PhotoList.yourFaves, "flickr.favorites.getList", [:]),
         (PhotoList.photostream(userID: "12@N01"), "flickr.people.getPhotos", ["user_id": "12@N01"]),
         (PhotoList.photosOf(userID: "12@N01"), "flickr.people.getPhotosOf", ["user_id": "12@N01"]),
+        (PhotoList.photosOfIn(userID: "12@N01", ownerID: "me@N00"), "flickr.people.getPhotosOf",
+         ["user_id": "12@N01", "owner_id": "me@N00"]),
         (PhotoList.explore, "flickr.interestingness.getList", [:]),
         (PhotoList.notInAlbum, "flickr.photos.getNotInSet", [:]),
     ])

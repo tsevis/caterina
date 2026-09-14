@@ -90,3 +90,18 @@ import FlickrKit
         #expect(try store.photos(.uploadedIn("2024-06")).map(\.id).sorted() == ["1", "2"])
     }
 }
+
+/// Searching your photos as people type: every word must be found, in the
+/// title, the description or a tag, in any order.
+@Suite struct LibrarySearchTests {
+    @Test func everyWordMustMatchSomewhere() throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "1", title: "Harbour at night", tags: ["piraeus"]),
+                        LibraryPhoto(id: "2", title: "Harbour", description: "Dusk over Piraeus"),
+                        LibraryPhoto(id: "3", title: "Piraeus market")], generation: 1)
+        #expect(Set(try store.photos(.matching("piraeus harbour")).map(\.id)) == ["1", "2"])
+        #expect(try store.photos(.matching("  dusk   PIRAEUS ")).map(\.id) == ["2"])
+        #expect(try store.count(.matching("harbour  night")) == 1)
+        #expect(try store.photos(.matching("100%")).isEmpty)
+    }
+}

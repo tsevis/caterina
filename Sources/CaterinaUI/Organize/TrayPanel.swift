@@ -33,17 +33,27 @@ struct TrayPanel: View {
             header
             Divider()
             if organize.tray.isEmpty {
-                ContentUnavailableView("The tray is empty", systemImage: "tray",
-                                       description: Text("Select photos and choose Add to Tray (⌘↩). "
-                                                         + "The tray keeps them while you look elsewhere."))
+                ContentUnavailableView {
+                    Label("The tray is empty", systemImage: "tray")
+                } description: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Select photos and choose Add to Tray (⌘↩), or Add All in a view's header. "
+                             + "The tray keeps them while you look elsewhere. Then choose what to change here.")
+                        Text("**Remove a tag from every photo:** right-click it under Tags in the sidebar.")
+                        Text("**Untag a person:** choose Change › People, Find them, put your photos of them "
+                             + "in the tray, choose Untag, then Apply.")
+                    }
+                    .multilineTextAlignment(.leading)
+                }
             } else {
                 TrayStrip(organize: organize).frame(height: 96)
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        Picker("Edit", selection: kind) {
+                        Picker("Change", selection: kind) {
                             ForEach(EditKind.allCases) { Text($0.title).tag($0) }
                         }
+                        .help("What to change on every photo in the tray")
                         EditForm(draft: $draft, organize: organize)
                         Divider()
                         TrayAlbumSection(organize: organize)

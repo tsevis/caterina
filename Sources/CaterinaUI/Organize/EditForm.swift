@@ -206,6 +206,7 @@ struct PeopleForm: View {
     @Binding var draft: EditDraft
     var organize: OrganizeModel?
     @State private var isFinding = false
+    @State private var loaded: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -231,6 +232,18 @@ struct PeopleForm: View {
             }
             if let found = draft.resolvedPerson {
                 Label("\(found.username) (\(found.nsid))", systemImage: "person.crop.circle.badge.checkmark")
+                if let organize {
+                    HStack {
+                        Button("Put My Photos of \(found.username) in the Tray") {
+                            Task { loaded = await organize.addPhotosOf(found) }
+                        }
+                        .disabled(organize.isRunning)
+                        if let loaded { Text("\(loaded.formatted()) found").foregroundStyle(Theme.inkSecondary) }
+                    }
+                    Text("To untag them from every photo: fill the tray this way, choose Untag, then Apply.")
+                        .font(.caption).foregroundStyle(Theme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Text("Flickr allows tagging only people who let you, and not in private photos; "
                  + "those photos are listed in Activity.")

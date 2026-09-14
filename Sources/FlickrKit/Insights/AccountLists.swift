@@ -11,6 +11,8 @@ public enum PhotoList: Sendable, Hashable {
     case photostream(userID: String)
     /// Photos someone is tagged in.
     case photosOf(userID: String)
+    /// Photos someone is tagged in, taken by one owner.
+    case photosOfIn(userID: String, ownerID: String)
     /// Flickr's Explore: today's most interesting.
     case explore
     /// Your photos in no album.
@@ -26,6 +28,7 @@ public enum PhotoList: Sendable, Hashable {
         case .yourFaves: ("flickr.favorites.getList", [:])
         case let .photostream(user): ("flickr.people.getPhotos", ["user_id": user])
         case let .photosOf(user): ("flickr.people.getPhotosOf", ["user_id": user])
+        case let .photosOfIn(user, owner): ("flickr.people.getPhotosOf", ["user_id": user, "owner_id": owner])
         case .explore: ("flickr.interestingness.getList", [:])
         case .notInAlbum: ("flickr.photos.getNotInSet", [:])
         }
