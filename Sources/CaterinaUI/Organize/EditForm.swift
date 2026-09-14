@@ -19,6 +19,15 @@ struct EditForm: View {
             }
         case .dateTaken: dateForm
         case .location: LocationForm(draft: $draft)
+        case .datePosted: PostedForm(draft: $draft)
+        case .rotate:
+            Picker("Rotate", selection: $draft.degrees) {
+                Text("90° clockwise").tag(90)
+                Text("180°").tag(180)
+                Text("90° anticlockwise").tag(270)
+            }
+            .pickerStyle(.radioGroup)
+        case .people: PeopleForm(draft: $draft)
         }
     }
 
@@ -161,6 +170,52 @@ struct VisibilityForm: View {
             Text("Friends & family").tag(LibraryPhoto.Audience.friendsAndFamily)
             Text("Contacts").tag(LibraryPhoto.Audience.contacts)
             Text("Any Flickr member").tag(LibraryPhoto.Audience.everybody)
+        }
+    }
+}
+
+/// The date photos show as posted: shifted by days, or set.
+struct PostedForm: View {
+    @Binding var draft: EditDraft
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("", selection: $draft.postedMode) {
+                Text("Shift").tag(EditDraft.DateMode.shift)
+                Text("Set").tag(EditDraft.DateMode.set)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            if draft.postedMode == .shift {
+                Stepper("\(draft.postedShiftDays) days", value: $draft.postedShiftDays, in: -3650...3650)
+            } else {
+                DatePicker("Posted", selection: Binding(get: { draft.postedDate ?? Date() },
+                                                        set: { draft.postedDate = $0 }))
+            }
+            Text("Changes where photos fall in your photostream. Flickr refuses a date in the future.")
+                .font(.caption).foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// Tag or untag a Flickr member in every photo in the tray.
+struct PeopleForm: View {
+    @Binding var draft: EditDraft
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("", selection: $draft.removesPerson) {
+                Text("Tag").tag(false)
+                Text("Untag").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            TextField("Username or photostream address", text: $draft.person).textFieldStyle(.roundedBorder)
+            Text("Flickr allows tagging only people who let you, and not in private photos; "
+                 + "those photos are listed in Activity.")
+                .font(.caption).foregroundStyle(Theme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

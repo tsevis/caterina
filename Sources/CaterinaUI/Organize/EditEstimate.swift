@@ -15,6 +15,14 @@ public struct EditEstimate: Sendable, Equatable {
     /// restore them.
     public let unrestorable: [String]
 
+    public init(photos: Int, unchanged: Int, calls: Int, duration: Duration, unrestorable: [String]) {
+        self.photos = photos
+        self.unchanged = unchanged
+        self.calls = calls
+        self.duration = duration
+        self.unrestorable = unrestorable
+    }
+
     static func of(_ changes: [PhotoChange], budget: CallBudget) -> EditEstimate {
         let changing = changes.filter { !$0.isEmpty }
         let calls = changing.reduce(0) { $0 + $1.readCalls + $1.writes.count }

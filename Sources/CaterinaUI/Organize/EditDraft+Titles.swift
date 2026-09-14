@@ -17,6 +17,9 @@ extension EditDraft {
         case .licence: "Set licence to \(licence.label)"
         case .dateTaken: dateTitle
         case .location: locationTitle
+        case .datePosted: postedMode == .shift ? "Shift date posted by \(postedShiftDays) days" : "Set date posted"
+        case .rotate: rotateTitle
+        case .people: removesPerson ? "Untag \(personQuery)" : "Tag \(personQuery)"
         }
     }
 
@@ -42,6 +45,14 @@ extension EditDraft {
         guard dateMode == .shift else { return "Set date taken to \(takenText.trimmed)" }
         let parts = [shiftHours > 0 ? "\(shiftHours) h" : nil, shiftMinutes > 0 ? "\(shiftMinutes) min" : nil]
         return "Shift date taken \(parts.compactMap { $0 }.joined(separator: " ")) \(shiftsEarlier ? "earlier" : "later")"
+    }
+
+    private var rotateTitle: String {
+        switch degrees {
+        case 180: "Rotate 180°"
+        case 270: "Rotate 90° anticlockwise"
+        default: "Rotate 90° clockwise"
+        }
     }
 
     private var locationTitle: String {

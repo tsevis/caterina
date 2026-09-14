@@ -73,6 +73,7 @@ struct TrayPanel: View {
             Spacer()
             Button("Clear") { organize.clearTray() }
                 .disabled(organize.tray.isEmpty || organize.isRunning)
+            DeleteTrayButton(organize: organize)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -120,7 +121,8 @@ struct ApplyBar: View {
 
     var body: some View {
         // Once per drawing: it walks every photo in the tray.
-        let estimate = draft.edits.map { organize.estimate($0) }
+        let estimate = draft.kind.isAction ? draft.action.map { organize.estimate(action: $0) }
+                                            : draft.edits.map { organize.estimate($0) }
         VStack(alignment: .leading, spacing: 8) {
             if let problem = draft.problem {
                 Label(problem, systemImage: "info.circle").foregroundStyle(Theme.inkSecondary)
@@ -147,10 +149,21 @@ struct ApplyBar: View {
     }
 
     private func apply() {
-        guard let edits = draft.edits else { return }
+        let (draft, organize) = (self.draft, self.organize)
         let title = draft.batchTitle
-        onApplied()
-        Task { await organize.apply(edits, title: title) }
+        switch (draft.kind, draft.action, draft.edits) {
+        case (.people, _, _):
+            onApplied()
+            Task { await organize.tagPerson(draft.personQuery, removing: draft.removesPerson, title: title) }
+        case let (_, action?, _):
+            onApplied()
+            Task { await organize.perform(action, title: title) }
+        case let (_, _, edits?):
+            onApplied()
+            Task { await organize.apply(edits, title: title) }
+        default:
+            return
+        }
     }
 }
 
@@ -169,5 +182,27 @@ struct EstimateLines: View {
                   + "Flickr does not say what it was.", systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.orange)
         }
+    }
+}
+
+/// Deleting is apart from every other edit: its own button, its own
+/// question naming the count, and Flickr's own permission.
+struct DeleteTrayButton: View {
+    let organize: OrganizeModel
+    @State private var isConfirming = false
+
+    var body: some View {
+        Button(role: .destructive) { isConfirming = true } label: { Image(systemName: "trash") }
+            .disabled(organize.tray.isEmpty || organize.isRunning)
+            .help("Delete the photos in the tray from Flickr")
+            .confirmationDialog("Delete \(OrganizeModel.count(organize.tray.count)) from Flickr?",
+                                isPresented: $isConfirming) {
+                Button("Delete \(OrganizeModel.count(organize.tray.count))", role: .destructive) {
+                    Task { await organize.deleteTray() }
+                }
+            } message: {
+                Text("This cannot be undone, here or on flickr.com. Their views, faves, comments and places "
+                     + "in albums and groups go with them. Flickr asks you to allow deleting first.")
+            }
     }
 }

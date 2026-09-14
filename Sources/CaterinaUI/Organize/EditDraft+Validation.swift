@@ -13,6 +13,8 @@ extension EditDraft {
         case .licence: .success([.setLicense(licence)])
         case .dateTaken: dateEdit
         case .location: locationEdit
+        case .datePosted: postedEdit
+        case .rotate, .people: .failure(Problem(message: ""))
         }
     }
 
@@ -72,6 +74,17 @@ extension EditDraft {
                 return .failure(Problem(message: "Write the date as 2024-06-01 21:14:05."))
             }
             return .success([.setTaken(taken)])
+        }
+    }
+
+    private var postedEdit: Result<[PhotoEdit], Problem> {
+        switch postedMode {
+        case .shift:
+            guard postedShiftDays != 0 else { return .failure(Problem(message: "Enter how many days to shift it.")) }
+            return .success([.shiftPosted(seconds: postedShiftDays * 86_400)])
+        case .set:
+            guard let postedDate else { return .failure(Problem(message: "Choose the date it was posted.")) }
+            return .success([.setPosted(postedDate)])
         }
     }
 

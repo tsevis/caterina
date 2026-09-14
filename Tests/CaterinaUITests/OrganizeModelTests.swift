@@ -101,6 +101,7 @@ actor FakeOrganizeFlickr: OrganizeFlickr {
         return photo
     }
     func geoPermissions(photoID: String, priority: CallPriority) async throws -> LibraryPhoto.GeoPermissions? { nil }
+    func resolveUser(from input: String) async throws -> String { "nsid-\(input)" }
     func photoList(_ list: PhotoList, page: Int) async throws -> LibraryPage {
         if holding { await withCheckedContinuation { held = $0 } }
         if let listFailure { throw listFailure }
@@ -418,5 +419,44 @@ final class AccountBox: @unchecked Sendable {
     var value: String? {
         get { lock.withLock { stored } }
         set { lock.withLock { stored = newValue } }
+    }
+}
+
+@MainActor
+@Suite struct OrganizeActionTests {
+
+    private func setUp() throws -> (OrganizeModel, FakeOrganizeFlickr) {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "1", title: "A"), LibraryPhoto(id: "2", title: "B")], generation: 1)
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+        model.selectAll()
+        model.addSelectionToTray()
+        return (model, flickr)
+    }
+
+    @Test func theTrayIsRotatedAndTheCostIsOneCallAPhoto() async throws {
+        let (model, flickr) = try setUp()
+        #expect(model.estimate(action: .rotate(degrees: 90)).calls == 2)
+        await model.perform(.rotate(degrees: 90), title: "Rotate")
+        #expect(await flickr.sent.map(\.method) == ["flickr.photos.transform.rotate", "flickr.photos.transform.rotate"])
+        #expect(model.activity.first?.canUndo == true)
+    }
+
+    @Test func aPersonIsFoundByNameThenTagged() async throws {
+        let (model, flickr) = try setUp()
+        await model.tagPerson("tsevis", removing: false, title: "Tag tsevis")
+        #expect(await flickr.sent.map { $0.arguments["user_id"] } == ["nsid-tsevis", "nsid-tsevis"])
+    }
+
+    /// Deleting: the whole tray, recorded, with nothing to undo, and the
+    /// photos gone from the copy and the tray.
+    @Test func deletingTheTray() async throws {
+        let (model, flickr) = try setUp()
+        await model.deleteTray()
+        #expect(await flickr.sent.map(\.permission) == [.delete, .delete])
+        #expect(model.tray.isEmpty)
+        #expect(model.photos.isEmpty)
+        #expect(model.activity.first?.canUndo == false)
     }
 }

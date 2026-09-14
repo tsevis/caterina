@@ -5,7 +5,10 @@ import FlickrKit
 /// The kinds of edit the tray offers. Deleting is not one of them: it cannot
 /// be undone and has its own confirmation.
 public enum EditKind: String, CaseIterable, Identifiable, Sendable {
-    case title, description, tags, visibility, safety, licence, dateTaken, location
+    case title, description, tags, visibility, safety, licence, dateTaken, datePosted, location, rotate, people
+
+    /// Rotating and tagging people are actions with their own undo, not field edits.
+    public var isAction: Bool { self == .rotate || self == .people }
 
     public var id: String { rawValue }
 
@@ -18,7 +21,10 @@ public enum EditKind: String, CaseIterable, Identifiable, Sendable {
         case .safety: "Safety & Search"
         case .licence: "Licence"
         case .dateTaken: "Date Taken"
+        case .datePosted: "Date Posted"
         case .location: "Location"
+        case .rotate: "Rotate"
+        case .people: "People"
         }
     }
 }
@@ -68,6 +74,15 @@ public struct EditDraft: Equatable, Sendable {
     public var shiftsEarlier = false
     public var takenText = ""
 
+    public var postedMode = DateMode.shift
+    public var postedShiftDays = 0
+    public var postedDate: Date?
+
+    /// Clockwise.
+    public var degrees = 90
+    public var person = ""
+    public var removesPerson = false
+
     public var locationMode = LocationMode.set
     /// 0,0 until a place is chosen; that point is open sea, never a choice.
     public var latitude = 0.0
@@ -87,9 +102,24 @@ public struct EditDraft: Equatable, Sendable {
     }
 
     public var problem: String? {
+        if kind.isAction { return action == nil ? "Enter a Flickr username or photostream URL." : nil }
         if case let .failure(problem) = validated { return problem.message }
         return nil
     }
+
+    /// For rotating and people: what to do to each photo.
+    public var action: PhotoAction? {
+        switch kind {
+        case .rotate: return PhotoAction.rotation(degrees: degrees)
+        case .people:
+            guard !personQuery.isEmpty else { return nil }
+            // The person is found by name when the batch starts.
+            return removesPerson ? .removePerson(userID: personQuery) : .addPerson(userID: personQuery)
+        default: return nil
+        }
+    }
+
+    public var personQuery: String { person.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var tags: [String] {
         tagText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }

@@ -155,3 +155,36 @@ import FlickrKit
         #expect(draft.batchTitle == "Set licence to CC BY 4.0")
     }
 }
+
+@Suite struct ActionDraftTests {
+    @Test func rotationIsAnActionNotAnEdit() {
+        var draft = EditDraft(kind: .rotate)
+        #expect(draft.action == .rotate(degrees: 90))
+        #expect(draft.edits == nil)
+        #expect(draft.problem == nil)
+        draft.degrees = 270
+        #expect(draft.action == .rotate(degrees: 270))
+        #expect(draft.batchTitle == "Rotate 90° anticlockwise")
+    }
+
+    @Test func aPersonNeedsAName() {
+        var draft = EditDraft(kind: .people)
+        #expect(draft.action == nil)
+        #expect(draft.problem == "Enter a Flickr username or photostream URL.")
+        draft.person = " tsevis "
+        #expect(draft.personQuery == "tsevis")
+        #expect(draft.batchTitle == "Tag tsevis")
+        draft.removesPerson = true
+        #expect(draft.batchTitle == "Untag tsevis")
+    }
+
+    @Test func datePostedShiftsOrSets() {
+        var draft = EditDraft(kind: .datePosted)
+        #expect(draft.edits == nil)
+        draft.postedShiftDays = 2
+        #expect(draft.edits == [.shiftPosted(seconds: 172_800)])
+        draft.postedMode = .set
+        draft.postedDate = Date(timeIntervalSince1970: 1_600_000_000)
+        #expect(draft.edits == [.setPosted(Date(timeIntervalSince1970: 1_600_000_000))])
+    }
+}

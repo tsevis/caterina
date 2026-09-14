@@ -13,7 +13,14 @@ extension FlickrClient: AlbumContents {}
 
 /// Flickr, as Organize needs it.
 public typealias OrganizeFlickr = PhotoWriter & LivePhotoReader & PhotoListSource & AlbumService & AlbumLister
-    & AlbumContents & GroupPoolWriter
+    & AlbumContents & GroupPoolWriter & PersonResolver
+
+/// Finding a Flickr member's id from a name or photostream address.
+public protocol PersonResolver: Sendable {
+    func resolveUser(from input: String) async throws -> String
+}
+
+extension FlickrClient: PersonResolver {}
 
 /// The Organize tab: find photos, gather them in a tray, change them in a
 /// batch, and take the batch back.
