@@ -4,8 +4,16 @@ import Observation
 import CaterinaLibrary
 import FlickrKit
 
+/// Every photo id in an album, in album order.
+public protocol AlbumContents: Sendable {
+    func albumPhotoIDs(albumID: String, ownerID: String, priority: CallPriority) async throws -> [String]
+}
+
+extension FlickrClient: AlbumContents {}
+
 /// Flickr, as Organize needs it.
-public typealias OrganizeFlickr = PhotoWriter & LivePhotoReader & PhotoListSource
+public typealias OrganizeFlickr = PhotoWriter & LivePhotoReader & PhotoListSource & AlbumService & AlbumLister
+    & AlbumContents
 
 /// The Organize tab: find photos, gather them in a tray, change them in a
 /// batch, and take the batch back.
@@ -26,18 +34,21 @@ public final class OrganizeModel {
     // MARK: Finding
 
     public private(set) var scope: OrganizeScope = .all
-    public private(set) var photos: [LibraryPhoto] = []
-    public private(set) var canLoadMore = false
+    public internal(set) var photos: [LibraryPhoto] = []
+    public internal(set) var canLoadMore = false
     public private(set) var isReadingNotInAlbum = false
     public private(set) var notInAlbumReadAt: Date?
     public private(set) var tags: [TagCount] = []
     public private(set) var months: [MonthCount] = []
     public private(set) var counts: [OrganizeScope: Int] = [:]
     public internal(set) var problem: String?
+    public internal(set) var albums: [Album] = []
+    /// The open album's photo ids, in album order.
+    var albumOrder: [String] = []
 
     // MARK: Choosing
 
-    public private(set) var selection = GridSelection()
+    public internal(set) var selection = GridSelection()
     /// Photo ids, in the order they went in. Kept across views.
     public private(set) var tray: [String] = []
     public private(set) var trayPhotos: [LibraryPhoto] = []
@@ -53,7 +64,7 @@ public final class OrganizeModel {
     let accountID: @Sendable () -> String?
     var runTask: Task<Void, Never>?
     /// Bumped by every change of view; a reply for an older one is dropped.
-    private var generation = 0
+    var generation = 0
 
     public init(store: LibraryStore, flickr: any OrganizeFlickr, budget: CallBudget = .standard,
                 accountID: @escaping @Sendable () -> String? = { nil }) {
@@ -79,7 +90,11 @@ public final class OrganizeModel {
         self.scope = scope
         selection = GridSelection()
         problem = nil
+        albumOrder = []
         reloadPhotos()
+        if let albumID = scope.albumID {
+            await readAlbum(albumID, generation: generation)
+        }
         if scope == .notInAlbum, notInAlbumReadAt == nil {
             await readNotInAlbum(generation: generation)
         }
@@ -130,6 +145,10 @@ public final class OrganizeModel {
     /// away what Load More brought in.
     func reloadPhotos() {
         let shown = max(Self.pageSize, photos.count)
+        if scope.albumID != nil {
+            showAlbumPhotos()
+            return
+        }
         do {
             photos = try store.photos(scope.filter, order: scope.order, limit: shown, offset: 0)
             canLoadMore = photos.count == shown

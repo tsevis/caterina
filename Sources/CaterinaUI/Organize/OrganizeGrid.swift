@@ -60,6 +60,7 @@ struct OrganizeGrid: View {
                         // handlers per ⌘-click (see PhotoGridView).
                         .onTapGesture { organize.click(photo.id, modifiers: Self.modifiers()) }
                         .contextMenu { menu(for: photo) }
+                        .modifier(AlbumReordering(organize: organize, photoID: photo.id))
                 }
             }
             if organize.canLoadMore {
@@ -127,6 +128,28 @@ struct OrganizeGrid: View {
     private func frameReader(_ id: String) -> some View {
         GeometryReader { geometry in
             Color.clear.preference(key: TileFramePreference.self, value: [id: geometry.frame(in: .named(Self.space))])
+        }
+    }
+}
+
+/// In an album, a tile can be dragged before another: the selection moves
+/// with it when it is part of the selection.
+struct AlbumReordering: ViewModifier {
+    let organize: OrganizeModel
+    let photoID: String
+
+    func body(content: Content) -> some View {
+        if organize.scope.albumID != nil {
+            content
+                .draggable(photoID)
+                .dropDestination(for: String.self) { dropped, _ in
+                    guard let first = dropped.first, !organize.isRunning else { return false }
+                    let moved = organize.selection.ids.contains(first) ? organize.selection.ids : Set(dropped)
+                    Task { await organize.movePhotos(moved, before: photoID) }
+                    return true
+                }
+        } else {
+            content
         }
     }
 }

@@ -17,6 +17,13 @@ public enum OrganizeScope: Sendable, Hashable {
     /// `yyyy-MM`.
     case month(String)
     case tag(String)
+    /// Read from Flickr, in album order.
+    case album(id: String, title: String)
+
+    var albumID: String? {
+        if case let .album(id, _) = self { return id }
+        return nil
+    }
 
     /// The fixed views, in sidebar order.
     public static let smartViews: [OrganizeScope] = [
@@ -25,7 +32,7 @@ public enum OrganizeScope: Sendable, Hashable {
 
     var filter: LibraryFilter {
         switch self {
-        case .all, .recentlyUpdated: .all
+        case .all, .recentlyUpdated, .album: .all
         case .notInAlbum: .notInAlbum
         case .untagged: .untagged
         case .withoutLocation: .withoutLocation
@@ -55,6 +62,7 @@ public enum OrganizeScope: Sendable, Hashable {
         case let .licence(licence): licence.label
         case let .month(month): MonthCount(month: month, count: 0).title
         case let .tag(tag): tag
+        case let .album(_, title): title
         }
     }
 
@@ -71,6 +79,7 @@ public enum OrganizeScope: Sendable, Hashable {
         case .licence: "c.circle"
         case .month: "calendar"
         case .tag: "tag"
+        case .album: "rectangle.stack"
         }
     }
 }

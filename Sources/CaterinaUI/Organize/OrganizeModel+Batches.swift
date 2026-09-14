@@ -86,16 +86,21 @@ extension OrganizeModel {
         }
     }
 
-    private func runBatch(_ batchID: String) async {
-        let runner = BatchRunner(writer: flickr, store: store)
+    func runBatch(_ batchID: String) async {
+        let kind = (try? store.batch(batchID))?.kind ?? .photos
+        let (flickr, store, owner) = (self.flickr, self.store, accountID() ?? "")
         run = .running(batchID: batchID, summary: (try? store.summary(of: batchID)) ?? .init(applied: 0, failed: 0, pending: 0))
         refreshActivity()
         // The model is main-actor isolated, so holding it for the length of
         // the run is safe; the run ends when the task does.
         let task = Task {
             do {
-                try await runner.run(batchID) { summary in
+                let progress: @Sendable (EditBatch.Summary) -> Void = { summary in
                     Task { @MainActor in self.showProgress(batchID, summary) }
+                }
+                switch kind {
+                case .photos: try await BatchRunner(writer: flickr, store: store).run(batchID, progress: progress)
+                case .albums: try await AlbumRunner(flickr: flickr, store: store, ownerID: owner).run(batchID, progress: progress)
                 }
                 self.run = .idle
             } catch FlickrError.permissionNeeded(let permission) {
@@ -110,6 +115,7 @@ extension OrganizeModel {
         await task.value
         runTask = nil
         afterBatch()
+        if kind == .albums { await afterAlbumBatch() }
     }
 
     /// Progress hops here in separate tasks, which need not arrive in order;

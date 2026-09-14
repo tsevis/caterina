@@ -20,6 +20,7 @@ struct OrganizeSidebar: View {
             Section("Library") {
                 ForEach(OrganizeScope.smartViews, id: \.self) { row($0) }
             }
+            AlbumSidebarSection(organize: organize)
             Section("Who can see") {
                 ForEach(Audience.allCases, id: \.self) { row(.audience($0)) }
             }
@@ -39,6 +40,12 @@ struct OrganizeSidebar: View {
                     }
                 }
             }
+            Section("Collections") {
+                Link(destination: URL(string: "https://www.flickr.com/photos/organize/?start_tab=collection")!) {
+                    Label("Edit collections on flickr.com", systemImage: "arrow.up.right.square")
+                }
+                .help("Flickr's API can read collections but not change them")
+            }
             Section("Tags") {
                 TextField("Filter tags", text: $tagFilter).textFieldStyle(.roundedBorder)
                 ForEach(shownTags) { tag in
@@ -46,6 +53,7 @@ struct OrganizeSidebar: View {
                 }
             }
         }
+        .task { await organize.loadAlbums() }
     }
 
     private func row(_ scope: OrganizeScope) -> some View {

@@ -43,6 +43,8 @@ struct TrayPanel: View {
                             ForEach(EditKind.allCases) { Text($0.title).tag($0) }
                         }
                         EditForm(draft: $draft)
+                        Divider()
+                        TrayAlbumSection(organize: organize)
                     }
                     .padding(14)
                 }

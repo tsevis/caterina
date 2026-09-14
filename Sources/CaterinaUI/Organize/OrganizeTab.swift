@@ -106,6 +106,7 @@ struct OrganizeContent: View {
                 .buttonStyle(.borderless)
                 .disabled(organize.photos.isEmpty)
                 Spacer()
+                if organize.scope.albumID != nil { AlbumActions(organize: organize) }
                 if organize.scope == .notInAlbum { NotInAlbumStatus(organize: organize) }
                 if let problem = organize.problem {
                     Label(problem, systemImage: "exclamationmark.triangle").font(.callout)

@@ -121,7 +121,7 @@ extension LibraryStore {
         return try batch(id)
     }
 
-    func batch(_ id: String) throws -> EditBatch {
+    public func batch(_ id: String) throws -> EditBatch {
         try read { db in
             guard let row = try Row.fetchOne(db, sql: "SELECT * FROM editBatch WHERE id = ?", arguments: [id]) else {
                 throw FlickrError.notFound("That edit is no longer in the history.")

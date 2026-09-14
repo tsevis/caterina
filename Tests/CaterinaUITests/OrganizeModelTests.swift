@@ -7,8 +7,17 @@ import FlickrKit
 
 /// Flickr for Organize: reads back from the library copy, sends writes, and
 /// can hold the not-in-album list until told to answer.
-actor FakeOrganizeFlickr: PhotoWriter, LivePhotoReader, PhotoListSource {
+actor FakeOrganizeFlickr: OrganizeFlickr {
+    struct FakeAlbum: Equatable, Sendable {
+        let id: String
+        var title: String
+        var description: String
+        var cover: String
+        var photos: [String]
+    }
+
     private let store: LibraryStore
+    private var albums: [FakeAlbum]
     private var refusals: [String: FlickrError]
     private var notInAlbum: [String]
     private var held: CheckedContinuation<Void, Never>?
@@ -17,8 +26,10 @@ actor FakeOrganizeFlickr: PhotoWriter, LivePhotoReader, PhotoListSource {
     var listFailure: FlickrError?
     func failLists(with error: FlickrError) { listFailure = error }
 
-    init(store: LibraryStore, notInAlbum: [String] = [], refusals: [String: FlickrError] = [:]) {
+    init(store: LibraryStore, notInAlbum: [String] = [], refusals: [String: FlickrError] = [:],
+         albums: [FakeAlbum] = []) {
         self.store = store
+        self.albums = albums
         self.notInAlbum = notInAlbum
         self.refusals = refusals
     }
@@ -31,7 +42,58 @@ actor FakeOrganizeFlickr: PhotoWriter, LivePhotoReader, PhotoListSource {
     func perform(_ write: FlickrWrite, priority: CallPriority) async throws -> Data {
         if let refusal = refusals[write.arguments["photo_id"] ?? ""] { throw refusal }
         sent.append(write)
+        applyAlbumWrite(write)
         return Data(#"{"stat":"ok"}"#.utf8)
+    }
+
+    // MARK: Albums, in memory
+
+    func album(_ id: String) -> FakeAlbum? { albums.first { $0.id == id } }
+    func albumTitled(_ title: String) -> FakeAlbum? { albums.first { $0.title == title } }
+    var albumOrder: [String] { albums.map(\.id) }
+
+    func albums(page: Int) async throws -> AlbumPage {
+        AlbumPage(page: 1, pages: 1, albums: albums.map {
+            Album(id: $0.id, title: $0.title, description: $0.description, photoCount: $0.photos.count,
+                  coverPhotoID: $0.cover, views: 0)
+        })
+    }
+    func albumPhotoIDs(albumID: String, ownerID: String, priority: CallPriority) async throws -> [String] {
+        album(albumID)?.photos ?? []
+    }
+    func albumSnapshot(reading reads: [AlbumEdit.Read], albumID: String?, ownerID: String,
+                       priority: CallPriority) async throws -> AlbumSnapshot {
+        let found = albumID.flatMap(album)
+        return AlbumSnapshot(title: found?.title ?? "", description: found?.description ?? "",
+                             coverPhotoID: found?.cover ?? "", photoIDs: found?.photos ?? [], albumOrder: albumOrder)
+    }
+    func createAlbum(title: String, description: String, coverPhotoID: String,
+                     priority: CallPriority) async throws -> String {
+        let id = "N\(albums.count + 1)"
+        albums.insert(FakeAlbum(id: id, title: title, description: description, cover: coverPhotoID,
+                                photos: [coverPhotoID]), at: 0)
+        return id
+    }
+
+    private func applyAlbumWrite(_ write: FlickrWrite) {
+        let args = write.arguments
+        guard let index = albums.firstIndex(where: { $0.id == args["photoset_id"] }) ?? (write.method == "flickr.photosets.orderSets" ? 0 : nil) else { return }
+        let list = (args["photo_ids"] ?? "").split(separator: ",").map(String.init)
+        switch write.method {
+        case "flickr.photosets.addPhoto": albums[index].photos.append(args["photo_id"] ?? "")
+        case "flickr.photosets.removePhotos": albums[index].photos.removeAll { list.contains($0) }
+        case "flickr.photosets.reorderPhotos":
+            albums[index].photos = list + albums[index].photos.filter { !list.contains($0) }
+        case "flickr.photosets.setPrimaryPhoto": albums[index].cover = args["photo_id"] ?? ""
+        case "flickr.photosets.editMeta":
+            albums[index].title = args["title"] ?? ""
+            albums[index].description = args["description"] ?? ""
+        case "flickr.photosets.delete": albums.remove(at: index)
+        case "flickr.photosets.orderSets":
+            let ids = (args["photoset_ids"] ?? "").split(separator: ",").map(String.init)
+            albums = ids.compactMap { id in albums.first { $0.id == id } } + albums.filter { !ids.contains($0.id) }
+        default: break
+        }
     }
     func livePhoto(id: String, priority: CallPriority) async throws -> LibraryPhoto {
         if holding { await withCheckedContinuation { held = $0 } }
