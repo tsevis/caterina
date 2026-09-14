@@ -61,7 +61,7 @@ public enum AlbumEdit: Sendable, Equatable, Hashable, Codable {
             let kept = ids.filter { !photos.contains($0) }
             return kept.isEmpty ? nil : .removePhotos(albumID: album, photoIDs: kept)
         case let .reorderPhotos(album, ids):
-            return .reorderPhotos(albumID: album, photoIDs: ids)
+            return .reorderPhotos(albumID: album, photoIDs: ids.filter { !photos.contains($0) })
         default:
             return self
         }

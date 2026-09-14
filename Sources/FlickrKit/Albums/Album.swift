@@ -42,9 +42,11 @@ public enum AlbumWrites {
         return FlickrWrite(method: "flickr.photosets.create", arguments: arguments, repeatable: false)
     }
 
+    /// Not retried inside one call: a retry's "already in set" would hide
+    /// that this call added it. Upload treats "already in set" as done.
     public static func add(photoID: String, albumID: String) -> FlickrWrite {
         FlickrWrite(method: "flickr.photosets.addPhoto",
-                    arguments: ["photoset_id": albumID, "photo_id": photoID], repeatable: true)
+                    arguments: ["photoset_id": albumID, "photo_id": photoID], repeatable: false)
     }
 
     public static func editMeta(albumID: String, title: String, description: String) -> FlickrWrite {
@@ -52,11 +54,10 @@ public enum AlbumWrites {
                     arguments: ["photoset_id": albumID, "title": title, "description": description], repeatable: true)
     }
 
-    /// Repeatable: a photo no longer in the album comes back as code 2, which
-    /// the runner takes as done.
+    /// Not retried inside one call, for the same reason as `add`.
     public static func remove(photoIDs: [String], albumID: String) -> FlickrWrite {
         FlickrWrite(method: "flickr.photosets.removePhotos",
-                    arguments: ["photoset_id": albumID, "photo_ids": photoIDs.joined(separator: ",")], repeatable: true)
+                    arguments: ["photoset_id": albumID, "photo_ids": photoIDs.joined(separator: ",")], repeatable: false)
     }
 
     /// Photos left out keep their place after the ones listed.

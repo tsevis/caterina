@@ -36,10 +36,16 @@ public struct PhotoActionRunner: Sendable {
             } catch let error as FlickrError where error.stopsTheBatch {
                 if error.isTransient, !write.repeatable {
                     try store.recordAction(entry, as: .failed, message: Self.mayHaveHappened)
+                } else if !error.isTransient {
+                    try store.clearSending(entry)
                 }
                 throw error
             } catch let error as FlickrError {
                 try store.recordAction(entry, as: .failed, message: error.message)
+            } catch {
+                // Stopped before the call went out.
+                try store.clearSending(entry)
+                throw error
             }
             progress(try store.summary(of: batchID))
         }

@@ -19,7 +19,7 @@ extension EditDraft {
         case .location: locationTitle
         case .datePosted: postedMode == .shift ? "Shift date posted by \(postedShiftDays) days" : "Set date posted"
         case .rotate: rotateTitle
-        case .people: removesPerson ? "Untag \(personQuery)" : "Tag \(personQuery)"
+        case .people: "\(removesPerson ? "Untag" : "Tag") \(resolvedPerson?.username ?? personQuery)"
         }
     }
 

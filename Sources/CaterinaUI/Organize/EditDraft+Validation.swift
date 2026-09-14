@@ -84,7 +84,10 @@ extension EditDraft {
             return .success([.shiftPosted(seconds: postedShiftDays * 86_400)])
         case .set:
             guard let postedDate else { return .failure(Problem(message: "Choose the date it was posted.")) }
-            return .success([.setPosted(postedDate)])
+            guard postedDate <= Date() else {
+                return .failure(Problem(message: "Flickr does not take a posted date in the future."))
+            }
+            return .success([.setPosted(Date(timeIntervalSince1970: postedDate.timeIntervalSince1970.rounded(.down)))])
         }
     }
 

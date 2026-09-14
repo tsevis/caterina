@@ -6,6 +6,7 @@ import FlickrKit
 /// The fields for one kind of edit.
 struct EditForm: View {
     @Binding var draft: EditDraft
+    var organize: OrganizeModel?
 
     var body: some View {
         switch draft.kind {
@@ -27,7 +28,7 @@ struct EditForm: View {
                 Text("90° anticlockwise").tag(270)
             }
             .pickerStyle(.radioGroup)
-        case .people: PeopleForm(draft: $draft)
+        case .people: PeopleForm(draft: $draft, organize: organize)
         }
     }
 
@@ -190,7 +191,8 @@ struct PostedForm: View {
                 Stepper("\(draft.postedShiftDays) days", value: $draft.postedShiftDays, in: -3650...3650)
             } else {
                 DatePicker("Posted", selection: Binding(get: { draft.postedDate ?? Date() },
-                                                        set: { draft.postedDate = $0 }))
+                                                        set: { draft.postedDate = $0 }), in: ...Date())
+                    .onAppear { if draft.postedDate == nil { draft.postedDate = Date() } }
             }
             Text("Changes where photos fall in your photostream. Flickr refuses a date in the future.")
                 .font(.caption).foregroundStyle(Theme.inkSecondary)
@@ -202,6 +204,8 @@ struct PostedForm: View {
 /// Tag or untag a Flickr member in every photo in the tray.
 struct PeopleForm: View {
     @Binding var draft: EditDraft
+    var organize: OrganizeModel?
+    @State private var isFinding = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -211,7 +215,23 @@ struct PeopleForm: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            TextField("Username or photostream address", text: $draft.person).textFieldStyle(.roundedBorder)
+            HStack {
+                TextField("Username, photostream address or NSID", text: $draft.person).textFieldStyle(.roundedBorder)
+                Button(isFinding ? "Finding…" : "Find") {
+                    guard let organize else { return }
+                    isFinding = true
+                    let query = draft.personQuery
+                    Task {
+                        let found = await organize.lookUpPerson(query)
+                        if draft.personQuery == query { draft.resolvedPerson = found }
+                        isFinding = false
+                    }
+                }
+                .disabled(draft.personQuery.isEmpty || isFinding || organize == nil)
+            }
+            if let found = draft.resolvedPerson {
+                Label("\(found.username) (\(found.nsid))", systemImage: "person.crop.circle.badge.checkmark")
+            }
             Text("Flickr allows tagging only people who let you, and not in private photos; "
                  + "those photos are listed in Activity.")
                 .font(.caption).foregroundStyle(Theme.inkSecondary)

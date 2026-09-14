@@ -56,6 +56,11 @@ extension LibraryStore {
         try update(entry, sql: "sending = 1", [])
     }
 
+    /// The call never reached Flickr, or Flickr answered no.
+    func clearSending(_ entry: AlbumEntry) throws {
+        try update(entry, sql: "sending = 0", [])
+    }
+
     func recordAlbum(_ entry: AlbumEntry, as state: EditEntry.State, message: String? = nil) throws {
         try update(entry, sql: "state = ?, message = ?, sending = 0", [state.rawValue, message])
     }

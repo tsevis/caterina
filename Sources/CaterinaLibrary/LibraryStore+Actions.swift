@@ -49,6 +49,13 @@ extension LibraryStore {
         }
     }
 
+    func clearSending(_ entry: ActionEntry) throws {
+        try write { db in
+            try db.execute(sql: "UPDATE actionEntry SET sending = 0 WHERE batchID = ? AND position = ?",
+                           arguments: [entry.batchID, entry.position])
+        }
+    }
+
     func recordAction(_ entry: ActionEntry, as state: EditEntry.State, message: String? = nil) throws {
         try write { db in
             try db.execute(sql: "UPDATE actionEntry SET state = ?, message = ?, sending = 0 WHERE batchID = ? AND position = ?",

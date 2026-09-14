@@ -21,43 +21,60 @@ extension AlbumRunner {
         } catch let error as FlickrError where error.isTransient {
             try store.recordAlbum(entry, as: .failed, message: Self.mayHaveMadeAlbum)
             throw error
+        } catch {
+            // Refused, or never sent (permission, Stop): nothing was made.
+            try store.clearSending(entry)
+            throw error
         }
     }
 
     /// A write, with Flickr's "already so" replies noted so undo leaves
-    /// those photos alone.
+    /// those photos alone, unless a previous run sent this step and lost the
+    /// reply: then "already so" was this batch.
     func write(_ write: FlickrWrite, for entry: AlbumEntry) async throws -> AlbumEntry {
+        let resumedAfterSending = entry.isSending
+        try store.markSending(entry)
         do {
             _ = try await flickr.perform(write, priority: .edit)
             return try store.recordStep(entry)
         } catch let error as FlickrError {
-            guard case let .api(code, _, _) = error else { throw error }
+            guard case let .api(code, _, _) = error else {
+                if !error.isTransient { try store.clearSending(entry) }
+                throw error
+            }
             let photos = Set((write.arguments["photo_ids"] ?? write.arguments["photo_id"] ?? "")
                 .split(separator: ",").map(String.init))
             switch (write.method, code) {
             case ("flickr.photosets.addPhoto", 3):
-                return try store.recordStep(entry, unchanged: photos)
+                return try store.recordStep(entry, unchanged: resumedAfterSending ? [] : photos)
             case ("flickr.photosets.removePhotos", 2):
-                return try await removeWhatIsLeft(write, photos: photos, for: entry)
+                return try await removeOneByOne(write, photos: photos, for: entry, resumed: resumedAfterSending)
             case ("flickr.photosets.delete", 1):
                 return try store.recordStep(entry)
             default:
+                try store.clearSending(entry)
                 throw error
             }
+        } catch {
+            try store.clearSending(entry)
+            throw error
         }
     }
 
-    /// A list refused because one photo had already gone: read the album and
-    /// remove the ones still there.
-    private func removeWhatIsLeft(_ write: FlickrWrite, photos: Set<String>, for entry: AlbumEntry) async throws -> AlbumEntry {
+    /// A list refused because a photo in it is not in the album: each photo
+    /// is removed on its own, and those Flickr says are not there are noted.
+    private func removeOneByOne(_ write: FlickrWrite, photos: Set<String>, for entry: AlbumEntry,
+                                resumed: Bool) async throws -> AlbumEntry {
         let album = write.arguments["photoset_id"] ?? ""
-        let current = Set(try await flickr.albumSnapshot(reading: [.photos], albumID: album, ownerID: ownerID,
-                                                         priority: .edit).photoIDs)
-        let left = photos.intersection(current)
-        if !left.isEmpty, left != photos {
-            _ = try await flickr.perform(AlbumWrites.remove(photoIDs: left.sorted(), albumID: album), priority: .edit)
+        var absent: Set<String> = []
+        for photo in photos.sorted() {
+            do {
+                _ = try await flickr.perform(AlbumWrites.remove(photoIDs: [photo], albumID: album), priority: .edit)
+            } catch FlickrError.api(code: 2, _, _) {
+                absent.insert(photo)
+            }
         }
-        return try store.recordStep(entry, unchanged: photos.subtracting(left))
+        return try store.recordStep(entry, unchanged: resumed ? [] : absent)
     }
 }
 

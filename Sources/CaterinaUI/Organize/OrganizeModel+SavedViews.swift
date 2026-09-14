@@ -18,10 +18,16 @@ extension OrganizeModel {
         writeSavedViews(savedViews.filter { $0.name != name })
     }
 
+    /// Entry by entry: one view this build cannot read is skipped, not the
+    /// reason to lose the others.
     func readSavedViews() -> [SavedView] {
+        struct Lenient: Decodable {
+            let view: SavedView?
+            init(from decoder: Decoder) throws { view = try? SavedView(from: decoder) }
+        }
         do {
             guard let data = try store.setting(Self.savedViewsKey) else { return [] }
-            return try JSONDecoder().decode([SavedView].self, from: data)
+            return try JSONDecoder().decode([Lenient].self, from: data).compactMap(\.view)
         } catch {
             problem = "Could not read your saved views: \(Self.message(error))"
             return []

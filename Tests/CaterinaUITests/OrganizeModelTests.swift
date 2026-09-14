@@ -105,7 +105,7 @@ actor FakeOrganizeFlickr: OrganizeFlickr {
         return photo
     }
     func geoPermissions(photoID: String, priority: CallPriority) async throws -> LibraryPhoto.GeoPermissions? { nil }
-    func resolveUser(from input: String) async throws -> String { "nsid-\(input)" }
+    func lookUpPerson(_ input: String) async throws -> FlickrPerson { FlickrPerson(nsid: "nsid-\(input)", username: input) }
     func collections() async throws -> [PhotoCollection] {
         [PhotoCollection(id: "c1", title: "Travel", description: "", albums: [],
                          children: [PhotoCollection(id: "c2", title: "Greece", description: "",
@@ -454,7 +454,10 @@ final class AccountBox: @unchecked Sendable {
 
     @Test func aPersonIsFoundByNameThenTagged() async throws {
         let (model, flickr) = try setUp()
-        await model.tagPerson("tsevis", removing: false, title: "Tag tsevis")
+        let person = try #require(await model.lookUpPerson("tsevis"))
+        #expect(person.username == "tsevis")
+        #expect(await flickr.sent.isEmpty)
+        await model.perform(.addPerson(userID: person.nsid), title: "Tag tsevis")
         #expect(await flickr.sent.map { $0.arguments["user_id"] } == ["nsid-tsevis", "nsid-tsevis"])
     }
 

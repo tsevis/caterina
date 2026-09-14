@@ -32,7 +32,17 @@ public struct GroupShareRunner: Sendable {
             } else {
                 let wasSending = entry.isSending
                 try store.markSending(entry)
-                let outcome = Self.settled(try await send(entry), wasSending: wasSending)
+                let sent: GroupShareOutcome
+                do {
+                    sent = try await send(entry)
+                } catch let error as FlickrError where error.isTransient {
+                    throw error
+                } catch {
+                    // Never reached Flickr (permission, Stop): not sent.
+                    try store.clearSending(entry)
+                    throw error
+                }
+                let outcome = Self.settled(sent, wasSending: wasSending)
                 try store.recordGroup(entry, outcome)
                 closed.note(outcome, for: entry.pair)
             }

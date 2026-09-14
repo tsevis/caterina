@@ -43,6 +43,13 @@ extension LibraryStore {
         }
     }
 
+    func clearSending(_ entry: GroupEntry) throws {
+        try write { db in
+            try db.execute(sql: "UPDATE groupEntry SET sending = 0 WHERE batchID = ? AND position = ?",
+                           arguments: [entry.batchID, entry.position])
+        }
+    }
+
     /// Rules to read again: a batch just used some of each group's room.
     /// Names stay, for reports.
     public func forgetGroupProfiles(_ ids: [String]) throws {

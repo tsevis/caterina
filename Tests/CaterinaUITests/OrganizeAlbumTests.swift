@@ -188,3 +188,21 @@ import FlickrKit
         #expect(reopened.savedViews.map(\.name) == ["Dusk shots"])
     }
 }
+
+@MainActor
+@Suite struct SavedViewFormatTests {
+    /// The stored shape is pinned: renaming a case would silently lose saved
+    /// views, so this JSON must keep reading.
+    @Test func theStoredFormatStillReads() throws {
+        let json = #"[{"name":"Dusk","scope":{"search":{"_0":"dusk"}}},{"name":"June","scope":{"month":{"_0":"2024-06"}}},{"name":"Bad","scope":{"gone":{}}}]"#
+        let store = try LibraryStore.inMemory()
+        try store.setSetting(OrganizeModel.savedViewsKey, to: Data(json.utf8))
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store))
+        #expect(model.savedViews.map(\.scope) == [.search("dusk"), .month("2024-06")])
+
+        // One unreadable entry must not wipe the rest on the next save.
+        model.saveView(named: "Untagged", scope: .untagged)
+        let reread = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store))
+        #expect(reread.savedViews.map(\.name) == ["Dusk", "June", "Untagged"])
+    }
+}

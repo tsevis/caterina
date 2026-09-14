@@ -73,10 +73,15 @@ public enum PhotoEdit: Sendable, Equatable {
         case let .setContentType(contentType): edited.contentType = contentType
         case let .setHiddenFromSearch(hidden): edited.hiddenFromSearch = hidden
         case let .setGeoPermissions(permissions): edited.geoPermissions = permissions
-        case let .shiftPosted(seconds): edited.uploaded = photo.uploaded?.addingTimeInterval(TimeInterval(seconds))
-        case let .setPosted(date): edited.uploaded = date
+        // Whole seconds, as Flickr keeps them.
+        case let .shiftPosted(seconds): edited.uploaded = photo.uploaded.map { Self.wholeSeconds($0.addingTimeInterval(TimeInterval(seconds))) }
+        case let .setPosted(date): edited.uploaded = Self.wholeSeconds(date)
         }
         return edited
+    }
+
+    static func wholeSeconds(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down))
     }
 
     /// Whether `taken` is a date Flickr takes: `yyyy-MM-dd HH:mm:ss`.

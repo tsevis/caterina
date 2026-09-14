@@ -160,6 +160,15 @@ import Testing
         #expect(writes.first?.arguments["date_taken"] == "2020-01-01 00:01:00")
     }
 
+    /// Flickr keeps whole seconds; a fraction kept here would never match
+    /// Flickr's value again, and undo would find a conflict every time.
+    @Test func aPostedDateIsWholeSeconds() {
+        #expect(PhotoEdit.setPosted(Date(timeIntervalSince1970: 1_600_000_000.7)).applied(to: photo).uploaded
+                == Date(timeIntervalSince1970: 1_600_000_000))
+        let fractional = LibraryPhoto(id: "1", uploaded: Date(timeIntervalSince1970: 1_700_000_000.25))
+        #expect(PhotoEdit.shiftPosted(seconds: 60).applied(to: fractional).uploaded == Date(timeIntervalSince1970: 1_700_000_060))
+    }
+
     @Test func aPostedDateChangedOnFlickrIsAConflict() {
         let change = PhotoChange(before: photo, after: PhotoEdit.shiftPosted(seconds: 60).applied(to: photo))
         let moved = PhotoEdit.shiftPosted(seconds: 999).applied(to: photo)

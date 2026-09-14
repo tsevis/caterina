@@ -80,7 +80,10 @@ public struct EditDraft: Equatable, Sendable {
 
     /// Clockwise.
     public var degrees = 90
-    public var person = ""
+    /// Typed; changing it forgets who was found.
+    public var person = "" { didSet { if person != oldValue { resolvedPerson = nil } } }
+    /// Who Flickr says `person` is. Nobody is tagged without one.
+    public var resolvedPerson: FlickrPerson?
     public var removesPerson = false
 
     public var locationMode = LocationMode.set
@@ -102,7 +105,7 @@ public struct EditDraft: Equatable, Sendable {
     }
 
     public var problem: String? {
-        if kind.isAction { return action == nil ? "Enter a Flickr username or photostream URL." : nil }
+        if kind.isAction { return action == nil ? "Enter a name or address, then Find." : nil }
         if case let .failure(problem) = validated { return problem.message }
         return nil
     }
@@ -112,9 +115,8 @@ public struct EditDraft: Equatable, Sendable {
         switch kind {
         case .rotate: return PhotoAction.rotation(degrees: degrees)
         case .people:
-            guard !personQuery.isEmpty else { return nil }
-            // The person is found by name when the batch starts.
-            return removesPerson ? .removePerson(userID: personQuery) : .addPerson(userID: personQuery)
+            guard let found = resolvedPerson else { return nil }
+            return removesPerson ? .removePerson(userID: found.nsid) : .addPerson(userID: found.nsid)
         default: return nil
         }
     }

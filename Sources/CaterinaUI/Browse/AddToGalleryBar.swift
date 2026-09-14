@@ -30,6 +30,11 @@ struct AddToGalleryBar: View {
             .help("Galleries hold other people's photos. Undo from Organize's Activity.")
         }
         .controlSize(.small)
+        .overlay(alignment: .top) {
+            if let problem = organize.problem {
+                Text(problem).font(.caption).foregroundStyle(.orange).offset(y: -18)
+            }
+        }
         .padding(10)
         .background(.bar)
         .task { await directory.load(.galleries) }

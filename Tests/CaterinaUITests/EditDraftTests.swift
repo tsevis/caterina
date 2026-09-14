@@ -167,15 +167,23 @@ import FlickrKit
         #expect(draft.batchTitle == "Rotate 90° anticlockwise")
     }
 
-    @Test func aPersonNeedsAName() {
+    /// Nobody is tagged until Flickr has said who the name is, and that
+    /// person has been shown.
+    @Test func aPersonMustBeFoundBeforeTagging() {
         var draft = EditDraft(kind: .people)
         #expect(draft.action == nil)
-        #expect(draft.problem == "Enter a Flickr username or photostream URL.")
+        #expect(draft.problem == "Enter a name or address, then Find.")
         draft.person = " tsevis "
         #expect(draft.personQuery == "tsevis")
+        #expect(draft.action == nil)
+        draft.resolvedPerson = FlickrPerson(nsid: "1@N01", username: "tsevis")
+        #expect(draft.action == .addPerson(userID: "1@N01"))
         #expect(draft.batchTitle == "Tag tsevis")
         draft.removesPerson = true
+        #expect(draft.action == .removePerson(userID: "1@N01"))
         #expect(draft.batchTitle == "Untag tsevis")
+        draft.person = "someone else"
+        #expect(draft.resolvedPerson == nil)
     }
 
     @Test func datePostedShiftsOrSets() {
@@ -184,7 +192,10 @@ import FlickrKit
         draft.postedShiftDays = 2
         #expect(draft.edits == [.shiftPosted(seconds: 172_800)])
         draft.postedMode = .set
-        draft.postedDate = Date(timeIntervalSince1970: 1_600_000_000)
+        draft.postedDate = Date(timeIntervalSince1970: 1_600_000_000.6)
         #expect(draft.edits == [.setPosted(Date(timeIntervalSince1970: 1_600_000_000))])
+        draft.postedDate = Date().addingTimeInterval(86_400)
+        #expect(draft.edits == nil)
+        #expect(draft.problem == "Flickr does not take a posted date in the future.")
     }
 }

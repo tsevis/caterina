@@ -44,7 +44,7 @@ struct TrayPanel: View {
                         Picker("Edit", selection: kind) {
                             ForEach(EditKind.allCases) { Text($0.title).tag($0) }
                         }
-                        EditForm(draft: $draft)
+                        EditForm(draft: $draft, organize: organize)
                         Divider()
                         TrayAlbumSection(organize: organize)
                         Divider()
@@ -152,9 +152,6 @@ struct ApplyBar: View {
         let (draft, organize) = (self.draft, self.organize)
         let title = draft.batchTitle
         switch (draft.kind, draft.action, draft.edits) {
-        case (.people, _, _):
-            onApplied()
-            Task { await organize.tagPerson(draft.personQuery, removing: draft.removesPerson, title: title) }
         case let (_, action?, _):
             onApplied()
             Task { await organize.perform(action, title: title) }

@@ -22,9 +22,9 @@ public protocol CollectionReader: Sendable {
 
 extension FlickrClient: CollectionReader {}
 
-/// Finding a Flickr member's id from a name or photostream address.
+/// Finding exactly the Flickr member meant by a name, address or NSID.
 public protocol PersonResolver: Sendable {
-    func resolveUser(from input: String) async throws -> String
+    func lookUpPerson(_ input: String) async throws -> FlickrPerson
 }
 
 extension FlickrClient: PersonResolver {}

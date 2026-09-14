@@ -83,3 +83,61 @@ import FlickrKit
         #expect(try store.actionEntries(in: batch.id).first?.state == .failed)
     }
 }
+
+/// Found in review: a marker left set by a call that never went out.
+@Suite struct SendingMarkerTests {
+    @Test func needingPermissionClearsTheMarkerSoTheRotationResumes() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryStoreTests.photo("1")], generation: 1)
+        let batch = try store.createActionBatch(title: "Rotate", action: .rotate(degrees: 90), photoIDs: ["1"], accountID: "me")
+        await #expect(throws: FlickrError.self) {
+            try await PhotoActionRunner(writer: ScriptedWriter(store: store, failing: ["1": .permissionNeeded(.write)]),
+                                        store: store).run(batch.id)
+        }
+        #expect(try store.actionEntries(in: batch.id).first?.isSending == false)
+        try await PhotoActionRunner(writer: ScriptedWriter(store: store), store: store).run(batch.id)
+        #expect(try store.actionEntries(in: batch.id).first?.state == .applied)
+    }
+
+    @Test func aGroupPairThatNeverWentOutIsNotCountedAsPlaced() async throws {
+        let store = try LibraryStore.inMemory()
+        let batch = try store.createGroupBatch(title: "Remove", removing: [GroupPair(photoID: "p9", groupID: "g")],
+                                               accountID: "me")
+        let refusing = PermissionThenPools()
+        await #expect(throws: FlickrError.self) { try await GroupShareRunner(flickr: refusing, store: store).run(batch.id) }
+        try await GroupShareRunner(flickr: FakePools(pools: ["g": []]), store: store).run(batch.id)
+        #expect(try store.groupEntries(in: batch.id).first?.outcome == .notInPool)
+    }
+
+    /// Code 3 from an album add after a lost reply was this batch's add.
+    @Test func anAlbumAddResumedAfterALostReplyIsUndoneToo() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeAlbumFlickr(["A": .init(title: "A", description: "", cover: "1", photos: ["1"])])
+        let batch = try store.createAlbumBatch(title: "Add", edits: [.addPhotos(albumID: "A", photoIDs: ["2"])], accountID: "me")
+        var entry = try #require(try store.albumEntries(in: batch.id).first)
+        entry = try store.recordSnapshot(AlbumSnapshot(title: "A", description: "", coverPhotoID: "1", photoIDs: ["1"],
+                                                       albumOrder: []), for: entry)
+        _ = try await flickr.perform(AlbumWrites.add(photoID: "2", albumID: "A"), priority: .edit)
+        try store.markSending(entry)
+
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(try store.undoBatch(for: batch.id).id)
+        #expect(await flickr.albums["A"]?.photos == ["1"])
+    }
+
+    @Test func albumPhotoWritesAreNotRetriedInsideOneCall() {
+        #expect(!AlbumWrites.add(photoID: "1", albumID: "A").repeatable)
+        #expect(!AlbumWrites.remove(photoIDs: ["1"], albumID: "A").repeatable)
+    }
+
+    @Test func undoingARemovalReordersOnlyPhotosItPutsBack() {
+        let edit = AlbumEdit.reorderPhotos(albumID: "A", photoIDs: ["1", "2", "3"])
+        #expect(edit.excluding(["2"]) == .reorderPhotos(albumID: "A", photoIDs: ["1", "3"]))
+    }
+}
+
+actor PermissionThenPools: GroupPoolWriter {
+    func perform(_ write: FlickrWrite, priority: CallPriority) async throws -> Data {
+        throw FlickrError.permissionNeeded(.write)
+    }
+}

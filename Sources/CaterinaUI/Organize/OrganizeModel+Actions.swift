@@ -18,13 +18,13 @@ extension OrganizeModel {
         await runActions(action, title: title)
     }
 
-    /// The person is looked up by name first; nothing is sent if not found.
-    public func tagPerson(_ query: String, removing: Bool, title: String) async {
+    /// Who a name, address or NSID is, to show before tagging anyone.
+    public func lookUpPerson(_ query: String) async -> FlickrPerson? {
         do {
-            let id = try await flickr.resolveUser(from: query)
-            await runActions(removing ? .removePerson(userID: id) : .addPerson(userID: id), title: title)
+            return try await flickr.lookUpPerson(query)
         } catch {
             problem = "Could not find “\(query)” on Flickr: \(Self.message(error))"
+            return nil
         }
     }
 
