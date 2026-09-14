@@ -148,7 +148,8 @@ public enum GroupSharePlanner {
         var skipped: [GroupSharePlan.Skip] = []
         for photo in photos {
             let open = groups.filter { fits(photo, $0) == nil && ledger.refusal($0.id) == nil }
-            let room = { (group: GroupProfile) in ledger.room(group.id) }
+            let current = ledger
+            let room = { (group: GroupProfile) in current.room(group.id) }
             // Most room first; the order chosen breaks ties.
             let chosen = open.enumerated()
                 .sorted { room($0.element) != room($1.element) ? room($0.element) > room($1.element) : $0.offset < $1.offset }
