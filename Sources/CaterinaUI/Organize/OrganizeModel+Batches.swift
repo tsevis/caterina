@@ -87,7 +87,13 @@ extension OrganizeModel {
     }
 
     func runBatch(_ batchID: String) async {
-        let kind = (try? store.batch(batchID))?.kind ?? .photos
+        let kind: EditBatch.Kind
+        do {
+            kind = try store.batch(batchID).kind
+        } catch {
+            problem = "Could not read the edit: \(Self.message(error))"
+            return
+        }
         let (flickr, store, owner) = (self.flickr, self.store, accountID() ?? "")
         run = .running(batchID: batchID, summary: (try? store.summary(of: batchID)) ?? .init(applied: 0, failed: 0, pending: 0))
         refreshActivity()
@@ -118,6 +124,7 @@ extension OrganizeModel {
         runTask = nil
         afterBatch()
         if kind == .albums { await afterAlbumBatch() }
+        if kind == .groups { forgetGroupRules(of: batchID) }
     }
 
     /// Progress hops here in separate tasks, which need not arrive in order;
@@ -139,6 +146,17 @@ extension OrganizeModel {
                                               accountID: accountID())
         } catch {
             problem = "Could not read the edit history: \(Self.message(error))"
+        }
+    }
+}
+
+extension OrganizeModel {
+    /// A group batch used some of each group's room: read the rules again next time.
+    func forgetGroupRules(of batchID: String) {
+        do {
+            try store.forgetGroupProfiles(Array(Set(try store.groupEntries(in: batchID).map(\.pair.groupID))))
+        } catch {
+            problem = "Could not update the groups' rules: \(Self.message(error))"
         }
     }
 }

@@ -44,13 +44,20 @@ extension LibraryStore {
         return try albumEntry(entry)
     }
 
-    func recordStep(_ entry: AlbumEntry, createdAlbumID: String? = nil) throws -> AlbumEntry {
-        try update(entry, sql: "done = done + 1, createdAlbumID = COALESCE(?, createdAlbumID)", [createdAlbumID])
+    func recordStep(_ entry: AlbumEntry, createdAlbumID: String? = nil, unchanged: Set<String> = []) throws -> AlbumEntry {
+        let all = entry.unchanged.union(unchanged).sorted()
+        try update(entry, sql: "done = done + 1, sending = 0, createdAlbumID = COALESCE(?, createdAlbumID), unchanged = ?",
+                   [createdAlbumID, all.isEmpty ? nil : try Self.json(all)])
         return try albumEntry(entry)
     }
 
+    /// Just before a call whose reply might be lost.
+    public func markSending(_ entry: AlbumEntry) throws {
+        try update(entry, sql: "sending = 1", [])
+    }
+
     func recordAlbum(_ entry: AlbumEntry, as state: EditEntry.State, message: String? = nil) throws {
-        try update(entry, sql: "state = ?, message = ?", [state.rawValue, message])
+        try update(entry, sql: "state = ?, message = ?, sending = 0", [state.rawValue, message])
     }
 
     private func update(_ entry: AlbumEntry, sql: String, _ values: [(any DatabaseValueConvertible)?]) throws {
@@ -75,10 +82,12 @@ extension LibraryStore {
         let snapshot = try (row["snapshot"] as String?).map {
             try decoder.decode(AlbumSnapshot.self, from: Data($0.utf8))
         }
+        let unchanged = try (row["unchanged"] as String?).map { try decoder.decode([String].self, from: Data($0.utf8)) } ?? []
         return AlbumEntry(batchID: row["batchID"], position: row["position"],
                           edit: try decoder.decode(AlbumEdit.self, from: Data((row["edit"] as String).utf8)),
                           snapshot: snapshot, done: row["done"], createdAlbumID: row["createdAlbumID"],
-                          state: EditEntry.State(rawValue: row["state"]) ?? .pending, message: row["message"])
+                          state: EditEntry.State(rawValue: row["state"]) ?? .pending, message: row["message"],
+                          isSending: row["sending"], unchanged: Set(unchanged))
     }
 
     private static func json<Value: Encodable>(_ value: Value) throws -> String {

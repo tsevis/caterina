@@ -30,7 +30,9 @@ public struct GroupShareRunner: Sendable {
             if let reason = closed.reason(for: entry.pair) {
                 try store.recordGroup(entry, .skipped(reason))
             } else {
-                let outcome = try await send(entry)
+                let wasSending = entry.isSending
+                try store.markSending(entry)
+                let outcome = Self.settled(try await send(entry), wasSending: wasSending)
                 try store.recordGroup(entry, outcome)
                 closed.note(outcome, for: entry.pair)
             }
@@ -52,13 +54,37 @@ public struct GroupShareRunner: Sendable {
         }
     }
 
+    /// Sent before an interruption and found already so on resume: that was
+    /// this batch, so undo must take it back.
+    static func settled(_ outcome: GroupShareOutcome, wasSending: Bool) -> GroupShareOutcome {
+        guard wasSending else { return outcome }
+        switch outcome {
+        case .alreadyInPool: return .added
+        case .alreadyPending: return .pendingModeration
+        case .notInPool: return .removed
+        default: return outcome
+        }
+    }
+
+    /// Whether a refusal from an earlier run still stands: a limit or a full
+    /// pool may have cleared since.
+    public static func carriesOver(_ refusal: GroupShareOutcome.Refusal) -> Bool {
+        switch refusal {
+        case .poolDisabled, .groupNotFound, .photoInTooManyPools, .photoNotFound: true
+        case .groupLimitReached, .poolFull, .contentNotAllowed, .other: false
+        }
+    }
+
     /// Groups and photos an earlier refusal closed, this run or a previous.
     private struct Closed {
         private var groups: [String: GroupShareOutcome.Refusal] = [:]
         private var photos: [String: GroupShareOutcome.Refusal] = [:]
 
         init(_ entries: [GroupEntry]) {
-            for entry in entries { if let outcome = entry.outcome { note(outcome, for: entry.pair) } }
+            for entry in entries {
+                guard case let .refused(reason) = entry.outcome, GroupShareRunner.carriesOver(reason) else { continue }
+                note(.refused(reason), for: entry.pair)
+            }
         }
 
         func reason(for pair: GroupPair) -> GroupShareOutcome.Refusal? {

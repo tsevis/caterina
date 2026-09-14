@@ -107,3 +107,39 @@ import FlickrKit
         #expect(model.problem == "Sign in to Flickr to change your albums.")
     }
 }
+
+@MainActor
+@Suite struct OrganizeAlbumSafetyTests {
+
+    @Test func deletingTheOpenAlbumReturnsToAllPhotos() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "1")], generation: 1)
+        let flickr = FakeOrganizeFlickr(store: store, albums: [.init(id: "A", title: "A", description: "", cover: "1", photos: ["1"])])
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+        await model.loadAlbums()
+        await model.open(.album(id: "A", title: "A"))
+        await model.deleteAlbum("A")
+        #expect(model.scope == .all)
+    }
+
+    /// Nothing selected, or the album not read yet: no empty batch.
+    @Test func removingNothingRecordsNothing() async throws {
+        let store = try LibraryStore.inMemory()
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { "me" })
+        await model.removeSelectionFromAlbum()
+        #expect(model.activity.isEmpty)
+    }
+
+    /// Photos leave "Not in an Album" only when the add went through.
+    @Test func aFailedAddLeavesPhotosNotInAnAlbum() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "1")], generation: 1)
+        let flickr = FakeOrganizeFlickr(store: store, notInAlbum: ["1"])
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+        await model.open(.notInAlbum)
+        model.selectAll()
+        model.addSelectionToTray()
+        await model.addTray(toAlbum: "missing")
+        #expect(try store.photos(.notInAlbum).map(\.id) == ["1"])
+    }
+}

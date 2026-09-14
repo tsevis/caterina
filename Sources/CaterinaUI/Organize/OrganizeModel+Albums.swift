@@ -70,6 +70,7 @@ extension OrganizeModel {
     public func removeSelectionFromAlbum() async {
         guard let albumID = scope.albumID, !selection.isEmpty else { return }
         let ids = albumOrder.filter(selection.ids.contains)
+        guard !ids.isEmpty else { return }
         await runAlbumEdits([.removePhotos(albumID: albumID, photoIDs: ids)],
                             title: "Remove \(Self.count(ids.count)) from “\(scope.title)”")
     }
@@ -112,6 +113,7 @@ extension OrganizeModel {
     public func deleteAlbum(_ albumID: String) async {
         let title = albums.first { $0.id == albumID }?.title ?? "album"
         await runAlbumEdits([.delete(albumID: albumID)], title: "Delete album “\(title)”")
+        if scope.albumID == albumID, !albums.contains(where: { $0.id == albumID }) { await open(.all) }
     }
 
     private func runAlbumEdits(_ edits: [AlbumEdit], title: String) async {
@@ -126,27 +128,25 @@ extension OrganizeModel {
         do {
             let batch = try store.createAlbumBatch(title: title, edits: edits, accountID: owner)
             await runBatch(batch.id)
-            filed(edits)
+            try filed(try store.albumEntries(in: batch.id))
         } catch {
             problem = "Could not record the album edit: \(Self.message(error))"
         }
     }
 
-    /// Photos put in an album leave "Not in an Album" at once.
-    private func filed(_ edits: [AlbumEdit]) {
-        let ids = edits.flatMap { edit -> [String] in
-            switch edit {
+    /// Photos put in an album leave "Not in an Album" at once, when the
+    /// edit that put them there went through.
+    private func filed(_ entries: [AlbumEntry]) throws {
+        let ids = entries.filter { $0.state == .applied }.flatMap { entry -> [String] in
+            switch entry.edit {
             case let .addPhotos(_, photos), let .create(_, _, _, photos): photos
             default: []
             }
         }
         guard !ids.isEmpty else { return }
-        do {
-            try store.markFiled(ids)
-            refreshIndexes()
-        } catch {
-            problem = "Could not update “Not in an Album”: \(Self.message(error))"
-        }
+        try store.markFiled(ids)
+        if scope == .notInAlbum { reloadPhotos() }
+        refreshIndexes()
     }
 
     /// After an album batch: albums and the open album as Flickr has them.

@@ -24,6 +24,8 @@ public struct GroupEntry: Sendable, Equatable {
     public let state: EditEntry.State
     /// Nil until sent (or skipped).
     public let outcome: GroupShareOutcome?
+    /// Sent and not yet recorded: it may have happened.
+    public let isSending: Bool
 }
 
 /// A named choice of groups, to pick again.

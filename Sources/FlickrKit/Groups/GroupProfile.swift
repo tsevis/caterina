@@ -4,6 +4,8 @@ import Foundation
 public struct GroupThrottle: Sendable, Equatable, Hashable, Codable {
     public enum Mode: String, Sendable, Codable {
         case none, day, week, month, ever, disabled
+        /// A mode this build does not know: its count is taken as the limit.
+        case unknown
     }
 
     public let mode: Mode
@@ -22,6 +24,7 @@ public struct GroupThrottle: Sendable, Equatable, Hashable, Codable {
         switch mode {
         case .none: nil
         case .disabled: 0
+        case .unknown: remaining ?? count ?? 0
         default: remaining ?? count
         }
     }
@@ -73,16 +76,18 @@ public struct GroupProfile: Sendable, Equatable, Hashable, Identifiable, Codable
 
 /// The writes that put photos in pools and take them out.
 public enum GroupWrites {
-    /// Repeatable: a second attempt answers "already in pool".
+    /// Not retried inside one call: a retry's "already in pool" would hide
+    /// that this call put it there. A lost reply stops the batch; the runner's
+    /// sending marker settles it on resume.
     public static func add(photoID: String, groupID: String) -> FlickrWrite {
         FlickrWrite(method: "flickr.groups.pools.add", arguments: ["photo_id": photoID, "group_id": groupID],
-                    repeatable: true)
+                    repeatable: false)
     }
 
-    /// Repeatable: a second attempt answers "not in pool".
+    /// Not retried inside one call, for the same reason as `add`.
     public static func remove(photoID: String, groupID: String) -> FlickrWrite {
         FlickrWrite(method: "flickr.groups.pools.remove", arguments: ["photo_id": photoID, "group_id": groupID],
-                    repeatable: true)
+                    repeatable: false)
     }
 }
 

@@ -30,8 +30,26 @@ extension LibraryStore {
     func recordGroup(_ entry: GroupEntry, _ outcome: GroupShareOutcome) throws {
         let data = String(decoding: try JSONEncoder().encode(outcome), as: UTF8.self)
         try write { db in
-            try db.execute(sql: "UPDATE groupEntry SET state = ?, outcome = ? WHERE batchID = ? AND position = ?",
+            try db.execute(sql: "UPDATE groupEntry SET state = ?, outcome = ?, sending = 0 WHERE batchID = ? AND position = ?",
                            arguments: [outcome.isSuccess ? "applied" : "failed", data, entry.batchID, entry.position])
+        }
+    }
+
+    /// Just before a call whose reply might be lost.
+    public func markSending(_ entry: GroupEntry) throws {
+        try write { db in
+            try db.execute(sql: "UPDATE groupEntry SET sending = 1 WHERE batchID = ? AND position = ?",
+                           arguments: [entry.batchID, entry.position])
+        }
+    }
+
+    /// Rules to read again: a batch just used some of each group's room.
+    /// Names stay, for reports.
+    public func forgetGroupProfiles(_ ids: [String]) throws {
+        guard !ids.isEmpty else { return }
+        try write { db in
+            try db.execute(sql: "UPDATE groupProfile SET readAt = 0 WHERE id IN (\(databaseQuestionMarks(count: ids.count)))",
+                           arguments: StatementArguments(ids))
         }
     }
 
@@ -121,6 +139,7 @@ extension LibraryStore {
         return GroupEntry(batchID: row["batchID"], position: row["position"],
                           pair: GroupPair(photoID: row["photoID"], groupID: row["groupID"]),
                           action: GroupEntry.Action(rawValue: row["action"]) ?? .add,
-                          state: EditEntry.State(rawValue: row["state"]) ?? .pending, outcome: outcome)
+                          state: EditEntry.State(rawValue: row["state"]) ?? .pending, outcome: outcome,
+                          isSending: row["sending"])
     }
 }

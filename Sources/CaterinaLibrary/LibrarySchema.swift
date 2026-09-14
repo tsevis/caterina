@@ -196,6 +196,15 @@ enum LibrarySchema {
                 t.primaryKey(["batchID", "position"])
             }
         }
+        migrator.registerMigration("v13-sending-markers") { db in
+            // Set just before a call whose reply may be lost, cleared once recorded:
+            // found set on resume, the call may have happened.
+            for table in ["albumEntry", "groupEntry", "actionEntry"] {
+                try db.alter(table: table) { t in t.add(column: "sending", .boolean).notNull().defaults(to: false) }
+            }
+            // Photos an album edit found already as asked, which undo must leave alone.
+            try db.alter(table: "albumEntry") { t in t.add(column: "unchanged", .text) }
+        }
         return migrator
     }
 

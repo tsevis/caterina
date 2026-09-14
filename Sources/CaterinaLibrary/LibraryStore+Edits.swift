@@ -27,6 +27,10 @@ extension LibraryStore {
     /// it actually changed, last photo first.
     public func undoBatch(for batchID: String, now: Date = Date()) throws -> EditBatch {
         let original = try batch(batchID)
+        guard original.undoes == nil else { throw FlickrError.invalidInput("An undo is not undone; make the edit again.") }
+        guard try !undoneBatchIDs().contains(batchID) else {
+            throw FlickrError.invalidInput("That edit has already been undone.")
+        }
         if original.kind == .albums { return try undoAlbumBatch(original, now: now) }
         if original.kind == .groups { return try undoGroupBatch(original, now: now) }
         if original.kind == .actions { return try undoActionBatch(original, now: now) }

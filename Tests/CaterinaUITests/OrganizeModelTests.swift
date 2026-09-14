@@ -41,6 +41,10 @@ actor FakeOrganizeFlickr: OrganizeFlickr {
 
     func perform(_ write: FlickrWrite, priority: CallPriority) async throws -> Data {
         if let refusal = refusals[write.arguments["photo_id"] ?? ""] { throw refusal }
+        if write.method.hasPrefix("flickr.photosets."), write.method != "flickr.photosets.orderSets",
+           let album = write.arguments["photoset_id"], !albums.contains(where: { $0.id == album }) {
+            throw FlickrError.api(code: 1, message: "Photoset not found", transient: false)
+        }
         sent.append(write)
         applyAlbumWrite(write)
         return Data(#"{"stat":"ok"}"#.utf8)

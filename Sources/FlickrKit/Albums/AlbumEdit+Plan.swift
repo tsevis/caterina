@@ -30,6 +30,14 @@ extension AlbumEdit {
                              undo: [.reorderPhotos(albumID: album, photoIDs: before.photoIDs)])
         case let .orderAlbums(albums):
             return AlbumPlan(steps: [.write(AlbumWrites.orderSets(albums))], undo: [.orderAlbums(before.albumOrder)])
+        case let .deleteMade(album, photos):
+            guard before.photoIDs.allSatisfy(Set(photos).contains) else {
+                throw Refusal(message: """
+                    The album now holds photos this edit did not add, so it was left alone. \
+                    Delete it yourself if that is what you want.
+                    """)
+            }
+            return AlbumPlan(steps: [.write(AlbumWrites.delete(albumID: album))], undo: [])
         case let .delete(album):
             return AlbumPlan(steps: [.write(AlbumWrites.delete(albumID: album))],
                              undo: [.create(title: before.title, description: before.description,
@@ -51,7 +59,7 @@ extension AlbumEdit {
             ? [] : [.write(AlbumWrites.reorder(photoIDs: wanted, albumID: Self.createdAlbum))]
         return AlbumPlan(steps: [.createAlbum(title: title, description: description, coverPhotoID: cover)]
                             + rest.map { .write(AlbumWrites.add(photoID: $0, albumID: Self.createdAlbum)) } + reorder,
-                         undo: [.delete(albumID: Self.createdAlbum)])
+                         undo: [.deleteMade(albumID: Self.createdAlbum, photoIDs: wanted)])
     }
 
     private func removePlan(album: String, photos: [String], before: AlbumSnapshot) throws(Refusal) -> AlbumPlan {

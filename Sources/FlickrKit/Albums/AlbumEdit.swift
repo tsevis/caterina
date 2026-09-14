@@ -11,6 +11,8 @@ public enum AlbumEdit: Sendable, Equatable, Hashable, Codable {
     case reorderPhotos(albumID: String, photoIDs: [String])
     case orderAlbums([String])
     case delete(albumID: String)
+    /// Undoing a made album: deleted only while it holds no photo but these.
+    case deleteMade(albumID: String, photoIDs: [String])
 
     /// Stands for the id of the album a `create` makes, until Flickr says it.
     public static let createdAlbum = "{created-album}"
@@ -34,6 +36,7 @@ public enum AlbumEdit: Sendable, Equatable, Hashable, Codable {
         case .setCover: [.info, .photos]
         case .orderAlbums: [.albumOrder]
         case .delete: [.info, .photos]
+        case .deleteMade: [.photos]
         }
     }
 
@@ -42,7 +45,25 @@ public enum AlbumEdit: Sendable, Equatable, Hashable, Codable {
         switch self {
         case .create, .orderAlbums: nil
         case let .editMeta(id, _, _), let .addPhotos(id, _), let .removePhotos(id, _),
-             let .setCover(id, _), let .reorderPhotos(id, _), let .delete(id): id
+             let .setCover(id, _), let .reorderPhotos(id, _), let .delete(id), let .deleteMade(id, _): id
+        }
+    }
+
+    /// The same edit without `photos` in what it adds or removes: photos found
+    /// already as asked, which this batch did not change.
+    public func excluding(_ photos: Set<String>) -> AlbumEdit? {
+        guard !photos.isEmpty else { return self }
+        switch self {
+        case let .addPhotos(album, ids):
+            let kept = ids.filter { !photos.contains($0) }
+            return kept.isEmpty ? nil : .addPhotos(albumID: album, photoIDs: kept)
+        case let .removePhotos(album, ids):
+            let kept = ids.filter { !photos.contains($0) }
+            return kept.isEmpty ? nil : .removePhotos(albumID: album, photoIDs: kept)
+        case let .reorderPhotos(album, ids):
+            return .reorderPhotos(albumID: album, photoIDs: ids)
+        default:
+            return self
         }
     }
 
@@ -57,6 +78,7 @@ public enum AlbumEdit: Sendable, Equatable, Hashable, Codable {
         case let .setCover(album, photo): return .setCover(albumID: fill(album), photoID: photo)
         case let .reorderPhotos(album, photos): return .reorderPhotos(albumID: fill(album), photoIDs: photos)
         case let .delete(album): return .delete(albumID: fill(album))
+        case let .deleteMade(album, photos): return .deleteMade(albumID: fill(album), photoIDs: photos)
         }
     }
 }

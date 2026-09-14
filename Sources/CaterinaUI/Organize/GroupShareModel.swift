@@ -86,6 +86,7 @@ public final class GroupShareModel {
     private let directory: GroupDirectory
     private let now: @Sendable () -> Date
     private var pools: [String: Set<String>] = [:]
+    private var previewTask: Task<Void, Never>?
 
     public init(organize: OrganizeModel, directory: GroupDirectory, now: @escaping @Sendable () -> Date = { Date() }) {
         self.organize = organize
@@ -186,10 +187,11 @@ public final class GroupShareModel {
         }
     }
 
-    func readProfiles(_ ids: [String]) async {
+    @discardableResult
+    func readProfiles(_ ids: [String]) async -> Bool {
         let missing = ids.filter { profiles[$0] == nil }
-        guard !missing.isEmpty else { return }
-        await working {
+        guard !missing.isEmpty else { return true }
+        return await working {
             var read: [GroupProfile] = []
             for id in missing {
                 try Task.checkCancellation()
@@ -200,9 +202,9 @@ public final class GroupShareModel {
         }
     }
 
-    func readPools() async {
+    func readPools() async -> Bool {
         let missing = organize.tray.filter { pools[$0] == nil }
-        await working {
+        return await working {
             for id in missing {
                 try Task.checkCancellation()
                 pools[id] = Set(try await directory.poolIDs(photoID: id, priority: .interactive))
@@ -210,15 +212,29 @@ public final class GroupShareModel {
         }
     }
 
-    func working(_ body: () async throws -> Void) async {
+    /// Runs `body`, reporting a failure. Returns whether it succeeded, so a
+    /// following step does not run on a failed read.
+    @discardableResult
+    func working(_ body: () async throws -> Void) async -> Bool {
         isWorking = true
-        problem = nil
         defer { isWorking = false }
         do {
             try await body()
+            return true
+        } catch is CancellationError {
+            return false
         } catch {
             problem = OrganizeModel.message(error)
+            return false
         }
+    }
+
+    func clearProblem() { problem = nil }
+
+    /// One preview at a time: a newer choice cancels the one before.
+    public func schedulePreview() {
+        previewTask?.cancel()
+        previewTask = Task { await preview() }
     }
 
     func setPlan(_ plan: GroupSharePlan?) { self.plan = plan }

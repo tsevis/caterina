@@ -35,7 +35,7 @@ struct SharePlanPanel: View {
             buttons
         }
         .padding(14)
-        .onChange(of: share.chosen) { _, _ in Task { await share.preview() } }
+        .onChange(of: share.chosen) { _, _ in share.schedulePreview() }
         .confirmationDialog(confirmTitle, isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
                             presenting: confirming) { action in
             switch action {
@@ -63,10 +63,10 @@ struct SharePlanPanel: View {
             Toggle("Skip photos already in a group (\(share.organize.tray.count.formatted()) calls to check)",
                    isOn: $share.skipsPhotosAlreadyInPools)
         }
-        .onChange(of: share.strategy) { _, _ in Task { await share.preview() } }
-        .onChange(of: share.groupsPerPhoto) { _, _ in Task { await share.preview() } }
-        .onChange(of: share.capPerGroup) { _, _ in Task { await share.preview() } }
-        .onChange(of: share.skipsPhotosAlreadyInPools) { _, _ in Task { await share.preview() } }
+        .onChange(of: share.strategy) { _, _ in share.schedulePreview() }
+        .onChange(of: share.groupsPerPhoto) { _, _ in share.schedulePreview() }
+        .onChange(of: share.capPerGroup) { _, _ in share.schedulePreview() }
+        .onChange(of: share.skipsPhotosAlreadyInPools) { _, _ in share.schedulePreview() }
     }
 
     @ViewBuilder
@@ -90,7 +90,7 @@ struct SharePlanPanel: View {
                 }
             }
         } else {
-            Button("Preview") { Task { await share.preview() } }.disabled(share.isWorking)
+            Button("Preview") { share.schedulePreview() }.disabled(share.isWorking)
         }
     }
 

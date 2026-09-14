@@ -70,3 +70,16 @@ import FlickrKit
         #expect(try store.batch(batch.id).kind == .actions)
     }
 }
+
+@Suite struct PhotoActionInterruptionTests {
+    @Test func aRotationSentBeforeQuittingIsNotSentAgain() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryStoreTests.photo("1")], generation: 1)
+        let batch = try store.createActionBatch(title: "Rotate", action: .rotate(degrees: 90), photoIDs: ["1"], accountID: "me")
+        try store.markSending(try #require(try store.actionEntries(in: batch.id).first))
+        let flickr = ScriptedWriter(store: store)
+        try await PhotoActionRunner(writer: flickr, store: store).run(batch.id)
+        #expect(await flickr.sent.isEmpty)
+        #expect(try store.actionEntries(in: batch.id).first?.state == .failed)
+    }
+}

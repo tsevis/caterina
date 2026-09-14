@@ -18,9 +18,9 @@ extension FlickrClient: AlbumService {}
 /// snapshot: a resume carries on from the step it reached with the same
 /// plan, and undo is worked out from what the album was.
 public struct AlbumRunner: Sendable {
-    private let flickr: any AlbumService
-    private let store: LibraryStore
-    private let ownerID: String
+    let flickr: any AlbumService
+    let store: LibraryStore
+    let ownerID: String
 
     public init(flickr: any AlbumService, store: LibraryStore, ownerID: String) {
         self.flickr = flickr
@@ -37,6 +37,8 @@ public struct AlbumRunner: Sendable {
             try Task.checkCancellation()
             do {
                 try await apply(entry)
+            } catch is StepStopped {
+                // Recorded where it happened.
             } catch let refusal as AlbumEdit.Refusal {
                 try store.recordAlbum(entry, as: .failed, message: refusal.message)
             } catch let error as FlickrError where !error.stopsTheBatch {
@@ -64,25 +66,9 @@ public struct AlbumRunner: Sendable {
     private func send(_ step: AlbumPlan.Step, for entry: AlbumEntry) async throws -> AlbumEntry {
         switch step {
         case let .createAlbum(title, description, cover):
-            do {
-                let id = try await flickr.createAlbum(title: title, description: description,
-                                                      coverPhotoID: cover, priority: .edit)
-                return try store.recordStep(entry, createdAlbumID: id)
-            } catch let error as FlickrError where error.isTransient {
-                // Flickr may have made it. Sending again could make two.
-                try store.recordAlbum(entry, as: .failed, message: """
-                    The connection dropped while making “\(title)”. Look on flickr.com before trying again: \
-                    it may have been made.
-                    """)
-                throw error
-            }
+            try await create(title: title, description: description, cover: cover, for: entry)
         case let .write(write):
-            do {
-                _ = try await flickr.perform(resolved(write, entry), priority: .edit)
-            } catch let error as FlickrError where Self.alreadyDone(error, write) {
-                // What the call was for is already so.
-            }
-            return try store.recordStep(entry)
+            try await self.write(resolved(write, entry), for: entry)
         }
     }
 
@@ -92,14 +78,4 @@ public struct AlbumRunner: Sendable {
                            repeatable: write.repeatable, permission: write.permission)
     }
 
-    /// Already in the album; already not in it; already deleted.
-    private static func alreadyDone(_ error: FlickrError, _ write: FlickrWrite) -> Bool {
-        guard case let .api(code, _, _) = error else { return false }
-        switch (write.method, code) {
-        case ("flickr.photosets.addPhoto", 3), ("flickr.photosets.removePhotos", 2), ("flickr.photosets.delete", 1):
-            return true
-        default:
-            return false
-        }
-    }
 }

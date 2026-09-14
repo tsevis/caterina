@@ -11,6 +11,10 @@ public struct PhotoActionRunner: Sendable {
     private let writer: any PhotoWriter
     private let store: LibraryStore
 
+    static let mayHaveHappened = """
+        The connection dropped, so this may have happened. Look at the photo on flickr.com before trying again.
+        """
+
     public init(writer: any PhotoWriter, store: LibraryStore) {
         self.writer = writer
         self.store = store
@@ -20,15 +24,18 @@ public struct PhotoActionRunner: Sendable {
         for entry in try store.actionEntries(in: batchID) where entry.state == .pending {
             try Task.checkCancellation()
             let write = entry.action.write(photoID: entry.photoID)
+            if entry.isSending, !write.repeatable {
+                // Quit after sending a rotation and before recording it.
+                try store.recordAction(entry, as: .failed, message: Self.mayHaveHappened)
+                continue
+            }
             do {
+                try store.markSending(entry)
                 _ = try await writer.perform(write, priority: .edit)
                 try store.recordAction(entry, as: .applied)
             } catch let error as FlickrError where error.stopsTheBatch {
                 if error.isTransient, !write.repeatable {
-                    try store.recordAction(entry, as: .failed, message: """
-                        The connection dropped, so this may have happened. Look at the photo on flickr.com \
-                        before trying again.
-                        """)
+                    try store.recordAction(entry, as: .failed, message: Self.mayHaveHappened)
                 }
                 throw error
             } catch let error as FlickrError {

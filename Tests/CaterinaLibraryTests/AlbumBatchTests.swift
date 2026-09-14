@@ -134,3 +134,71 @@ import FlickrKit
         #expect(batch.calls == 3)
     }
 }
+
+/// Found in review: interruptions and undo that could change more than meant.
+@Suite struct AlbumSafetyTests {
+
+    /// Quit after "create" went out but before its id was saved: resuming
+    /// must not make a second album.
+    @Test func aCreateSentButNotRecordedIsNeverSentAgain() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeAlbumFlickr([:])
+        let batch = try store.createAlbumBatch(title: "New", edits: [
+            .create(title: "Hydra", description: "", coverPhotoID: "1", photoIDs: ["1"])], accountID: "me")
+        let entry = try #require(try store.albumEntries(in: batch.id).first)
+        try store.markSending(entry)
+
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+
+        #expect(await flickr.sent.isEmpty)
+        #expect(try store.albumEntries(in: batch.id).first?.state == .failed)
+    }
+
+    /// A photo someone put in the album between reading it and adding it is
+    /// not taken out by undo.
+    @Test func undoLeavesAPhotoThatWasAlreadyThereWhenAdded() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeAlbumFlickr(["A": .init(title: "A", description: "", cover: "1", photos: ["1"])])
+        let batch = try store.createAlbumBatch(title: "Add", edits: [.addPhotos(albumID: "A", photoIDs: ["2", "3"])],
+                                               accountID: "me")
+        // Read the album, then photo 2 arrives by another route.
+        let entry = try #require(try store.albumEntries(in: batch.id).first)
+        _ = try store.recordSnapshot(AlbumSnapshot(title: "A", description: "", coverPhotoID: "1", photoIDs: ["1"],
+                                                   albumOrder: []), for: entry)
+        _ = try await flickr.perform(AlbumWrites.add(photoID: "2", albumID: "A"), priority: .edit)
+
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(try store.undoBatch(for: batch.id).id)
+
+        #expect(await flickr.albums["A"]?.photos == ["1", "2"])
+    }
+
+    /// Undoing "make album" once others were added to it would delete them
+    /// from the album too: refused, saying why.
+    @Test func undoingAMadeAlbumThatHasGrownIsRefused() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeAlbumFlickr([:])
+        let batch = try store.createAlbumBatch(title: "Make", edits: [
+            .create(title: "Hydra", description: "", coverPhotoID: "1", photoIDs: ["1"])], accountID: "me")
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+        let made = try #require(await flickr.albums.keys.first)
+        _ = try await flickr.perform(AlbumWrites.add(photoID: "9", albumID: made), priority: .edit)
+
+        let undo = try store.undoBatch(for: batch.id)
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(undo.id)
+
+        #expect(await flickr.albums[made] != nil)
+        #expect(try store.albumEntries(in: undo.id).first?.message?.contains("photos this edit did not add") == true)
+    }
+
+    @Test func aBatchIsUndoneOnceAndAnUndoIsNotUndone() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeAlbumFlickr(["A": .init(title: "A", description: "", cover: "1", photos: ["1"])])
+        let batch = try store.createAlbumBatch(title: "Rename", edits: [.editMeta(albumID: "A", title: "B", description: "")],
+                                               accountID: "me")
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+        let undo = try store.undoBatch(for: batch.id)
+        #expect(throws: FlickrError.self) { _ = try store.undoBatch(for: batch.id) }
+        #expect(throws: FlickrError.self) { _ = try store.undoBatch(for: undo.id) }
+    }
+}

@@ -11,8 +11,12 @@ extension GroupShareModel {
             setPlan(nil)
             return
         }
-        await readProfiles(chosen)
-        if skipsPhotosAlreadyInPools { await readPools() }
+        clearProblem()
+        let wanted = chosen
+        guard await readProfiles(wanted), !Task.isCancelled else { return }
+        if skipsPhotosAlreadyInPools { guard await readPools(), !Task.isCancelled else { return } }
+        // The choice changed while reading: the newer preview will answer.
+        guard wanted == chosen else { return }
         let groups = chosen.compactMap { profiles[$0] }
         guard groups.count == chosen.count else { return }
         let photos = organize.trayPhotos.map {

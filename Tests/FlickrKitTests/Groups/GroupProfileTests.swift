@@ -84,7 +84,7 @@ import Testing
         let add = GroupWrites.add(photoID: "1", groupID: "g")
         #expect(add.method == "flickr.groups.pools.add")
         #expect(add.arguments == ["photo_id": "1", "group_id": "g"])
-        #expect(add.repeatable)
+        #expect(!add.repeatable)
         #expect(GroupWrites.remove(photoID: "1", groupID: "g").method == "flickr.groups.pools.remove")
     }
 }

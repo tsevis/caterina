@@ -93,7 +93,7 @@ import Testing
                                   "flickr.photosets.reorderPhotos"])
         guard case let .write(add) = plan.steps[1] else { Issue.record("no write"); return }
         #expect(add.arguments["photoset_id"] == AlbumEdit.createdAlbum)
-        #expect(plan.undo == [.delete(albumID: AlbumEdit.createdAlbum)])
+        #expect(plan.undo == [.deleteMade(albumID: AlbumEdit.createdAlbum, photoIDs: ["1", "2", "3"])])
     }
 
     @Test func eachEditSaysWhatItNeedsToReadFirst() {

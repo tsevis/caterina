@@ -11,6 +11,8 @@ public struct ActionEntry: Sendable, Equatable {
     public let action: PhotoAction
     public let state: EditEntry.State
     public let message: String?
+    /// Sent and not yet recorded: it may have happened.
+    public let isSending: Bool
 }
 
 extension LibraryStore {
@@ -28,7 +30,8 @@ extension LibraryStore {
                              arguments: [batchID]).map { row in
                 ActionEntry(batchID: row["batchID"], position: row["position"], photoID: row["photoID"],
                             action: try JSONDecoder().decode(PhotoAction.self, from: Data((row["action"] as String).utf8)),
-                            state: EditEntry.State(rawValue: row["state"]) ?? .pending, message: row["message"])
+                            state: EditEntry.State(rawValue: row["state"]) ?? .pending, message: row["message"],
+                            isSending: row["sending"])
             }
         }
     }
@@ -38,9 +41,17 @@ extension LibraryStore {
         try actionEntries(in: batchID).contains { $0.state == .applied && $0.action.undo != nil }
     }
 
+    /// Just before a call whose reply might be lost.
+    public func markSending(_ entry: ActionEntry) throws {
+        try write { db in
+            try db.execute(sql: "UPDATE actionEntry SET sending = 1 WHERE batchID = ? AND position = ?",
+                           arguments: [entry.batchID, entry.position])
+        }
+    }
+
     func recordAction(_ entry: ActionEntry, as state: EditEntry.State, message: String? = nil) throws {
         try write { db in
-            try db.execute(sql: "UPDATE actionEntry SET state = ?, message = ? WHERE batchID = ? AND position = ?",
+            try db.execute(sql: "UPDATE actionEntry SET state = ?, message = ?, sending = 0 WHERE batchID = ? AND position = ?",
                            arguments: [state.rawValue, message, entry.batchID, entry.position])
             if state == .applied, entry.action == .delete {
                 try db.execute(sql: "DELETE FROM photo WHERE id = ?", arguments: [entry.photoID])

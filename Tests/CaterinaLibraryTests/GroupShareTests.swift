@@ -162,3 +162,55 @@ actor FakePools: GroupPoolWriter {
         #expect(try store.groupProfiles(ids: ["g"], freshAfter: now.addingTimeInterval(1)).isEmpty)
     }
 }
+
+/// Found in review.
+@Suite struct GroupShareSafetyTests {
+
+    /// Flickr took the photo but the reply was lost; on resume it says
+    /// "already in pool". That was this batch, so undo takes it out.
+    @Test func aPairSentBeforeAnInterruptionCountsAsPlacedByTheBatch() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakePools(pools: ["g": ["p1"]])
+        let batch = try store.createGroupBatch(title: "Share", adding: [GroupPair(photoID: "p1", groupID: "g")],
+                                               accountID: "me")
+        try store.markSending(try #require(try store.groupEntries(in: batch.id).first))
+
+        try await GroupShareRunner(flickr: flickr, store: store).run(batch.id)
+
+        #expect(try store.groupEntries(in: batch.id).first?.outcome == .added)
+    }
+
+    /// Pool writes are not retried by the client: a retry's "already in
+    /// pool" would hide that this batch put the photo there.
+    @Test func poolWritesAreNotRetriedInsideOneCall() {
+        #expect(!GroupWrites.add(photoID: "1", groupID: "g").repeatable)
+        #expect(!GroupWrites.remove(photoID: "1", groupID: "g").repeatable)
+    }
+
+    /// A daily limit may have reset by the time a batch is resumed; only
+    /// refusals that do not pass carry over.
+    @Test func aLimitReachedYesterdayDoesNotCloseTheGroupToday() async throws {
+        let store = try LibraryStore.inMemory()
+        let tight = FakePools(limits: ["g": 1])
+        await tight.goOffline(after: 2)
+        let batch = try store.createGroupBatch(title: "Share", adding: [
+            GroupPair(photoID: "p1", groupID: "g"), GroupPair(photoID: "p2", groupID: "g"),
+            GroupPair(photoID: "p3", groupID: "h")], accountID: "me")
+        await #expect(throws: FlickrError.self) { try await GroupShareRunner(flickr: tight, store: store).run(batch.id) }
+
+        let entries = try store.groupEntries(in: batch.id)
+        #expect(entries.map(\.outcome) == [.added, .refused(.groupLimitReached), nil])
+        #expect(!GroupShareRunner.carriesOver(.groupLimitReached))
+        #expect(GroupShareRunner.carriesOver(.poolDisabled))
+    }
+
+    @Test func usedRulesAreForgottenAfterSharing() throws {
+        let store = try LibraryStore.inMemory()
+        let profile = GroupProfile(id: "g", name: "G", members: 1, poolCount: 1, isAdmin: false, isModerated: false,
+                                   isEighteenPlus: false, throttle: .init(mode: .day, count: 5, remaining: 2),
+                                   restrictions: .none)
+        try store.saveGroupProfiles([profile], readAt: Date())
+        try store.forgetGroupProfiles(["g"])
+        #expect(try store.groupProfiles(ids: ["g"], freshAfter: Date(timeIntervalSince1970: 0)).isEmpty)
+    }
+}

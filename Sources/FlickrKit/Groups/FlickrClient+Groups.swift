@@ -41,7 +41,7 @@ enum GroupResponse {
         try FlickrResponse.throwIfFailed(data)
         let group = try InsightsResponse.decode(Envelope.self, data, "the group's details").group
         let flag = { (value: LooseInt?, otherwise: Bool) in value?.value.map { $0 != 0 } ?? otherwise }
-        let throttle = GroupThrottle(mode: GroupThrottle.Mode(rawValue: group.throttle?.mode ?? "none") ?? .none,
+        let throttle = GroupThrottle(mode: GroupThrottle.Mode(rawValue: group.throttle?.mode ?? "none") ?? .unknown,
                                      count: group.throttle?.count?.value, remaining: group.throttle?.remaining?.value)
         return GroupProfile(
             id: group.id, name: GroupResolver.unescapingHTML(group.name?._content ?? group.id),
