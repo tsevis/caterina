@@ -10,10 +10,11 @@ struct OrganizePanelView: View {
     @Binding var panel: OrganizePanel
 
     @Binding var draft: EditDraft
+    let shareToGroups: () -> Void
 
     var body: some View {
         switch panel {
-        case .tray: TrayPanel(organize: organize, draft: $draft) { panel = .activity }
+        case .tray: TrayPanel(organize: organize, draft: $draft, shareToGroups: shareToGroups) { panel = .activity }
         case .activity: ActivityPanel(organize: organize)
         }
     }
@@ -24,6 +25,7 @@ struct TrayPanel: View {
     let organize: OrganizeModel
     /// Held by the tab, so going to Activity and back keeps what was typed.
     @Binding var draft: EditDraft
+    var shareToGroups: () -> Void = {}
     let onApplied: () -> Void
 
     var body: some View {
@@ -45,6 +47,10 @@ struct TrayPanel: View {
                         EditForm(draft: $draft)
                         Divider()
                         TrayAlbumSection(organize: organize)
+                        Divider()
+                        Text("Groups").font(.subheadline.weight(.semibold))
+                        Button("Share to Groups…", action: shareToGroups)
+                        .disabled(organize.isRunning)
                     }
                     .padding(14)
                 }

@@ -23,6 +23,14 @@ public struct BatchActivity: Sendable, Equatable, Identifiable {
     /// Something on Flickr changed, it is not itself an undo, it has not been
     /// undone, nothing is running it, and it was made by this account.
     public let canUndo: Bool
+    /// For a group batch: per group, what happened.
+    public var groupReport: [GroupReportLine] = []
+
+    public struct GroupReportLine: Sendable, Equatable, Identifiable {
+        public var id: String { row.groupID }
+        public let name: String
+        public let row: GroupShareReport.Row
+    }
 
     static func rows(from store: LibraryStore, limit: Int, runningID: String?,
                      accountID: String?) throws -> [BatchActivity] {
@@ -33,10 +41,19 @@ public struct BatchActivity: Sendable, Equatable, Identifiable {
             let (failures, changed) = try outcome(of: batch, in: store)
             let ours = batch.accountID == nil || batch.accountID == accountID
             let idle = batch.id != runningID
-            return BatchActivity(batch: batch, summary: summary, failures: failures,
-                                 canResume: ours && idle && summary.pending > 0 && !undone.contains(batch.id),
-                                 canUndo: ours && idle && changed && batch.undoes == nil && !undone.contains(batch.id))
+            var row = BatchActivity(batch: batch, summary: summary, failures: failures,
+                                    canResume: ours && idle && summary.pending > 0 && !undone.contains(batch.id),
+                                    canUndo: ours && idle && changed && batch.undoes == nil && !undone.contains(batch.id))
+            if batch.kind == .groups { row.groupReport = try groupReport(of: batch, in: store) }
+            return row
         }
+    }
+
+    private static func groupReport(of batch: EditBatch, in store: LibraryStore) throws -> [GroupReportLine] {
+        let rows = try store.groupShareReport(of: batch.id)
+        let names = Dictionary(uniqueKeysWithValues: try store.groupProfiles(ids: rows.map(\.groupID), freshAfter: .distantPast)
+            .map { ($0.id, $0.name) })
+        return rows.map { GroupReportLine(name: names[$0.groupID] ?? $0.groupID, row: $0) }
     }
 
     /// What was refused, and whether anything on Flickr changed.

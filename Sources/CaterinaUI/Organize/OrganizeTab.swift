@@ -13,6 +13,7 @@ struct OrganizeTab: View {
     /// Captured when the sheet opens, so approval resumes that batch and no
     /// other.
     @State private var permissionRequest: PermissionRequest?
+    @State private var groupShare: GroupShareModel?
 
     var body: some View {
         if let organize = model.organize {
@@ -25,7 +26,9 @@ struct OrganizeTab: View {
                     LibraryStatusBar(model: model)
                 }
                 .inspector(isPresented: $isShowingPanel) {
-                    OrganizePanelView(model: model, organize: organize, panel: $panel, draft: $draft)
+                    OrganizePanelView(model: model, organize: organize, panel: $panel, draft: $draft) {
+                        groupShare = GroupShareModel(organize: organize, directory: model.groupDirectory)
+                    }
                         .inspectorColumnWidth(min: 320, ideal: 380, max: 520)
                 }
             }
@@ -34,6 +37,9 @@ struct OrganizeTab: View {
                 if case let .needsPermission(permission, batchID) = run {
                     permissionRequest = PermissionRequest(permission: permission, batchID: batchID)
                 }
+            }
+            .sheet(item: $groupShare) { share in
+                GroupShareSheet(share: share) { groupShare = nil; panel = .activity }
             }
             .sheet(item: $permissionRequest) { request in
                 PermissionRequestSheet(model: model, permission: request.permission) {
@@ -152,4 +158,8 @@ struct NotInAlbumStatus: View {
         .font(.callout)
         .foregroundStyle(Theme.inkSecondary)
     }
+}
+
+extension GroupShareModel: Identifiable {
+    public nonisolated var id: ObjectIdentifier { ObjectIdentifier(self) }
 }

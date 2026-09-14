@@ -54,6 +54,8 @@ public final class AppModel {
     public let browse: BrowseModel
     /// Nil when the library copy could not be opened: Organize edits from it.
     public let organize: OrganizeModel?
+    /// Groups and their rules, for sharing from Organize.
+    public var groupDirectory: GroupDirectory { client }
     /// Read by Browse off the main actor, so kept in a box it can hold.
     private let accountID: AccountIDBox
 

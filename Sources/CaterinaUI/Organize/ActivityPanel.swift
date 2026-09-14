@@ -90,7 +90,12 @@ struct ActivityRow: View {
                 }
             }
             Text(detail).font(.caption).monospacedDigit().foregroundStyle(Theme.inkSecondary)
-            if !row.failures.isEmpty {
+            if !row.groupReport.isEmpty {
+                DisclosureGroup("Per group") {
+                    ForEach(row.groupReport) { line in GroupReportView(line: line) }
+                }
+                .font(.caption)
+            } else if !row.failures.isEmpty {
                 DisclosureGroup("\(row.failures.count.formatted()) not changed") {
                     ForEach(row.failures) { failure in
                         VStack(alignment: .leading, spacing: 1) {
@@ -112,5 +117,30 @@ struct ActivityRow: View {
         if summary.failed > 0 { parts.append("\(summary.failed.formatted()) refused") }
         if summary.pending > 0 { parts.append("\(summary.pending.formatted()) waiting") }
         return row.batch.createdAt.formatted(date: .abbreviated, time: .shortened) + " · " + parts.joined(separator: " · ")
+    }
+}
+
+/// One group's line in a sharing report.
+struct GroupReportView: View {
+    let line: BatchActivity.GroupReportLine
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(line.name).lineLimit(1)
+            Text(counts).foregroundStyle(Theme.inkSecondary).monospacedDigit()
+            ForEach(line.row.refused.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { reason in
+                Text("\(line.row.refused[reason] ?? 0) not added: \(reason.explanation)").foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+    }
+
+    private var counts: String {
+        let row = line.row
+        return [row.added > 0 ? "\(row.added) done" : nil,
+                row.waiting > 0 ? "\(row.waiting) waiting for a moderator" : nil,
+                row.already > 0 ? "\(row.already) already so" : nil,
+                row.pending > 0 ? "\(row.pending) still to send" : nil]
+            .compactMap { $0 }.joined(separator: " · ")
     }
 }

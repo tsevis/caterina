@@ -48,6 +48,11 @@ public struct GroupSharePlan: Sendable, Equatable {
     public struct Tally: Sendable, Equatable {
         public let sending: Int
         public let skipped: Int
+
+        public init(sending: Int, skipped: Int) {
+            self.sending = sending
+            self.skipped = skipped
+        }
     }
 
     public let assignments: [Assignment]
