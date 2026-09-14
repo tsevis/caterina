@@ -98,6 +98,24 @@ Each of these was a defect in the reference application, and each has a test.
 * **Flickr serves about 4000 results.** The reachable page count is clamped to
   that, with the reason shown, rather than letting you page into duplicates.
 
+## Organize: batch edits with undo
+
+Organize is Flickr's Organizr rebuilt: find photos in smart views, gather them
+in a tray, see the calls and time an edit will take, run it, and undo it from
+Activity. The rules that are not obvious:
+
+* **Each photo is read from Flickr just before it is changed.** The local copy
+  holds clean tags ("newyork") and can be behind; the change is laid over the
+  photo as Flickr has it, so tag spellings survive and an edit made on
+  flickr.com since the last sync is never silently written over.
+* **A call whose reply can be lost is marked before it is sent.** Making an
+  album and rotating are never sent twice; a batch interrupted there stops and
+  says to look on flickr.com.
+* **Every change except deleting can be undone**, including album edits and
+  group sharing; undo is planned from what Flickr had just before.
+* **Deleting is separate**: its own button, its own question naming the count,
+  and Flickr's own delete permission.
+
 ## What it writes, and what it keeps
 
 * **A `Credits.csv` beside every download**, naming the photographer, the
