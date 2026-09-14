@@ -158,8 +158,10 @@ struct GroupRow: View {
         switch (throttle.mode, throttle.available) {
         case (.disabled, _): "Closed"
         case (_, nil): "No limit"
-        case let (.ever, left?): "\(left) left"
-        case let (mode, left?): "\(left) left this \(mode.rawValue)"
+        case let (.day, left?): "\(left) left today"
+        case let (.week, left?): "\(left) left this week"
+        case let (.month, left?): "\(left) left this month"
+        case let (_, left?): "\(left) left"
         }
     }
 }

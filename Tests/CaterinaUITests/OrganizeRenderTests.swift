@@ -58,3 +58,30 @@ import FlickrKit
             .padding(14), "activity", size: CGSize(width: 380, height: 200))
     }
 }
+
+@MainActor
+@Suite struct GroupShareRenderTests {
+    @Test func groupRowsPreviewAndReportAreDrawn() throws {
+        let profile = GroupShareModelTests.profile("s", "Street Photography – Europe", members: 5000, remaining: 2,
+                                                   videos: false, moderated: true)
+        let group = AccountGroup(id: "s", name: profile.name, members: 5000, photos: 50_000, isAdmin: true)
+        let report = BatchActivity.GroupReportLine(name: "Mediterranean Light",
+                                                   row: .init(groupID: "m", added: 3, waiting: 2, already: 1,
+                                                              refused: [.groupLimitReached: 4], pending: 0))
+        let view = VStack(alignment: .leading, spacing: 14) {
+            GroupRow(group: group, profile: profile, isChosen: true) {}
+            GroupRow(group: group, profile: nil, isChosen: false) {}
+            PlanGroupRow(name: "Athens Architecture", tally: .init(sending: 7, skipped: 3),
+                         reasons: [.videosNotAllowed, .overGroupLimit, .overGroupLimit])
+            GroupReportView(line: report)
+        }
+        .padding(14)
+        let renderer = ImageRenderer(content: view.frame(width: 420, height: 300).background(Color(nsColor: .windowBackgroundColor)))
+        renderer.scale = 2
+        let image = try #require(renderer.nsImage)
+        let url = OrganizeRenderTests.output.appendingPathComponent("groups.png")
+        try FileManager.default.createDirectory(at: OrganizeRenderTests.output, withIntermediateDirectories: true)
+        try #require(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:))?.representation(using: .png, properties: [:]))
+            .write(to: url)
+    }
+}
