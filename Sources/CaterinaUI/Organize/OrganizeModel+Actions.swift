@@ -34,8 +34,18 @@ extension OrganizeModel {
         await runActions(.delete, title: "Delete \(Self.count(tray.count))")
     }
 
+    /// A photo from Browse, usually someone else's, into one of your galleries.
+    public func addToGallery(photoID: String, galleryID: String, galleryTitle: String, comment: String) async {
+        await runActions(.addToGallery(galleryID: galleryID, comment: comment), on: [photoID],
+                         title: "Add a photo to gallery “\(galleryTitle)”")
+    }
+
     private func runActions(_ action: PhotoAction, title: String) async {
-        guard !tray.isEmpty else { return }
+        await runActions(action, on: tray, title: title)
+    }
+
+    private func runActions(_ action: PhotoAction, on photoIDs: [String], title: String) async {
+        guard !photoIDs.isEmpty else { return }
         guard let owner = accountID() else {
             problem = "Sign in to Flickr to change your photos."
             return
@@ -45,7 +55,7 @@ extension OrganizeModel {
             return
         }
         do {
-            let batch = try store.createActionBatch(title: title, action: action, photoIDs: tray, accountID: owner)
+            let batch = try store.createActionBatch(title: title, action: action, photoIDs: photoIDs, accountID: owner)
             await runBatch(batch.id)
         } catch {
             problem = "Could not record the edit: \(Self.message(error))"

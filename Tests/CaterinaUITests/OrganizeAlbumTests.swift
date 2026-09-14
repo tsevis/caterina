@@ -143,3 +143,24 @@ import FlickrKit
         #expect(try store.photos(.notInAlbum).map(\.id) == ["1"])
     }
 }
+
+@MainActor
+@Suite struct OrganizeFindingTests {
+    @Test func searchingFindsTitlesDescriptionsAndTags() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "1", title: "Harbour at dusk"), LibraryPhoto(id: "2", title: "Hill", tags: ["dusk"]),
+                        LibraryPhoto(id: "3", title: "Pier")], generation: 1)
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store))
+        await model.open(.search("dusk"))
+        #expect(Set(model.photos.map(\.id)) == ["1", "2"])
+        #expect(OrganizeScope.search("dusk").title == "“dusk”")
+    }
+
+    @Test func collectionsAreReadForShowingOnly() async throws {
+        let store = try LibraryStore.inMemory()
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store))
+        await model.loadCollections()
+        #expect(model.collections.map(\.title) == ["Travel"])
+        #expect(model.collections.first?.children.first?.albums.map(\.title) == ["Athens"])
+    }
+}

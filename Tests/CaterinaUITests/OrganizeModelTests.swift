@@ -106,6 +106,11 @@ actor FakeOrganizeFlickr: OrganizeFlickr {
     }
     func geoPermissions(photoID: String, priority: CallPriority) async throws -> LibraryPhoto.GeoPermissions? { nil }
     func resolveUser(from input: String) async throws -> String { "nsid-\(input)" }
+    func collections() async throws -> [PhotoCollection] {
+        [PhotoCollection(id: "c1", title: "Travel", description: "", albums: [],
+                         children: [PhotoCollection(id: "c2", title: "Greece", description: "",
+                                                    albums: [.init(id: "A", title: "Athens")], children: [])])]
+    }
     func photoList(_ list: PhotoList, page: Int) async throws -> LibraryPage {
         if holding { await withCheckedContinuation { held = $0 } }
         if let listFailure { throw listFailure }
@@ -462,5 +467,23 @@ final class AccountBox: @unchecked Sendable {
         #expect(model.tray.isEmpty)
         #expect(model.photos.isEmpty)
         #expect(model.activity.first?.canUndo == false)
+    }
+}
+
+@MainActor
+@Suite struct OrganizeGalleryTests {
+    @Test func aPhotoFromBrowseGoesIntoAGalleryAndCanBeTakenOut() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+
+        await model.addToGallery(photoID: "someone-else", galleryID: "g1", galleryTitle: "Blue", comment: "")
+
+        #expect(await flickr.sent.map(\.method) == ["flickr.galleries.addPhoto"])
+        let row = try #require(model.activity.first)
+        #expect(row.batch.title == "Add a photo to gallery “Blue”")
+        #expect(row.canUndo)
+        await model.undo(row.batch.id)
+        #expect(await flickr.sent.last?.method == "flickr.galleries.removePhoto")
     }
 }

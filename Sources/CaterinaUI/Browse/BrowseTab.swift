@@ -18,7 +18,7 @@ struct BrowseTab: View {
         } detail: {
             BrowseContent(browse: browse)
                 .inspector(isPresented: $isShowingRecord) {
-                    RecordPanel(browse: browse)
+                    RecordPanel(browse: browse, organize: model.organize)
                         .inspectorColumnWidth(min: 320, ideal: 400, max: 560)
                 }
         }
@@ -45,6 +45,7 @@ struct BrowseTab: View {
 /// The chosen photo's record, or what to do to get one.
 struct RecordPanel: View {
     let browse: BrowseModel
+    var organize: OrganizeModel?
 
     var body: some View {
         switch browse.record {
@@ -58,6 +59,11 @@ struct RecordPanel: View {
                                    description: Text(message))
         case let .loaded(record):
             PhotoRecordView(record: record, thumbnailURL: browse.thumbnailURL(for: record.info.id))
+                .safeAreaInset(edge: .bottom) {
+                    if let organize, record.info.owner.nsid != browse.accountID() {
+                        AddToGalleryBar(photoID: record.info.id, directory: browse.directory, organize: organize)
+                    }
+                }
         }
     }
 }

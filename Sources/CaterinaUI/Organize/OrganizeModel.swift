@@ -13,7 +13,14 @@ extension FlickrClient: AlbumContents {}
 
 /// Flickr, as Organize needs it.
 public typealias OrganizeFlickr = PhotoWriter & LivePhotoReader & PhotoListSource & AlbumService & AlbumLister
-    & AlbumContents & GroupPoolWriter & PersonResolver
+    & AlbumContents & GroupPoolWriter & PersonResolver & CollectionReader
+
+/// Collections, which Flickr's API can read but not change.
+public protocol CollectionReader: Sendable {
+    func collections() async throws -> [PhotoCollection]
+}
+
+extension FlickrClient: CollectionReader {}
 
 /// Finding a Flickr member's id from a name or photostream address.
 public protocol PersonResolver: Sendable {
@@ -50,6 +57,7 @@ public final class OrganizeModel {
     public private(set) var counts: [OrganizeScope: Int] = [:]
     public internal(set) var problem: String?
     public internal(set) var albums: [Album] = []
+    public internal(set) var collections: [PhotoCollection] = []
     /// The open album's photo ids, in album order.
     var albumOrder: [String] = []
 

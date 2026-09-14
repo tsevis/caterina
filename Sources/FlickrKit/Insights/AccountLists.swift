@@ -82,6 +82,11 @@ public struct PhotoCollection: Sendable, Equatable, Hashable, Identifiable {
     public struct AlbumRef: Sendable, Equatable, Hashable, Identifiable {
         public let id: String
         public let title: String
+
+        public init(id: String, title: String) {
+            self.id = id
+            self.title = title
+        }
     }
 
     public let id: String
@@ -89,6 +94,14 @@ public struct PhotoCollection: Sendable, Equatable, Hashable, Identifiable {
     public let description: String
     public let albums: [AlbumRef]
     public let children: [PhotoCollection]
+
+    public init(id: String, title: String, description: String, albums: [AlbumRef], children: [PhotoCollection]) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.albums = albums
+        self.children = children
+    }
 }
 
 public struct Contact: Sendable, Equatable, Hashable, Identifiable {

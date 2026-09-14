@@ -19,6 +19,8 @@ public enum OrganizeScope: Sendable, Hashable {
     case tag(String)
     /// Read from Flickr, in album order.
     case album(id: String, title: String)
+    /// Title, description or tags containing the text.
+    case search(String)
 
     var albumID: String? {
         if case let .album(id, _) = self { return id }
@@ -33,6 +35,7 @@ public enum OrganizeScope: Sendable, Hashable {
     var filter: LibraryFilter {
         switch self {
         case .all, .recentlyUpdated, .album: .all
+        case let .search(text): .matching(text)
         case .notInAlbum: .notInAlbum
         case .untagged: .untagged
         case .withoutLocation: .withoutLocation
@@ -63,6 +66,7 @@ public enum OrganizeScope: Sendable, Hashable {
         case let .month(month): MonthCount(month: month, count: 0).title
         case let .tag(tag): tag
         case let .album(_, title): title
+        case let .search(text): "“\(text)”"
         }
     }
 
@@ -80,6 +84,7 @@ public enum OrganizeScope: Sendable, Hashable {
         case .month: "calendar"
         case .tag: "tag"
         case .album: "rectangle.stack"
+        case .search: "magnifyingglass"
         }
     }
 }

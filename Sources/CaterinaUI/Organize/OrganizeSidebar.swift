@@ -7,6 +7,7 @@ import FlickrKit
 struct OrganizeSidebar: View {
     let organize: OrganizeModel
     @State private var tagFilter = ""
+    @State private var searchText = ""
 
     private var selection: Binding<OrganizeScope?> {
         Binding(get: { organize.scope }, set: { scope in
@@ -17,6 +18,13 @@ struct OrganizeSidebar: View {
 
     var body: some View {
         List(selection: selection) {
+            TextField("Search titles, descriptions, tags", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { return }
+                    Task { await organize.open(.search(text)) }
+                }
             Section("Library") {
                 ForEach(OrganizeScope.smartViews, id: \.self) { row($0) }
             }
@@ -40,7 +48,8 @@ struct OrganizeSidebar: View {
                     }
                 }
             }
-            Section("Collections") {
+            Section("Collections (read only)") {
+                ForEach(organize.collections) { CollectionRow(collection: $0) }
                 Link(destination: URL(string: "https://www.flickr.com/photos/organize/?start_tab=collection")!) {
                     Label("Edit collections on flickr.com", systemImage: "arrow.up.right.square")
                 }
@@ -53,7 +62,10 @@ struct OrganizeSidebar: View {
                 }
             }
         }
-        .task { await organize.loadAlbums() }
+        .task {
+            await organize.loadAlbums()
+            await organize.loadCollections()
+        }
     }
 
     private func row(_ scope: OrganizeScope) -> some View {
@@ -73,5 +85,21 @@ struct OrganizeSidebar: View {
         let needle = PhotoEdit.flickrTag(tagFilter)
         let matching = needle.isEmpty ? organize.tags : organize.tags.filter { $0.tag.contains(needle) }
         return Array(matching.prefix(200))
+    }
+}
+
+/// A collection, its sub-collections and albums; albums open in Organize.
+struct CollectionRow: View {
+    let collection: PhotoCollection
+
+    var body: some View {
+        DisclosureGroup {
+            ForEach(collection.children) { CollectionRow(collection: $0) }
+            ForEach(collection.albums) { album in
+                Label(album.title, systemImage: "rectangle.stack").tag(OrganizeScope.album(id: album.id, title: album.title))
+            }
+        } label: {
+            Label(collection.title, systemImage: "square.stack.3d.up")
+        }
     }
 }

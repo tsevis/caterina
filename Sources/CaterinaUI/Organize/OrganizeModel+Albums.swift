@@ -23,6 +23,15 @@ extension OrganizeModel {
         }
     }
 
+    /// For showing only: the API cannot change collections.
+    public func loadCollections() async {
+        do {
+            collections = try await flickr.collections()
+        } catch {
+            problem = "Could not read your collections: \(Self.message(error))"
+        }
+    }
+
     func readAlbum(_ albumID: String, generation: Int) async {
         guard let owner = accountID() else {
             problem = "Sign in to Flickr to see your albums."

@@ -48,3 +48,21 @@ import Testing
         }
     }
 }
+
+/// Galleries hold other people's photos; adding one is never repeated.
+@Suite struct GalleryActionTests {
+    @Test func addingToAGalleryIsNeverRepeatedAndUndoRemoves() {
+        let add = PhotoAction.addToGallery(galleryID: "5704-721", comment: "Light").write(photoID: "9")
+        #expect(add.method == "flickr.galleries.addPhoto")
+        #expect(add.arguments == ["photo_id": "9", "gallery_id": "5704-721", "comment": "Light"])
+        #expect(!add.repeatable)
+        #expect(PhotoAction.addToGallery(galleryID: "g", comment: "").undo == .removeFromGallery(galleryID: "g"))
+        let remove = PhotoAction.removeFromGallery(galleryID: "g").write(photoID: "9")
+        #expect(remove.method == "flickr.galleries.removePhoto")
+        #expect(remove.arguments == ["photo_id": "9", "gallery_id": "g", "full_response": "0"])
+    }
+
+    @Test func anEmptyCommentIsLeftOut() {
+        #expect(PhotoAction.addToGallery(galleryID: "g", comment: " ").write(photoID: "9").arguments["comment"] == nil)
+    }
+}

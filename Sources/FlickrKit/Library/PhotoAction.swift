@@ -9,6 +9,9 @@ public enum PhotoAction: Sendable, Equatable, Hashable, Codable {
     case removePerson(userID: String)
     /// Cannot be undone, and needs Flickr's separate delete permission.
     case delete
+    /// Someone else's photo, in one of your galleries.
+    case addToGallery(galleryID: String, comment: String)
+    case removeFromGallery(galleryID: String)
 
     /// A turn by any whole number of right angles; nil for none or an odd angle.
     public static func rotation(degrees: Int) -> PhotoAction? {
@@ -31,6 +34,16 @@ public enum PhotoAction: Sendable, Equatable, Hashable, Codable {
         case .delete:
             FlickrWrite(method: "flickr.photos.delete", arguments: ["photo_id": photoID], repeatable: true,
                         permission: .delete)
+        case let .addToGallery(gallery, comment):
+            // Never repeated after a lost reply.
+            FlickrWrite(method: "flickr.galleries.addPhoto",
+                        arguments: ["photo_id": photoID, "gallery_id": gallery]
+                            .merging(comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [:] : ["comment": comment]) { $1 },
+                        repeatable: false)
+        case let .removeFromGallery(gallery):
+            // Flickr lists full_response as required.
+            FlickrWrite(method: "flickr.galleries.removePhoto",
+                        arguments: ["photo_id": photoID, "gallery_id": gallery, "full_response": "0"], repeatable: true)
         }
     }
 
@@ -40,6 +53,8 @@ public enum PhotoAction: Sendable, Equatable, Hashable, Codable {
         case let .addPerson(user): .removePerson(userID: user)
         case let .removePerson(user): .addPerson(userID: user)
         case .delete: nil
+        case let .addToGallery(gallery, _): .removeFromGallery(galleryID: gallery)
+        case let .removeFromGallery(gallery): .addToGallery(galleryID: gallery, comment: "")
         }
     }
 }
