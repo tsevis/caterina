@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// How much of your library is here, how fresh it is, and a way to refresh it.
+/// The window's status bar, under every tab: the studio mark, how much of
+/// your library is here, how fresh it is, and a way to refresh it.
 struct LibraryStatusBar: View {
     let model: AppModel
 
@@ -8,6 +9,8 @@ struct LibraryStatusBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            TsevisMakersMark()
+            Divider().frame(height: 14)
             Image(systemName: "externaldrive.badge.icloud")
                 .foregroundStyle(Theme.markText)
                 .accessibilityHidden(true)

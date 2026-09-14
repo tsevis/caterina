@@ -21,7 +21,11 @@ public struct RootView: View {
     }
 
     public var body: some View {
-        content
+        VStack(spacing: 0) {
+            content.frame(maxHeight: .infinity)
+            // Under every tab, as Nino's status bar is under its browser.
+            LibraryStatusBar(model: model)
+        }
             .background(WindowConfigurator(autosaveName: "CaterinaMain",
                                            minimum: NSSize(width: 820, height: 560)))
             .toolbar {

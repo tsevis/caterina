@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Testing
 
 @testable import CaterinaUI
@@ -48,5 +49,34 @@ import Testing
         #expect(AboutView.about.contains("licence"))
         #expect(AboutView.about.contains("not made by or affiliated with Flickr"))
         #expect(AboutView.legal.contains("Keychain"))
+    }
+}
+
+/// The studio mark in the corner of the window's status bar, as Nino and
+/// Hipparchus have it.
+@MainActor
+@Suite struct MakersMarkTests {
+    /// Two points taller than a status-bar symbol, measured from the system
+    /// font so it follows the user's text size.
+    @Test func theMarkIsASymbolAndTwoPointsTall() {
+        #expect(TsevisMakersMark.height > 14)
+        #expect(TsevisMakersMark.height < 24)
+        #expect(TsevisMakersMark.link == URL(string: "https://tsevis.com"))
+    }
+
+    /// Drawn, not a blank frame: the PDF loads and puts ink in the corner.
+    @Test func theStatusBarDrawsTheMarkAtItsLeft() throws {
+        let renderer = ImageRenderer(content: TsevisMakersMark().padding(4)
+            .background(Color.white))
+        renderer.scale = 2
+        let image = try #require(renderer.nsImage)
+        let bitmap = try #require(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+        var inked = 0
+        for x in 0..<bitmap.pixelsWide {
+            for y in 0..<bitmap.pixelsHigh {
+                if let colour = bitmap.colorAt(x: x, y: y), colour.brightnessComponent < 0.8 { inked += 1 }
+            }
+        }
+        #expect(inked > 20)
     }
 }

@@ -22,10 +22,7 @@ struct OrganizeTab: View {
                 OrganizeSidebar(organize: organize)
                     .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
             } detail: {
-                VStack(spacing: 0) {
-                    OrganizeContent(organize: organize)
-                    LibraryStatusBar(model: model)
-                }
+                OrganizeContent(organize: organize)
                 .inspector(isPresented: $isShowingPanel) {
                     OrganizePanelView(model: model, organize: organize, panel: $panel, draft: $draft) {
                         groupShare = GroupShareModel(organize: organize, directory: model.groupDirectory)
