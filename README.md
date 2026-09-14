@@ -1,11 +1,50 @@
 # Caterina
 
-A native macOS app that bulk-downloads photos from Flickr — search results, a
-person's photostream, a group's pool, or your own account — at a size you pick,
-into a folder you pick.
+A native macOS app for your whole Flickr library — download, upload, organize
+and browse — named for **Caterina Fake**, who co-founded Flickr in 2004.
 
-It is a ground-up redesign of [FDownloadr](../FDownloadr), a PyQt6 application,
-in Swift and SwiftUI. The behaviour was ported; the interface was not.
+It rebuilds Flickr's web Organizr as batch edits on your Mac: find photos in
+smart views, gather them in a tray, see what an edit will cost in calls and
+time before it runs, and **undo any change except deletion**.
+
+<img src="documents/screenshots/organize.jpg" width="100%" alt="The Organize tab showing the Public view: a grid of mosaic portraits, the sidebar with smart views and albums, and the empty tray on the right explaining how to remove a tag or a person in bulk. The status bar at the bottom starts with the Tsevis studio mark and reads 924 photos, synced just now.">
+
+**Status: built, notarised and in use by its author.** Everything below is
+covered by more than 800 offline tests; Flickr writes are recorded so an
+interrupted batch resumes and a finished one can be undone.
+
+## Four tabs, one library
+
+* **Download** — search Flickr, a photostream or a group's pool, and save what
+  you select at the size you pick, with a `Credits.csv` beside it.
+* **Upload** — drop files and folders; titles, captions and keywords in the
+  files come along; presets, albums, and a queue that survives quitting.
+* **Organize** — smart views (not in an album, untagged, no location, by
+  audience, licence, month, tag, album), search as you type, and batch edits:
+  titles and descriptions with patterns, tags (add, remove, replace, rename,
+  or remove one everywhere), who can see and comment, safety and content
+  type, licence, dates taken and posted, location on a map, rotation, people,
+  albums, groups and galleries. Delete stands apart, behind its own question
+  and Flickr's own permission.
+* **Browse** — rankings, a timeline, a map, albums, groups and every number
+  Flickr keeps for a photo, with daily stats kept past Flickr's 28 days.
+
+<img src="documents/screenshots/tray.jpg" width="100%" alt="600 public photos in the tray with a Tags edit adding three tags. Before anything runs, the panel reads 600 photos, 1,200 calls, about 20 minutes, beside the Apply to Tray button.">
+
+### Share to groups
+
+Search your groups by any word of their names, filter by room left, videos,
+moderation or the groups you run, save choices as group sets, and pick how to
+share: every photo to every group, spread one group per photo, or best fit.
+The preview reads each group's limit and says, per group, what will go and
+why the rest will not; the report afterwards counts what was added, what waits
+for a moderator and what each group refused.
+
+<img src="documents/screenshots/groups.jpg" width="100%" alt="The Share to Groups sheet with a search for illustration: fifteen groups chosen, each showing members, pool size and its limit such as 8 left this month or no limit. On the right, the choice of how to share and a preview of 6,080 shares to 15 groups, listing per group how many will be sent and how many are skipped for being over the group's limit.">
+
+<img src="documents/screenshots/browse.jpg" width="100%" alt="The Browse tab showing public photos as a grid with dates taken, the sidebar with your photos, rankings, organised structures and who can see, and a small chart of account views for the last 28 days.">
+
+<p align="center"><img src="documents/screenshots/about.png" width="60%" alt="Caterina's About window: a contact sheet of coloured frames, the Tsevis studio mark and the name Caterina with the subtitle Your Flickr library, whole, and a paragraph describing the app."></p>
 
 ## What you need before it works
 
@@ -27,9 +66,9 @@ costs nothing.
 The key, the secret and the access token are kept in the macOS **Keychain**.
 They are never written to a file, to `UserDefaults`, or into source.
 
-Searching and browsing need only the key. Signing in is needed only for the
-**You** section — your own photostream, including photos that are not public.
-Sign-in asks Flickr for `read` permission and nothing else.
+Searching needs only the key. Signing in reads your own library with `read`
+permission; the first change you make asks Flickr for `write`, and deleting
+asks separately for `delete`.
 
 ## Building
 
@@ -50,9 +89,10 @@ Requires macOS 15 and Swift 6.
 ```
 Sources/
   FlickrKit/            pure Swift — no SwiftUI, no AppKit, fully testable
-  CaterinaUI/         the SwiftUI layer, and the splash's artwork
+  CaterinaLibrary/      the local copy of your library and the edit record (GRDB)
+  CaterinaUI/           the SwiftUI layer, one folder per tab
 App/                    a thin Xcode shell: Info.plist, entitlements, @main
-Tests/                  233 tests — the bulk in FlickrKit, none opening a window
+Tests/                  800+ tests, none opening a window
 ```
 
 `FlickrKit` links no UI framework, and `make lint` fails if one appears. That is
