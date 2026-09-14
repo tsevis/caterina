@@ -7,6 +7,8 @@ extension EditDraft {
     /// What the Activity panel calls the batch.
     public var batchTitle: String {
         switch kind {
+        case .title where textMode == .set && text.isEmpty: "Clear titles"
+        case .description where textMode == .set && text.isEmpty: "Clear descriptions"
         case .title: textMode == .set ? "Set title to “\(text)”" : "Add “\(text)” to titles"
         case .description: textMode == .set ? "Set description" : "Add to descriptions"
         case .tags: tagTitle
@@ -24,7 +26,7 @@ extension EditDraft {
         case .add: return "Add tags: \(list)"
         case .remove: return "Remove tags: \(list)"
         case .replace: return "Replace tags with: \(list)"
-        case .rename: return "Rename tag \(renameFrom) to \(renameTo)"
+        case .rename: return "Rename tag \(renameFrom.trimmed) to \(renameTo.trimmed)"
         }
     }
 
@@ -37,7 +39,7 @@ extension EditDraft {
     }
 
     private var dateTitle: String {
-        guard dateMode == .shift else { return "Set date taken to \(takenText)" }
+        guard dateMode == .shift else { return "Set date taken to \(takenText.trimmed)" }
         let parts = [shiftHours > 0 ? "\(shiftHours) h" : nil, shiftMinutes > 0 ? "\(shiftMinutes) min" : nil]
         return "Shift date taken \(parts.compactMap { $0 }.joined(separator: " ")) \(shiftsEarlier ? "earlier" : "later")"
     }

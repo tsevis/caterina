@@ -74,12 +74,12 @@ public enum PhotoEdit: Sendable, Equatable {
         return edited
     }
 
-    /// A tag the way Flickr stores it: lowercase letters and digits only, so
-    /// "New York" is "newyork". A machine tag (`namespace:predicate=value`)
-    /// keeps its structure, lowercased.
     /// Whether `taken` is a date Flickr takes: `yyyy-MM-dd HH:mm:ss`.
     public static func isValidTaken(_ taken: String) -> Bool { TakenDate.isValid(taken) }
 
+    /// A tag the way Flickr stores it: lowercase letters and digits only, so
+    /// "New York" is "newyork". A machine tag (`namespace:predicate=value`)
+    /// keeps its structure, lowercased.
     public static func flickrTag(_ tag: String) -> String {
         let lowered = tag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if lowered.wholeMatch(of: /[a-z_][a-z0-9_]*:[a-z_][a-z0-9_]*=.+/) != nil { return lowered }

@@ -25,36 +25,58 @@ extension OrganizeModel {
 
     /// Record `edits` on the tray as one batch and run it.
     public func apply(_ edits: [PhotoEdit], title: String) async {
-        guard !isRunning else {
-            problem = "Wait for the edit that is running to finish."
-            return
-        }
+        guard canStart() else { return }
         do {
-            let batch = try store.createBatch(title: title, changes: changes(for: edits))
+            let batch = try store.createBatch(title: title, changes: changes(for: edits), accountID: accountID())
             await runBatch(batch.id)
         } catch {
             problem = "Could not record the edit: \(Self.message(error))"
         }
     }
 
-    /// Carry on with a batch that stopped: after approving on Flickr, or once
-    /// Flickr is reachable again.
+    /// Carry on with a batch that stopped: after approving on Flickr, once
+    /// Flickr is reachable again, or after Stop.
     public func resume(_ batchID: String) async {
-        guard !isRunning else { return }
+        guard canStart(), belongsToThisAccount(batchID) else { return }
         await runBatch(batchID)
     }
 
     public func undo(_ batchID: String) async {
-        guard !isRunning else {
-            problem = "Wait for the edit that is running to finish."
-            return
-        }
+        guard canStart(), belongsToThisAccount(batchID) else { return }
         do {
             let undo = try store.undoBatch(for: batchID)
             await runBatch(undo.id)
         } catch {
             problem = "Could not undo: \(Self.message(error))"
         }
+    }
+
+    /// Stop after the photo being changed; the rest stay pending.
+    public func stop() {
+        runTask?.cancel()
+    }
+
+    /// Signed out, or signed in as someone else: stop, and forget the tray.
+    public func accountChanged() {
+        stop()
+        clearTray()
+        refreshActivity()
+    }
+
+    private func canStart() -> Bool {
+        guard !isRunning else {
+            problem = "Wait for the edit that is running to finish."
+            return false
+        }
+        return true
+    }
+
+    private func belongsToThisAccount(_ batchID: String) -> Bool {
+        let owner = activity.first { $0.batch.id == batchID }?.batch.accountID
+            ?? (try? store.recentBatches(limit: Self.activityLimit))?.first { $0.id == batchID }?.accountID
+        guard let owner, owner != accountID() else { return true }
+        problem = "That edit was made by another Flickr account."
+        return false
     }
 
     private func changes(for edits: [PhotoEdit]) -> [PhotoChange] {
@@ -68,35 +90,45 @@ extension OrganizeModel {
         let runner = BatchRunner(writer: flickr, store: store)
         run = .running(batchID: batchID, summary: (try? store.summary(of: batchID)) ?? .init(applied: 0, failed: 0, pending: 0))
         refreshActivity()
-        do {
-            try await runner.run(batchID) { summary in
-                Task { @MainActor [weak self] in self?.showProgress(batchID, summary) }
+        // The model is main-actor isolated, so holding it for the length of
+        // the run is safe; the run ends when the task does.
+        let task = Task {
+            do {
+                try await runner.run(batchID) { summary in
+                    Task { @MainActor in self.showProgress(batchID, summary) }
+                }
+                self.run = .idle
+            } catch FlickrError.permissionNeeded(let permission) {
+                self.run = .needsPermission(permission, batchID: batchID)
+            } catch is CancellationError {
+                self.run = .idle
+            } catch {
+                self.run = .paused(batchID: batchID, message: Self.message(error))
             }
-            run = .idle
-        } catch FlickrError.permissionNeeded(let permission) {
-            run = .needsPermission(permission, batchID: batchID)
-        } catch {
-            run = .paused(batchID: batchID, message: Self.message(error))
         }
+        runTask = task
+        await task.value
+        runTask = nil
         afterBatch()
     }
 
+    /// Progress hops here in separate tasks, which need not arrive in order;
+    /// a count that goes backwards is a late one.
     private func showProgress(_ batchID: String, _ summary: EditBatch.Summary) {
-        guard case .running(batchID, _) = run else { return }
+        guard case let .running(id, shown) = run, id == batchID, summary.pending <= shown.pending else { return }
         run = .running(batchID: batchID, summary: summary)
     }
 
     private func afterBatch() {
-        reloadPhotos()
-        refreshTray()
-        refreshIndexes()
+        libraryChanged()
         refreshActivity()
     }
 
     func refreshActivity() {
         let runningID: String? = if case let .running(id, _) = run { id } else { nil }
         do {
-            activity = try BatchActivity.rows(from: store, limit: Self.activityLimit, runningID: runningID)
+            activity = try BatchActivity.rows(from: store, limit: Self.activityLimit, runningID: runningID,
+                                              accountID: accountID())
         } catch {
             problem = "Could not read the edit history: \(Self.message(error))"
         }

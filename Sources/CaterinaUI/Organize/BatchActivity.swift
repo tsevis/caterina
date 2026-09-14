@@ -18,24 +18,27 @@ public struct BatchActivity: Sendable, Equatable, Identifiable {
     public let batch: EditBatch
     public let summary: EditBatch.Summary
     public let failures: [Failure]
-    /// Pending photos, and nothing running it now.
+    /// Pending photos, nothing running it, and made by this account.
     public let canResume: Bool
-    /// Something changed, it is not itself an undo, and it has not been undone.
+    /// Something on Flickr changed, it is not itself an undo, it has not been
+    /// undone, nothing is running it, and it was made by this account.
     public let canUndo: Bool
 
-    static func rows(from store: LibraryStore, limit: Int, runningID: String?) throws -> [BatchActivity] {
+    static func rows(from store: LibraryStore, limit: Int, runningID: String?,
+                     accountID: String?) throws -> [BatchActivity] {
         let batches = try store.recentBatches(limit: limit)
-        let undone = Set(batches.compactMap(\.undoes))
+        let undone = try store.undoneBatchIDs()
         return try batches.map { batch in
+            let entries = try store.entries(in: batch.id)
             let summary = try store.summary(of: batch.id)
-            let failures = try store.entries(in: batch.id)
-                .filter { $0.state == .failed || $0.state == .partial }
+            let failures = entries.filter { $0.state == .failed || $0.state == .partial }
                 .map { Failure(photoID: $0.photoID, title: $0.change.before.title, message: $0.message ?? "") }
-            let isRunning = batch.id == runningID
+            let changed = entries.contains { $0.state == .applied || $0.state == .partial }
+            let ours = batch.accountID == nil || batch.accountID == accountID
+            let idle = batch.id != runningID
             return BatchActivity(batch: batch, summary: summary, failures: failures,
-                                 canResume: summary.pending > 0 && !isRunning,
-                                 canUndo: batch.undoes == nil && !undone.contains(batch.id) && !isRunning
-                                    && summary.applied + failures.count > 0 && summary.pending == 0)
+                                 canResume: ours && idle && summary.pending > 0 && !undone.contains(batch.id),
+                                 canUndo: ours && idle && changed && batch.undoes == nil && !undone.contains(batch.id))
         }
     }
 }

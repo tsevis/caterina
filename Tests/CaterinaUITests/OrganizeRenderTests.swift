@@ -36,7 +36,7 @@ import FlickrKit
 
     @Test func theTrayShowsItsCostBeforeItRuns() throws {
         let organize = try organize()
-        _ = try render(TrayPanel(organize: organize, onApplied: {}), "tray", size: CGSize(width: 380, height: 640))
+        _ = try render(TrayPanel(organize: organize, draft: .constant(EditDraft(kind: .tags)), onApplied: {}), "tray", size: CGSize(width: 380, height: 640))
         var draft = EditDraft(kind: .tags)
         draft.tagText = "New York, blue hour"
         _ = try render(VStack(alignment: .leading) { EditForm(draft: .constant(draft)); ApplyBar(organize: organize, draft: draft, onApplied: {}) }

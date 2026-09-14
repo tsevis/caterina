@@ -9,6 +9,10 @@ struct OrganizeTab: View {
     let model: AppModel
     @State private var panel = OrganizePanel.tray
     @State private var isShowingPanel = true
+    @State private var draft = EditDraft(kind: .tags)
+    /// Captured when the sheet opens, so approval resumes that batch and no
+    /// other.
+    @State private var permissionRequest: PermissionRequest?
 
     var body: some View {
         if let organize = model.organize {
@@ -21,11 +25,22 @@ struct OrganizeTab: View {
                     LibraryStatusBar(model: model)
                 }
                 .inspector(isPresented: $isShowingPanel) {
-                    OrganizePanelView(model: model, organize: organize, panel: $panel)
+                    OrganizePanelView(model: model, organize: organize, panel: $panel, draft: $draft)
                         .inspectorColumnWidth(min: 320, ideal: 380, max: 520)
                 }
             }
             .toolbar { toolbar(organize) }
+            .onChange(of: organize.run) { _, run in
+                if case let .needsPermission(permission, batchID) = run {
+                    permissionRequest = PermissionRequest(permission: permission, batchID: batchID)
+                }
+            }
+            .sheet(item: $permissionRequest) { request in
+                PermissionRequestSheet(model: model, permission: request.permission) {
+                    permissionRequest = nil
+                    await organize.resume(request.batchID)
+                } onCancel: { permissionRequest = nil }
+            }
         } else {
             ContentUnavailableView("The library copy could not be opened", systemImage: "externaldrive.badge.exclamationmark",
                                    description: Text("Organize works from the copy of your library on this Mac."))
@@ -57,6 +72,12 @@ struct OrganizeTab: View {
                 .help("Show or hide the tray (⌥⌘I)")
         }
     }
+}
+
+struct PermissionRequest: Identifiable {
+    var id: String { batchID }
+    let permission: FlickrPermission
+    let batchID: String
 }
 
 enum OrganizePanel: String, CaseIterable, Identifiable {

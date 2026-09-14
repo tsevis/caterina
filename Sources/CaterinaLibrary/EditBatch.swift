@@ -25,6 +25,9 @@ public struct EditBatch: Sendable, Equatable, Identifiable {
     public let createdAt: Date
     /// The batch this one takes back, when it is an undo.
     public let undoes: String?
+    /// The Flickr account it was made under; nil for batches from before
+    /// this was recorded.
+    public let accountID: String?
     /// Flickr calls still to make, for the up-front cost: an estimate, since
     /// each photo's writes are settled only once it is read from Flickr.
     public let calls: Int

@@ -63,7 +63,7 @@ struct OrganizeGrid: View {
                 }
             }
             if organize.canLoadMore {
-                Button("Load More") { organize.loadMore() }
+                Button("Load More") { organize.loadMore() }.disabled(organize.isRunning)
             }
         }
         .padding(12)

@@ -38,6 +38,9 @@ public struct EditDraft: Equatable, Sendable {
 
     public var textMode = TextMode.set
     public var text = ""
+    /// Replacing with nothing clears every title or description: asked for
+    /// in so many words, never by an empty field.
+    public var clearsText = false
 
     public var tagMode = TagMode.add
     /// Comma-separated, so one tag can hold spaces.
@@ -66,6 +69,7 @@ public struct EditDraft: Equatable, Sendable {
     public var takenText = ""
 
     public var locationMode = LocationMode.set
+    /// 0,0 until a place is chosen; that point is open sea, never a choice.
     public var latitude = 0.0
     public var longitude = 0.0
     public var accuracy = 16

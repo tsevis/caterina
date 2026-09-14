@@ -259,3 +259,102 @@ actor FakeOrganizeFlickr: PhotoWriter, LivePhotoReader, PhotoListSource {
         #expect(await flickr.sent.compactMap { $0.arguments["title"] } == ["A", "A", "A"])
     }
 }
+
+/// Found in review: writes nobody meant to send.
+@MainActor
+@Suite struct OrganizeSafetyTests {
+
+    private func library(_ count: Int = 3) throws -> LibraryStore {
+        let store = try LibraryStore.inMemory()
+        try store.save((1...count).map { LibraryPhoto(id: "\($0)", title: "Photo \($0)", taken: "2024-01-0\(min($0, 9)) 10:00:00") },
+                       generation: 1)
+        return store
+    }
+
+    @Test func aRunningBatchCanBeStoppedAndResumedLater() async throws {
+        let store = try library()
+        let flickr = FakeOrganizeFlickr(store: store)
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+        model.selectAll()
+        model.addSelectionToTray()
+        await flickr.hold()
+        let running = Task { await model.apply(.setTitle("A"), title: "T") }
+        try await waitUntil("the batch to start") { await flickr.isHolding }
+
+        model.stop()
+        await flickr.release()
+        await running.value
+
+        #expect(!model.isRunning)
+        let row = try #require(model.activity.first)
+        #expect(row.summary.pending > 0)
+        #expect(row.canResume)
+    }
+
+    /// Signed out, or signed in as someone else: the batch stops, and the
+    /// first account's batches can neither resume nor undo under the second.
+    @Test func anotherAccountCannotResumeOrUndoTheFirstAccountsBatches() async throws {
+        let store = try library()
+        let account = AccountBox("me")
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { account.value })
+        model.selectAll()
+        model.addSelectionToTray()
+        await model.apply(.setTitle("A"), title: "T")
+        let batchID = try #require(model.activity.first?.batch.id)
+
+        account.value = "someone-else"
+        model.accountChanged()
+
+        #expect(model.tray.isEmpty)
+        #expect(model.activity.first?.canUndo == false)
+        await model.undo(batchID)
+        #expect(model.activity.count == 1)
+        #expect(model.problem == "That edit was made by another Flickr account.")
+    }
+
+    @Test func aBatchWhereEveryPhotoWasRefusedHasNothingToUndo() async throws {
+        let store = try library(1)
+        let flickr = FakeOrganizeFlickr(store: store, refusals: ["1": .api(code: 1, message: "Photo not found", transient: false)])
+        let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
+        model.selectAll()
+        model.addSelectionToTray()
+        await model.apply(.setTitle("A"), title: "T")
+        #expect(model.activity.first?.canUndo == false)
+    }
+
+    /// Leaving the view while it was read and coming back must show the
+    /// answer once it arrives.
+    @Test func notInAnAlbumShowsItsAnswerAfterLeavingAndComingBack() async throws {
+        let store = try library()
+        let flickr = FakeOrganizeFlickr(store: store, notInAlbum: ["2"])
+        await flickr.hold()
+        let model = OrganizeModel(store: store, flickr: flickr)
+        let first = Task { await model.open(.notInAlbum) }
+        try await waitUntil("the read to start") { await flickr.isHolding }
+        await model.open(.all)
+        await model.open(.notInAlbum)
+        await flickr.release()
+        await first.value
+        #expect(model.photos.map(\.id) == ["2"])
+    }
+
+    /// After a batch, the grid keeps as many photos as were showing.
+    @Test func aReloadKeepsWhatWasLoaded() async throws {
+        let store = try library(OrganizeModel.pageSize + 5)
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store))
+        model.loadMore()
+        #expect(model.photos.count == OrganizeModel.pageSize + 5)
+        model.libraryChanged()
+        #expect(model.photos.count == OrganizeModel.pageSize + 5)
+    }
+}
+
+final class AccountBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: String?
+    init(_ value: String?) { stored = value }
+    var value: String? {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
+}

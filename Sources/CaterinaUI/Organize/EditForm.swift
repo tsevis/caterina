@@ -30,6 +30,9 @@ struct EditForm: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            if draft.textMode == .set && draft.text.isEmpty {
+                Toggle("Clear them", isOn: $draft.clearsText)
+            }
             if draft.kind == .description {
                 TextEditor(text: $draft.text).frame(minHeight: 80).font(.body)
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.hairline))

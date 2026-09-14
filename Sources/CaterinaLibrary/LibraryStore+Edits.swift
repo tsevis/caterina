@@ -8,8 +8,9 @@ extension LibraryStore {
 
     /// Record `changes`, leaving out any that change nothing. For edits that
     /// differ per photo; never for deleting, which cannot be undone.
-    public func createBatch(title: String, changes: [PhotoChange], now: Date = Date()) throws -> EditBatch {
-        try createBatch(title: title, changes: changes, undoes: nil, now: now)
+    public func createBatch(title: String, changes: [PhotoChange], accountID: String? = nil,
+                            now: Date = Date()) throws -> EditBatch {
+        try createBatch(title: title, changes: changes, undoes: nil, accountID: accountID, now: now)
     }
 
     /// Record `edit` applied to `photos`, leaving out any it would not change.
@@ -19,7 +20,7 @@ extension LibraryStore {
             PhotoChange(before: photo,
                         after: edit.applied(to: photo, context: .init(position: index + 1, count: photos.count)))
         }
-        return try createBatch(title: title, changes: changes, undoes: nil, now: now)
+        return try createBatch(title: title, changes: changes, undoes: nil, accountID: nil, now: now)
     }
 
     /// A new batch that writes back what `batchID` changed, for every photo
@@ -31,7 +32,7 @@ extension LibraryStore {
             .reversed()
             .map(\.change.reversed)
         return try createBatch(title: "Undo \(original.title)", changes: changes,
-                               undoes: batchID, now: now)
+                               undoes: batchID, accountID: original.accountID, now: now)
     }
 
     public func entries(in batchID: String) throws -> [EditEntry] {
@@ -52,6 +53,12 @@ extension LibraryStore {
             return EditBatch.Summary(applied: count(.applied), failed: count(.failed) + count(.partial),
                                      pending: count(.pending))
         }
+    }
+
+    /// Every batch some undo takes back, however old: a limit on the list of
+    /// recent batches must not make an undone batch offer Undo again.
+    public func undoneBatchIDs() throws -> Set<String> {
+        try read { db in Set(try String.fetchAll(db, sql: "SELECT undoes FROM editBatch WHERE undoes IS NOT NULL")) }
     }
 
     public func recentBatches(limit: Int) throws -> [EditBatch] {
@@ -92,13 +99,13 @@ extension LibraryStore {
 
     // MARK: - Private
 
-    private func createBatch(title: String, changes: [PhotoChange], undoes: String?,
+    private func createBatch(title: String, changes: [PhotoChange], undoes: String?, accountID: String?,
                              now: Date) throws -> EditBatch {
         let kept = changes.filter { !$0.isEmpty }
         let id = UUID().uuidString
         try write { db in
-            try db.execute(sql: "INSERT INTO editBatch (id, title, createdAt, undoes) VALUES (?, ?, ?, ?)",
-                           arguments: [id, title, now.timeIntervalSince1970, undoes])
+            try db.execute(sql: "INSERT INTO editBatch (id, title, createdAt, undoes, accountID) VALUES (?, ?, ?, ?, ?)",
+                           arguments: [id, title, now.timeIntervalSince1970, undoes, accountID])
             for (position, change) in kept.enumerated() {
                 try db.execute(sql: """
                     INSERT INTO editEntry (batchID, position, photoID, before, after, state)
@@ -125,7 +132,7 @@ extension LibraryStore {
             .map(entry)
         return EditBatch(id: id, title: row["title"],
                          createdAt: Date(timeIntervalSince1970: row["createdAt"]),
-                         undoes: row["undoes"],
+                         undoes: row["undoes"], accountID: row["accountID"],
                          // One read per photo, to lay the change over Flickr's copy.
                          calls: changes.filter { $0.state == .pending }
                             .reduce(0) { $0 + $1.change.readCalls + $1.change.writes.count })

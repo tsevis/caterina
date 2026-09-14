@@ -48,13 +48,34 @@ import FlickrKit
         #expect(description.edits == [.setDescription("Shot on film")])
     }
 
-    /// Setting an empty title is a real edit (clearing it); appending nothing
-    /// is not.
-    @Test func appendingNothingIsNotAnEdit() {
+    /// Clearing every title is allowed only when asked for in so many words;
+    /// appending nothing is never an edit.
+    @Test func anEmptyTitleClearsOnlyWhenAskedTo() {
         var draft = EditDraft(kind: .title)
+        #expect(draft.edits == nil)
+        #expect(draft.problem == "Enter the text, or choose to clear it.")
+        draft.clearsText = true
         #expect(draft.edits == [.setTitle("")])
+        #expect(draft.batchTitle == "Clear titles")
         draft.textMode = .append
         #expect(draft.edits == nil)
+    }
+
+    /// An untouched map is not a place: 0,0 is the sea off West Africa.
+    @Test func noPlaceChosenIsNotALocation() {
+        var draft = EditDraft(kind: .location)
+        #expect(draft.edits == nil)
+        draft.latitude = .nan
+        draft.longitude = 2
+        #expect(draft.edits == nil)
+    }
+
+    @Test func batchTitlesUseWhatWasValidated() {
+        var draft = EditDraft(kind: .tags)
+        draft.tagMode = .rename
+        draft.renameFrom = " nyc "
+        draft.renameTo = " New York"
+        #expect(draft.batchTitle == "Rename tag nyc to New York")
     }
 
     @Test func visibilityCanCarryCommentAndTagPermissions() {

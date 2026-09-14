@@ -139,6 +139,11 @@ enum LibrarySchema {
                 t.add(column: "rebased", .boolean).notNull().defaults(to: false)
             }
         }
+        migrator.registerMigration("v9-batch-account") { db in
+            try db.alter(table: "editBatch") { t in
+                t.add(column: "accountID", .text)
+            }
+        }
         return migrator
     }
 

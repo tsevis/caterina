@@ -5,9 +5,7 @@ import FlickrKit
 
 /// Recent batches: progress, what Flickr refused and why, Resume and Undo.
 struct ActivityPanel: View {
-    let model: AppModel
     let organize: OrganizeModel
-    @State private var askingPermission: FlickrPermission?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,7 +15,7 @@ struct ActivityPanel: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            RunBanner(organize: organize) { askingPermission = $0 }
+            RunBanner(organize: organize)
             Divider()
             if organize.activity.isEmpty {
                 ContentUnavailableView("No edits yet", systemImage: "clock.arrow.circlepath",
@@ -28,23 +26,12 @@ struct ActivityPanel: View {
                 }
             }
         }
-        .onChange(of: organize.run) { _, run in
-            if case let .needsPermission(permission, _) = run { askingPermission = permission }
-        }
-        .sheet(item: $askingPermission) { permission in
-            PermissionRequestSheet(model: model, permission: permission) {
-                askingPermission = nil
-                guard case let .needsPermission(_, batchID) = organize.run else { return }
-                await organize.resume(batchID)
-            } onCancel: { askingPermission = nil }
-        }
     }
 }
 
 /// What is running now, or why it stopped.
 struct RunBanner: View {
     let organize: OrganizeModel
-    let askPermission: (FlickrPermission) -> Void
 
     var body: some View {
         switch organize.run {
@@ -53,13 +40,18 @@ struct RunBanner: View {
         case let .running(_, summary):
             let done = summary.applied + summary.failed
             let total = done + summary.pending
-            ProgressView(value: Double(done), total: Double(max(total, 1))) {
-                Text("Changing \(done.formatted()) of \(total.formatted())…").monospacedDigit()
+            HStack {
+                ProgressView(value: Double(done), total: Double(max(total, 1))) {
+                    Text("Changing \(done.formatted()) of \(total.formatted())…").monospacedDigit()
+                }
+                Button("Stop") { organize.stop() }
+                    .help("Stop after the photo being changed. The rest can be resumed.")
             }
             .padding(.horizontal, 14).padding(.bottom, 8)
-        case let .needsPermission(permission, _):
+        case let .needsPermission(_, batchID):
             banner("Flickr needs your approval to continue.", systemImage: "lock") {
-                Button("Approve…") { askPermission(permission) }
+                Button("Resume") { Task { await organize.resume(batchID) } }
+                    .help("Resume once Caterina may change your photos")
             }
         case let .paused(batchID, message):
             banner("Stopped: \(message)", systemImage: "wifi.exclamationmark") {

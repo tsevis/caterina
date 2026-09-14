@@ -19,6 +19,8 @@ extension EditDraft {
     private func text(for kind: EditKind) -> Result<[PhotoEdit], Problem> {
         switch (kind, textMode) {
         case (_, .append) where text.isEmpty: .failure(Problem(message: "Enter the text to add."))
+        case (_, .set) where text.isEmpty && !clearsText:
+            .failure(Problem(message: "Enter the text, or choose to clear it."))
         case (.title, .set): .success([.setTitle(text)])
         case (.title, .append): .success([.appendToTitle(text)])
         case (_, .set): .success([.setDescription(text)])
@@ -28,7 +30,7 @@ extension EditDraft {
 
     private var tagEdits: Result<[PhotoEdit], Problem> {
         if tagMode == .rename {
-            let (from, to) = (renameFrom.trimmingCharacters(in: .whitespaces), renameTo.trimmingCharacters(in: .whitespaces))
+            let (from, to) = (renameFrom.trimmed, renameTo.trimmed)
             guard !from.isEmpty, !to.isEmpty else {
                 return .failure(Problem(message: "Enter the tag to rename and its new name."))
             }
@@ -80,11 +82,16 @@ extension EditDraft {
             return .success([.setGeoPermissions(.init(isPublic: geoIsPublic, isContact: geoIsContact,
                                                       isFriend: geoIsFriend, isFamily: geoIsFamily))])
         case .set:
-            guard (-90...90).contains(latitude), (-180...180).contains(longitude) else {
+            guard latitude.isFinite, longitude.isFinite, latitude != 0 || longitude != 0,
+                  (-90...90).contains(latitude), (-180...180).contains(longitude) else {
                 return .failure(Problem(message: "Choose a place on the map."))
             }
             return .success([.setLocation(.init(latitude: latitude, longitude: longitude,
                                                  accuracy: min(max(accuracy, 1), 16)))])
         }
     }
+}
+
+extension String {
+    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }

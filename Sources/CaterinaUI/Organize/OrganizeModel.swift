@@ -50,14 +50,22 @@ public final class OrganizeModel {
     let store: LibraryStore
     let flickr: any OrganizeFlickr
     let budget: CallBudget
+    let accountID: @Sendable () -> String?
+    var runTask: Task<Void, Never>?
     /// Bumped by every change of view; a reply for an older one is dropped.
     private var generation = 0
 
-    public init(store: LibraryStore, flickr: any OrganizeFlickr, budget: CallBudget = .standard) {
+    public init(store: LibraryStore, flickr: any OrganizeFlickr, budget: CallBudget = .standard,
+                accountID: @escaping @Sendable () -> String? = { nil }) {
         self.store = store
         self.flickr = flickr
         self.budget = budget
-        notInAlbumReadAt = try? store.notInAlbumReadAt()
+        self.accountID = accountID
+        do {
+            notInAlbumReadAt = try store.notInAlbumReadAt()
+        } catch {
+            problem = "Could not read the library copy: \(Self.message(error))"
+        }
         reloadPhotos()
         refreshIndexes()
         refreshActivity()
@@ -83,10 +91,14 @@ public final class OrganizeModel {
     }
 
     public func loadMore() {
-        let more = (try? store.photos(scope.filter, order: scope.order, limit: Self.pageSize,
-                                      offset: photos.count)) ?? []
-        photos += more
-        canLoadMore = more.count == Self.pageSize
+        guard !isRunning else { return }
+        do {
+            let more = try store.photos(scope.filter, order: scope.order, limit: Self.pageSize, offset: photos.count)
+            photos += more
+            canLoadMore = more.count == Self.pageSize
+        } catch {
+            problem = "Could not read the library copy: \(Self.message(error))"
+        }
     }
 
     public func count(of scope: OrganizeScope) -> Int? { counts[scope] }
@@ -106,18 +118,21 @@ public final class OrganizeModel {
             _ = try await NotInAlbumIndex(source: flickr, store: store).refresh()
             notInAlbumReadAt = try store.notInAlbumReadAt()
             refreshIndexes()
-            guard generation == self.generation else { return }
-            reloadPhotos()
+            // Whichever open of the view is current, it wants this answer.
+            if scope == .notInAlbum { reloadPhotos() }
         } catch {
             guard generation == self.generation else { return }
             problem = "Could not read which photos are in no album: \(Self.message(error))"
         }
     }
 
+    /// As many photos as were showing, so a batch or sync does not throw
+    /// away what Load More brought in.
     func reloadPhotos() {
+        let shown = max(Self.pageSize, photos.count)
         do {
-            photos = try store.photos(scope.filter, order: scope.order, limit: Self.pageSize, offset: 0)
-            canLoadMore = photos.count == Self.pageSize
+            photos = try store.photos(scope.filter, order: scope.order, limit: shown, offset: 0)
+            canLoadMore = photos.count == shown
             selection = selection.keeping(to: photos.map(\.id))
         } catch {
             photos = []
@@ -126,12 +141,15 @@ public final class OrganizeModel {
     }
 
     func refreshIndexes() {
-        tags = (try? store.tagCounts()) ?? []
-        months = (try? store.monthCounts()) ?? []
-        let views = OrganizeScope.smartViews + Audience.allCases.map(OrganizeScope.audience)
-        counts = Dictionary(uniqueKeysWithValues: views.compactMap { view in
-            (try? store.count(view.filter)).map { (view, $0) }
-        })
+        do {
+            tags = try store.tagCounts()
+            months = try store.monthCounts()
+            let views = OrganizeScope.smartViews + Audience.allCases.map(OrganizeScope.audience)
+                + License.allCases.map(OrganizeScope.licence)
+            counts = Dictionary(uniqueKeysWithValues: try views.map { ($0, try store.count($0.filter)) })
+        } catch {
+            problem = "Could not count the library copy: \(Self.message(error))"
+        }
     }
 
     // MARK: - Selection
@@ -171,7 +189,14 @@ public final class OrganizeModel {
     }
 
     func refreshTray() {
-        let found = (try? store.photos(ids: tray)) ?? []
+        let found: [LibraryPhoto]
+        do {
+            found = try store.photos(ids: tray)
+        } catch {
+            // Keep the tray: an unreadable copy is not a reason to empty it.
+            problem = "Could not read the tray's photos: \(Self.message(error))"
+            return
+        }
         let byID = Dictionary(uniqueKeysWithValues: found.map { ($0.id, $0) })
         // A photo gone from the library copy leaves the tray with it.
         tray = tray.filter { byID[$0] != nil }
