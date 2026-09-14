@@ -27,6 +27,7 @@ extension LibraryStore {
     /// it actually changed, last photo first.
     public func undoBatch(for batchID: String, now: Date = Date()) throws -> EditBatch {
         let original = try batch(batchID)
+        if original.kind == .albums { return try undoAlbumBatch(original, now: now) }
         let changes = try entries(in: batchID)
             .filter { $0.state == .applied || $0.state == .partial }
             .reversed()
@@ -45,8 +46,11 @@ extension LibraryStore {
     public func summary(of batchID: String) throws -> EditBatch.Summary {
         try read { db in
             let counts = try Row.fetchAll(db, sql: """
-                SELECT state, COUNT(*) AS n FROM editEntry WHERE batchID = ? GROUP BY state
-                """, arguments: [batchID])
+                SELECT state, COUNT(*) AS n FROM (
+                    SELECT state FROM editEntry WHERE batchID = ?
+                    UNION ALL SELECT state FROM albumEntry WHERE batchID = ?)
+                GROUP BY state
+                """, arguments: [batchID, batchID])
             let count = { (state: EditEntry.State) -> Int in
                 counts.first { ($0["state"] as String) == state.rawValue }?["n"] ?? 0
             }
@@ -117,7 +121,7 @@ extension LibraryStore {
         return try batch(id)
     }
 
-    private func batch(_ id: String) throws -> EditBatch {
+    func batch(_ id: String) throws -> EditBatch {
         try read { db in
             guard let row = try Row.fetchOne(db, sql: "SELECT * FROM editBatch WHERE id = ?", arguments: [id]) else {
                 throw FlickrError.notFound("That edit is no longer in the history.")
@@ -128,13 +132,16 @@ extension LibraryStore {
 
     private static func batch(_ row: Row, _ db: Database) throws -> EditBatch {
         let id: String = row["id"]
+        let kind = EditBatch.Kind(rawValue: row["kind"]) ?? .photos
         let changes = try Row.fetchAll(db, sql: "SELECT * FROM editEntry WHERE batchID = ?", arguments: [id])
             .map(entry)
-        return EditBatch(id: id, title: row["title"],
+        let albumCalls = try Row.fetchAll(db, sql: "SELECT * FROM albumEntry WHERE batchID = ?", arguments: [id])
+            .map(albumEntry).filter { $0.state == .pending }.reduce(0) { $0 + $1.estimatedCalls }
+        return EditBatch(id: id, kind: kind, title: row["title"],
                          createdAt: Date(timeIntervalSince1970: row["createdAt"]),
                          undoes: row["undoes"], accountID: row["accountID"],
                          // One read per photo, to lay the change over Flickr's copy.
-                         calls: changes.filter { $0.state == .pending }
+                         calls: albumCalls + changes.filter { $0.state == .pending }
                             .reduce(0) { $0 + $1.change.readCalls + $1.change.writes.count })
     }
 

@@ -144,6 +144,24 @@ enum LibrarySchema {
                 t.add(column: "accountID", .text)
             }
         }
+        migrator.registerMigration("v10-album-edits") { db in
+            try db.alter(table: "editBatch") { t in
+                t.add(column: "kind", .text).notNull().defaults(to: "photos")
+            }
+            try db.create(table: "albumEntry") { t in
+                t.column("batchID", .text).notNull().references("editBatch", onDelete: .cascade)
+                t.column("position", .integer).notNull()
+                t.column("edit", .text).notNull()
+                // The album as Flickr had it, read once before the first call.
+                t.column("snapshot", .text)
+                // Steps of the plan already sent.
+                t.column("done", .integer).notNull().defaults(to: 0)
+                t.column("createdAlbumID", .text)
+                t.column("state", .text).notNull()
+                t.column("message", .text)
+                t.primaryKey(["batchID", "position"])
+            }
+        }
         return migrator
     }
 

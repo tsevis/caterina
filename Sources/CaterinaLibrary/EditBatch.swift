@@ -20,7 +20,15 @@ public struct EditBatch: Sendable, Equatable, Identifiable {
         public var isFinished: Bool { pending == 0 }
     }
 
+    public enum Kind: String, Sendable {
+        /// One entry per photo (`EditEntry`).
+        case photos
+        /// One entry per album edit (`AlbumEntry`).
+        case albums
+    }
+
     public let id: String
+    public let kind: Kind
     public let title: String
     public let createdAt: Date
     /// The batch this one takes back, when it is an undo.

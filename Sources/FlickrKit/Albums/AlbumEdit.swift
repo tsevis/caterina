@@ -16,7 +16,7 @@ public enum AlbumEdit: Sendable, Equatable, Hashable, Codable {
     public static let createdAlbum = "{created-album}"
 
     /// Flickr's `removePhotos` takes a list; a hundred keeps each call short.
-    static let removeChunk = 100
+    public static let removeChunk = 100
 
     public enum Read: Sendable, Equatable { case info, photos, albumOrder }
 
