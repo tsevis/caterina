@@ -62,3 +62,47 @@ import Testing
         }
     }
 }
+
+/// Reading an album as it stands, just before an edit changes it.
+@Suite struct AlbumSnapshotTests {
+
+    private func client(_ transport: ScriptedTransport) -> FlickrClient {
+        FlickrClient(credentials: Fixtures.credentials, permission: .write, transport: transport,
+                     budget: .unspaced, sleep: SleepRecorder().sleep)
+    }
+
+    @Test func infoAndEveryPageOfPhotosAreRead() async throws {
+        let transport = ScriptedTransport([
+            .body(#"{"photoset":{"id":"A","owner":"me","primary":"2","title":{"_content":"Athens"},"description":{"_content":"Spring"}},"stat":"ok"}"#),
+            .body(#"{"photoset":{"id":"A","page":1,"pages":2,"photo":[{"id":"1"},{"id":"2"}]},"stat":"ok"}"#),
+            .body(#"{"photoset":{"id":"A","page":2,"pages":2,"photo":[{"id":"3"}]},"stat":"ok"}"#),
+        ])
+
+        let snapshot = try await client(transport).albumSnapshot(reading: [.info, .photos], albumID: "A",
+                                                                 ownerID: "me", priority: .edit)
+
+        #expect(snapshot == AlbumSnapshot(title: "Athens", description: "Spring", coverPhotoID: "2",
+                                          photoIDs: ["1", "2", "3"], albumOrder: []))
+        let asked = await transport.requested.compactMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        #expect(asked.map { $0.queryItems?.first { $0.name == "method" }?.value }
+                == ["flickr.photosets.getInfo", "flickr.photosets.getPhotos", "flickr.photosets.getPhotos"])
+        #expect(asked[1].queryItems?.first { $0.name == "user_id" }?.value == "me")
+    }
+
+    @Test func theOrderOfAlbumsIsReadAcrossPages() async throws {
+        let transport = ScriptedTransport([
+            .body(#"{"photosets":{"page":1,"pages":2,"photoset":[{"id":"B"},{"id":"A"}]},"stat":"ok"}"#),
+            .body(#"{"photosets":{"page":2,"pages":2,"photoset":[{"id":"C"}]},"stat":"ok"}"#),
+        ])
+        let snapshot = try await client(transport).albumSnapshot(reading: [.albumOrder], albumID: nil,
+                                                                 ownerID: "me", priority: .edit)
+        #expect(snapshot.albumOrder == ["B", "A", "C"])
+    }
+
+    @Test func nothingToReadCostsNothing() async throws {
+        let transport = ScriptedTransport([])
+        #expect(try await client(transport).albumSnapshot(reading: [], albumID: nil, ownerID: "me", priority: .edit)
+                == .empty)
+        #expect(await transport.callCount == 0)
+    }
+}

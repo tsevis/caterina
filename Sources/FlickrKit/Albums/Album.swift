@@ -47,6 +47,41 @@ public enum AlbumWrites {
                     arguments: ["photoset_id": albumID, "photo_id": photoID], repeatable: true)
     }
 
+    public static func editMeta(albumID: String, title: String, description: String) -> FlickrWrite {
+        FlickrWrite(method: "flickr.photosets.editMeta",
+                    arguments: ["photoset_id": albumID, "title": title, "description": description], repeatable: true)
+    }
+
+    /// Repeatable: a photo no longer in the album comes back as code 2, which
+    /// the runner takes as done.
+    public static func remove(photoIDs: [String], albumID: String) -> FlickrWrite {
+        FlickrWrite(method: "flickr.photosets.removePhotos",
+                    arguments: ["photoset_id": albumID, "photo_ids": photoIDs.joined(separator: ",")], repeatable: true)
+    }
+
+    /// Photos left out keep their place after the ones listed.
+    public static func reorder(photoIDs: [String], albumID: String) -> FlickrWrite {
+        FlickrWrite(method: "flickr.photosets.reorderPhotos",
+                    arguments: ["photoset_id": albumID, "photo_ids": photoIDs.joined(separator: ",")], repeatable: true)
+    }
+
+    /// Albums left out go to the end, ordered by id.
+    public static func orderSets(_ albumIDs: [String]) -> FlickrWrite {
+        FlickrWrite(method: "flickr.photosets.orderSets",
+                    arguments: ["photoset_ids": albumIDs.joined(separator: ",")], repeatable: true)
+    }
+
+    public static func setPrimary(photoID: String, albumID: String) -> FlickrWrite {
+        FlickrWrite(method: "flickr.photosets.setPrimaryPhoto",
+                    arguments: ["photoset_id": albumID, "photo_id": photoID], repeatable: true)
+    }
+
+    /// Repeatable in effect: a second attempt finds nothing (code 1), which
+    /// the runner takes as done. Needs only write permission.
+    public static func delete(albumID: String) -> FlickrWrite {
+        FlickrWrite(method: "flickr.photosets.delete", arguments: ["photoset_id": albumID], repeatable: true)
+    }
+
     /// Flickr's "Photo already in set".
     static let alreadyInAlbum = 3
 }
@@ -79,6 +114,31 @@ enum AlbumResponse {
         }
         return AlbumPage(page: max(1, container.page?.value ?? 1), pages: max(1, container.pages?.value ?? 1),
                          albums: albums)
+    }
+
+    struct Info { let title: String; let description: String; let coverPhotoID: String }
+
+    static func info(from data: Data) throws -> Info {
+        struct Envelope: Decodable { let photoset: Entry? }
+        struct Text: Decodable { let _content: String? }
+        struct Entry: Decodable { let primary: String?; let title: Text?; let description: Text? }
+        try FlickrResponse.throwIfFailed(data)
+        guard let entry = (try? JSONDecoder().decode(Envelope.self, from: data))?.photoset else {
+            throw FlickrError.malformedResponse("Flickr sent the album's details in an unexpected shape.")
+        }
+        return Info(title: entry.title?._content ?? "", description: entry.description?._content ?? "",
+                    coverPhotoID: entry.primary ?? "")
+    }
+
+    static func photoIDs(from data: Data) throws -> (ids: [String], pages: Int) {
+        struct Envelope: Decodable { let photoset: Container? }
+        struct Container: Decodable { let pages: FlickrResponse.LooseInt?; let photo: [FlickrResponse.Lenient<Entry>]? }
+        struct Entry: Decodable { let id: String }
+        try FlickrResponse.throwIfFailed(data)
+        guard let container = (try? JSONDecoder().decode(Envelope.self, from: data))?.photoset else {
+            throw FlickrError.malformedResponse("Flickr sent the album's photos in an unexpected shape.")
+        }
+        return ((container.photo ?? []).compactMap(\.value).map(\.id), max(1, container.pages?.value ?? 1))
     }
 
     static func createdID(from data: Data) throws -> String {
