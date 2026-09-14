@@ -91,6 +91,49 @@ reviewed (`4ee5308`):**
   (per-photo only), cameras (per-photo EXIF), editing collections.
 * `galleries.getList` paging by `page` with `continuation=0` is unverified live.
 
+**Phase 3, Organize (2026-09-14/15), offline-tested and reviewed three times.**
+The tab is built; `AppTab.isBuilt` is true for all four. Everything below has
+unit tests; nothing has been sent to the real account yet.
+
+* **Finding:** smart views (all, not in an album via `photos.getNotInSet`
+  read whole into migration v7, untagged, with/without location, recently
+  updated, videos), audience, licence, timeline by month taken or posted,
+  tags, search, albums (in album order), a read-only collections tree, and
+  saved views that keep matching new photos (v14 settings table).
+* **Tray:** marquee and ⌘/⇧ selection, persists across views, shows photos,
+  calls and time (`CallBudget.estimatedDuration` now waits out the hourly
+  limit) before anything runs, and names fields undo cannot restore. Apply
+  has no Return shortcut and asks above 20 photos.
+* **Photo edits** (`PhotoEdit` → `PhotoChange`): title/description set or
+  append with `{title} {date} {year} {n} {nn} {count}`, tags add/remove/
+  replace/rename keeping raw spelling, visibility with comment/add-meta
+  permissions, safety, content type (incl. virtual photography, 4), hidden,
+  licence, date taken shift/set, date posted shift/set, location on a map,
+  location privacy (`geo.getPerms` read only when changed).
+* **The two traps, as decided:** each photo is read with `photos.getInfo`
+  just before writing and the recorded change is laid over it
+  (`PhotoChange.rebased`): tag changes replay on Flickr's raw list; a field
+  changed on both sides is refused with a reason. Rebased once (v8), so a
+  resume after a landed write keeps the true before.
+* **Actions** (`PhotoAction`, v12): rotate (never repeated), people
+  add/remove (found by username), galleries add/remove from Browse, delete
+  (own button and question, `delete` permission, no undo).
+* **Albums** (`AlbumEdit`, v10): create, rename/describe, add, remove, cover,
+  drag-reorder photos, sort, drag-reorder albums, delete. Each edit reads an
+  album snapshot once and plans its undo from it.
+* **Groups** (v11): Share to Groups sheet — search (word prefixes, accents
+  ignored), filters, sort, group sets, strategies (everywhere / spread /
+  best fit K) with a cap and skip-already-in-pool, per-group preview,
+  per-group report, undo. Remove tray from pools.
+* **Activity:** one list for all four batch kinds, progress, Stop, Resume,
+  Flickr's reason per refusal, Undo. Batches record their account (v9);
+  another account cannot resume or undo them.
+* **Unverified live:** `getInfo` shapes for safety level, content type,
+  hidden (so those edits say undo cannot restore them); machine-tag clean
+  form; `getNotInSet` beyond 4,000; `galleries.removePhoto` full_response;
+  `people.getGroups` for large accounts. The owner was asked for an API
+  Explorer `getInfo` sample of one of their photos.
+
 **Not in Phase 2 yet:** licence and group steps after upload, duplicate
 detection, watch folders, Photos import, video limits (Phase 5), thumbnails
 in the draft table, editing custom presets in the UI (store exists).
@@ -274,6 +317,17 @@ against the real CDN via the public feed (byte-identical JPEGs, 404 throws):**
 * **Do not launch the app to "verify" a change** unless the user asks.
 
 ## Things that were got wrong once — do not regress them
+
+* **Inserting an enum case makes SwiftPM run stale test objects** that crash
+  with signal 11 or match the wrong case. After adding a case to `PhotoEdit`,
+  `PhotoAction` or any enum used across modules, `touch Tests/*/*.swift
+  Tests/*/*/*.swift` before `swift test`.
+* **A call whose reply can be lost is marked before it is sent** (v13
+  `sending`). Found marked on resume: a create or rotation fails with "look on
+  flickr.com"; a pool add counts as placed by the batch, so undo takes it out.
+* **Pool writes are not retried inside one call**: a retry's "already in
+  pool" hid that the batch put the photo there.
+* **Return must not apply a batch.** The Apply button has no default shortcut.
 
 Each of these has a test that fails if it comes back.
 
