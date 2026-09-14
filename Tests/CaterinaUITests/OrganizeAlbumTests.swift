@@ -206,3 +206,26 @@ import FlickrKit
         #expect(reread.savedViews.map(\.name) == ["Dusk", "June", "Untagged"])
     }
 }
+
+@Suite struct OrganizeScopeTests {
+    @Test(arguments: [
+        (OrganizeScope.all, "All Photos"), (.notInAlbum, "Not in an Album"), (.untagged, "Untagged"),
+        (.withoutLocation, "No Location"), (.withLocation, "With Location"), (.recentlyUpdated, "Recently Updated"),
+        (.videos, "Videos"), (.audience(.onlyYou), "Private"), (.licence(.by4), "CC BY 4.0"),
+        (.month("2024-06"), "June 2024"), (.postedMonth("2024-06"), "Posted in June 2024"), (.tag("sea"), "sea"),
+        (.album(id: "A", title: "Athens"), "Athens"), (.search("dusk"), "“dusk”"),
+    ])
+    func everyScopeHasATitleAndAnIcon(scope: OrganizeScope, title: String) {
+        #expect(scope.title == title)
+        #expect(!scope.systemImage.isEmpty)
+    }
+
+    @Test func eachScopeReadsTheLibraryItsOwnWay() {
+        #expect(OrganizeScope.recentlyUpdated.order == .recentlyUpdated)
+        #expect(OrganizeScope.postedMonth("2024-06").order == .newestUploaded)
+        #expect(OrganizeScope.postedMonth("2024-06").filter == .uploadedIn("2024-06"))
+        #expect(OrganizeScope.search("x").filter == .matching("x"))
+        #expect(OrganizeScope.album(id: "A", title: "").albumID == "A")
+        #expect(OrganizeScope.all.albumID == nil)
+    }
+}

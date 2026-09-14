@@ -161,3 +161,89 @@ actor FakeGroupDirectory: GroupDirectory {
         #expect(await flickr.sent.map(\.method) == Array(repeating: "flickr.groups.pools.remove", count: 3))
     }
 }
+
+@MainActor
+@Suite struct GroupFinderTests {
+
+    private func model() async throws -> GroupShareModel {
+        let profiles = [GroupShareModelTests.profile("a", "Alpha", members: 10, remaining: 0),
+                        GroupShareModelTests.profile("b", "Beta", members: 30, remaining: 4),
+                        GroupShareModelTests.profile("c", "Gamma", members: 20)]
+        let store = try LibraryStore.inMemory()
+        let organize = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { "me" })
+        let directory = FakeGroupDirectory(groups: [
+            AccountGroup(id: "a", name: "Alpha", members: 10, photos: 500, isAdmin: false),
+            AccountGroup(id: "b", name: "Beta", members: 30, photos: 100, isAdmin: false),
+            AccountGroup(id: "c", name: "Gamma", members: 20, photos: 900, isAdmin: false)], profiles: profiles)
+        let model = GroupShareModel(organize: organize, directory: directory)
+        await model.load()
+        await model.readRules()
+        return model
+    }
+
+    @Test func everySortOrdersAsLabelled() async throws {
+        let model = try await model()
+        model.sort = .poolSize
+        #expect(model.visibleGroups.map(\.id) == ["c", "a", "b"])
+        model.sort = .room
+        #expect(model.visibleGroups.map(\.id) == ["c", "b", "a"])
+        model.sort = .members
+        #expect(model.visibleGroups.map(\.id) == ["b", "c", "a"])
+    }
+
+    @Test func hasRoomLeavesOutGroupsAtTheirLimit() async throws {
+        let model = try await model()
+        model.filters = [.hasRoom]
+        #expect(model.visibleGroups.map(\.id) == ["b", "c"])
+        model.chooseVisible()
+        #expect(model.chosen == ["b", "c"])
+        model.toggle("b")
+        #expect(model.chosen == ["c"])
+    }
+
+    @Test func setsAreDeletedAndStaleIDsDropped() async throws {
+        let model = try await model()
+        model.toggle("a")
+        model.saveSet(named: "  One  ")
+        #expect(model.sets.map(\.name) == ["One"])
+        try model.organize.store.saveGroupSet(named: "Old", groupIDs: ["gone", "c"])
+        await model.load()
+        model.choose(set: try #require(model.sets.first { $0.name == "Old" }))
+        #expect(model.chosen == ["c"])
+        model.deleteSet(named: "One")
+        #expect(model.sets.map(\.name) == ["Old"])
+        #expect(model.name(of: "c") == "Gamma")
+    }
+
+    @Test func signedOutSaysSo() async throws {
+        let store = try LibraryStore.inMemory()
+        let organize = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { nil })
+        let model = GroupShareModel(organize: organize, directory: FakeGroupDirectory(groups: [], profiles: []))
+        await model.load()
+        #expect(model.problem == "Sign in to Flickr to share to your groups.")
+    }
+}
+
+@MainActor
+@Suite struct GroupRulesUnknownTests {
+    /// A filter on rules not yet read cannot vouch for a group, so hides it;
+    /// a failed read is said, and no preview is made from it.
+    @Test func unreadRulesHideFromRuleFiltersAndAFailedReadIsReported() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "p1")], generation: 1)
+        let organize = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { "me" })
+        organize.selectAll()
+        organize.addSelectionToTray()
+        let directory = FakeGroupDirectory(groups: [AccountGroup(id: "x", name: "X", members: 1, photos: 1, isAdmin: false)],
+                                           profiles: [])
+        let model = GroupShareModel(organize: organize, directory: directory)
+        await model.load()
+        model.filters = [.unmoderated]
+        #expect(model.visibleGroups.isEmpty)
+        model.filters = []
+        model.toggle("x")
+        await model.preview()
+        #expect(model.plan == nil)
+        #expect(model.problem == "Group not found")
+    }
+}

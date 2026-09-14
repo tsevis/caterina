@@ -202,3 +202,49 @@ import FlickrKit
         #expect(throws: FlickrError.self) { _ = try store.undoBatch(for: undo.id) }
     }
 }
+
+@Suite struct AlbumStepPathTests {
+    /// A removal list Flickr refuses because one photo has gone: the rest are
+    /// removed one by one, and undo puts back only those.
+    @Test func aRefusedRemovalListIsSentPhotoByPhoto() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeAlbumFlickr(["A": .init(title: "A", description: "", cover: "1", photos: ["1", "2", "3"])])
+        let batch = try store.createAlbumBatch(title: "Remove", edits: [.removePhotos(albumID: "A", photoIDs: ["2", "3"])],
+                                               accountID: "me")
+        await flickr.fail("flickr.photosets.removePhotos", with: .api(code: 2, message: "Photo not found", transient: false))
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+
+        #expect(await flickr.albums["A"]?.photos == ["1"])
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(try store.undoBatch(for: batch.id).id)
+        #expect(await flickr.albums["A"]?.photos == ["1", "2", "3"])
+    }
+
+    /// Flickr says no to making the album: nothing was made, so it fails
+    /// with Flickr's reason and without "may have been made".
+    @Test func aRefusedCreateSaysWhyAndClearsTheMarker() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeAlbumFlickr([:])
+        await flickr.fail("create", with: .api(code: 2, message: "Photo not found", transient: false))
+        let batch = try store.createAlbumBatch(title: "Make", edits: [
+            .create(title: "H", description: "", coverPhotoID: "1", photoIDs: ["1"])], accountID: "me")
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+        let entry = try #require(try store.albumEntries(in: batch.id).first)
+        #expect(entry.state == .failed)
+        #expect(entry.message == "Photo not found")
+        #expect(!entry.isSending)
+    }
+
+    @Test func permissionNeededStopsWithoutMarkingTheStepSent() async throws {
+        let store = try LibraryStore.inMemory()
+        let flickr = FakeAlbumFlickr(["A": .init(title: "A", description: "", cover: "1", photos: ["1"])])
+        await flickr.fail("flickr.photosets.editMeta", with: .permissionNeeded(.write))
+        let batch = try store.createAlbumBatch(title: "Rename", edits: [.editMeta(albumID: "A", title: "B", description: "")],
+                                               accountID: "me")
+        await #expect(throws: FlickrError.permissionNeeded(.write)) {
+            try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+        }
+        #expect(try store.albumEntries(in: batch.id).first?.isSending == false)
+        try await AlbumRunner(flickr: flickr, store: store, ownerID: "me").run(batch.id)
+        #expect(await flickr.albums["A"]?.title == "B")
+    }
+}
