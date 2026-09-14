@@ -55,6 +55,8 @@ struct GroupFinder: View {
                         set: { share.filters = $0 ? share.filters.union([filter]) : share.filters.subtracting([filter]) }))
                         .toggleStyle(.button)
                         .controlSize(.small)
+                        .fixedSize()
+                        .help(filter.help)
                 }
                 Spacer()
                 setsMenu

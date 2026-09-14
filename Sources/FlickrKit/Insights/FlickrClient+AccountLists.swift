@@ -17,7 +17,7 @@ extension FlickrClient {
         }
         return (try InsightsResponse.decode(Envelope.self, data, "your groups").groups.group ?? [])
             .compactMap(\.value).map {
-                AccountGroup(id: $0.nsid, name: $0.name ?? "", members: $0.members?.value ?? 0,
+                AccountGroup(id: $0.nsid, name: GroupResolver.unescapingHTML($0.name ?? ""), members: $0.members?.value ?? 0,
                              photos: $0.pool_count?.value ?? 0, isAdmin: ($0.admin?.value ?? 0) != 0)
             }
     }

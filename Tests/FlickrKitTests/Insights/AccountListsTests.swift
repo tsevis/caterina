@@ -77,11 +77,11 @@ import Testing
 
     @Test func yourGroups() async throws {
         let transport = ScriptedTransport(always: """
-        {"groups":{"group":[{"nsid":"17274427@N00","name":"Cream of the Crop","admin":0,"members":"11935","pool_count":"12522"},
+        {"groups":{"group":[{"nsid":"17274427@N00","name":"Cream &amp; the Crop","admin":0,"members":"11935","pool_count":"12522"},
                              {"nsid":"20083316@N00","name":"Apple","members":11776,"pool_count":62438,"admin":1}]},"stat":"ok"}
         """)
         let groups = try await client(transport).groups(of: "9@N00")
-        #expect(groups == [AccountGroup(id: "17274427@N00", name: "Cream of the Crop", members: 11_935, photos: 12_522, isAdmin: false),
+        #expect(groups == [AccountGroup(id: "17274427@N00", name: "Cream & the Crop", members: 11_935, photos: 12_522, isAdmin: false),
                            AccountGroup(id: "20083316@N00", name: "Apple", members: 11_776, photos: 62_438, isAdmin: true)])
     }
 

@@ -21,12 +21,20 @@ public final class GroupShareModel {
     public enum Filter: String, CaseIterable, Identifiable, Sendable {
         case hasRoom, acceptsVideos, unmoderated, admin
         public var id: String { rawValue }
+        public var help: String {
+            switch self {
+            case .hasRoom: "Groups with room left for you now"
+            case .acceptsVideos: "Groups that take videos"
+            case .unmoderated: "Groups where photos appear without a moderator"
+            case .admin: "Groups you run"
+            }
+        }
         public var title: String {
             switch self {
-            case .hasRoom: "Has room"
-            case .acceptsVideos: "Takes videos"
-            case .unmoderated: "No moderation"
-            case .admin: "You run it"
+            case .hasRoom: "Room"
+            case .acceptsVideos: "Videos"
+            case .unmoderated: "Unmoderated"
+            case .admin: "Yours"
             }
         }
     }
