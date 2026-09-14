@@ -20,12 +20,14 @@ struct ActivityPanel: View {
             if organize.activity.isEmpty {
                 ContentUnavailableView("No edits yet", systemImage: "clock.arrow.circlepath",
                                        description: Text("Every edit made here is listed, and can be undone."))
+                    .frame(maxHeight: .infinity)
             } else {
                 List(organize.activity) { row in
                     ActivityRow(organize: organize, row: row)
                 }
             }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 

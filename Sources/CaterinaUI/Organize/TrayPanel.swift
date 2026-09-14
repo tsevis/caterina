@@ -40,11 +40,12 @@ struct TrayPanel: View {
                         Text("Select photos and choose Add to Tray (⌘↩), or Add All in a view's header. "
                              + "The tray keeps them while you look elsewhere. Then choose what to change here.")
                         Text("**Remove a tag from every photo:** right-click it under Tags in the sidebar.")
-                        Text("**Untag a person:** choose Change › People, Find them, put your photos of them "
-                             + "in the tray, choose Untag, then Apply.")
+                        // One literal: joined with +, the ** would show as text.
+                        Text("**Untag a person:** choose Change › People, Find them, put your photos of them in the tray, choose Untag, then Apply.")
                     }
                     .multilineTextAlignment(.leading)
                 }
+                .frame(maxHeight: .infinity)
             } else {
                 TrayStrip(organize: organize).frame(height: 96)
                 Divider()
@@ -68,6 +69,8 @@ struct TrayPanel: View {
                 ApplyBar(organize: organize, draft: draft, onApplied: onApplied)
             }
         }
+        // Top-aligned: centred, the header floated to the middle of the column.
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     /// A new kind starts from a blank form, so nothing typed for tags leaks
