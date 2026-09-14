@@ -13,6 +13,14 @@ extension OrganizeModel {
         return false
     }
 
+    /// Running, or a delete waiting to be sent: no other edit may start.
+    public var isBusy: Bool { isRunning || pendingDelete != nil }
+
+    var busyMessage: String {
+        pendingDelete == nil ? "Wait for the edit that is running to finish."
+                             : "Take back the delete, or let it go ahead, first."
+    }
+
     /// What `edit` would do to the tray, before anything is sent.
     public func estimate(_ edit: PhotoEdit) -> EditEstimate { estimate([edit]) }
 
@@ -65,14 +73,17 @@ extension OrganizeModel {
 
     /// Signed out, or signed in as someone else: stop, and forget the tray.
     public func accountChanged() {
+        cancelPendingDelete()
+        undoRequest = nil
+        lastEditID = nil
         stop()
         clearTray()
         refreshActivity()
     }
 
     private func canStart() -> Bool {
-        guard !isRunning else {
-            problem = "Wait for the edit that is running to finish."
+        guard !isBusy else {
+            problem = busyMessage
             return false
         }
         return true
@@ -102,6 +113,7 @@ extension OrganizeModel {
             return
         }
         let (flickr, store, owner) = (self.flickr, self.store, accountID() ?? "")
+        lastEditID = nil
         run = .running(batchID: batchID, summary: (try? store.summary(of: batchID)) ?? .init(applied: 0, failed: 0, pending: 0))
         refreshActivity()
         // The model is main-actor isolated, so holding it for the length of
@@ -130,6 +142,8 @@ extension OrganizeModel {
         await task.value
         runTask = nil
         afterBatch()
+        // An undo, a delete, or nothing changed: none of them offer Undo.
+        lastEditID = activity.first { $0.batch.id == batchID && $0.canUndo }?.id
         if kind == .albums { await afterAlbumBatch() }
         if kind == .groups { forgetGroupRules(of: batchID) }
     }

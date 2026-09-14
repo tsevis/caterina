@@ -17,7 +17,7 @@ struct AlbumSidebarSection: View {
                     .tag(OrganizeScope.album(id: album.id, title: album.title))
                     .contextMenu {
                         Button("Add Tray to This Album") { Task { await organize.addTray(toAlbum: album.id) } }
-                            .disabled(organize.tray.isEmpty || organize.isRunning)
+                            .disabled(organize.tray.isEmpty || organize.isBusy)
                         Button("Rename…") { editing = album }
                         Divider()
                         Button("Delete Album…", role: .destructive) { deleting = album }
@@ -86,16 +86,16 @@ struct AlbumActions: View {
     var body: some View {
         HStack(spacing: 8) {
             Button("Set as Cover") { Task { await organize.setCoverToSelection() } }
-                .disabled(organize.selection.count != 1 || organize.isRunning)
+                .disabled(organize.selection.count != 1 || organize.isBusy)
             Button("Remove from Album") { Task { await organize.removeSelectionFromAlbum() } }
-                .disabled(organize.selection.isEmpty || organize.isRunning)
+                .disabled(organize.selection.isEmpty || organize.isBusy)
             Menu("Sort") {
                 ForEach(AlbumOrdering.Sort.allCases) { sort in
                     Button(sort.title) { Task { await organize.sortAlbum(by: sort) } }
                 }
             }
             .fixedSize()
-            .disabled(organize.isRunning)
+            .disabled(organize.isBusy)
         }
         .controlSize(.small)
         .help("Drag photos to reorder them in the album")
@@ -118,10 +118,10 @@ struct TrayAlbumSection: View {
                 }
                 .labelsHidden()
                 Button("Add") { Task { await organize.addTray(toAlbum: albumID) } }
-                    .disabled(albumID.isEmpty || organize.isRunning)
+                    .disabled(albumID.isEmpty || organize.isBusy)
             }
             Button("New Album from Tray…") { isNaming = true }
-                .disabled(organize.isRunning)
+                .disabled(organize.isBusy)
         }
         .sheet(isPresented: $isNaming) {
             AlbumDetailsSheet(title: "", description: "", heading: "New Album") { title, description in

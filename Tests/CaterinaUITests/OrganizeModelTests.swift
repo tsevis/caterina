@@ -467,7 +467,8 @@ final class AccountBox: @unchecked Sendable {
     /// photos gone from the copy and the tray.
     @Test func deletingTheTray() async throws {
         let (model, flickr) = try setUp()
-        await model.deleteTray()
+        model.deleteTray()
+        await model.deletePendingNow()
         #expect(await flickr.sent.map(\.permission) == [.delete, .delete])
         #expect(model.tray.isEmpty)
         #expect(model.photos.isEmpty)

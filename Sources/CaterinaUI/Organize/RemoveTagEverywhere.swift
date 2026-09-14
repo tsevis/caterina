@@ -12,7 +12,7 @@ struct RemoveTagEverywhereButton: View {
     var body: some View {
         Button("Remove Tag Everywhere…") { removing = tag }
             .buttonStyle(.borderless)
-            .disabled(organize.isRunning)
+            .disabled(organize.isBusy)
             .removeTagEverywhereDialog(organize: organize, tag: $removing)
     }
 }

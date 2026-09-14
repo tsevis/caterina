@@ -64,7 +64,7 @@ struct OrganizeGrid: View {
                 }
             }
             if organize.canLoadMore {
-                Button("Load More") { organize.loadMore() }.disabled(organize.isRunning)
+                Button("Load More") { organize.loadMore() }.disabled(organize.isBusy)
             }
         }
         .padding(12)
@@ -143,7 +143,7 @@ struct AlbumReordering: ViewModifier {
             content
                 .draggable(photoID)
                 .dropDestination(for: String.self) { dropped, _ in
-                    guard let first = dropped.first, !organize.isRunning else { return false }
+                    guard let first = dropped.first, !organize.isBusy else { return false }
                     let moved = organize.selection.ids.contains(first) ? organize.selection.ids : Set(dropped)
                     Task { await organize.movePhotos(moved, before: photoID) }
                     return true

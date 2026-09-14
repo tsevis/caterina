@@ -26,7 +26,7 @@ struct AddToGalleryBar: View {
                 Task { await organize.addToGallery(photoID: photo, galleryID: gallery, galleryTitle: title, comment: note) }
                 comment = ""
             }
-            .disabled(galleryID.isEmpty || organize.isRunning)
+            .disabled(galleryID.isEmpty || organize.isBusy)
             .help("Galleries hold other people's photos. Undo from Organize's Activity.")
         }
         .controlSize(.small)

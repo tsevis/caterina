@@ -62,7 +62,7 @@ struct OrganizeSidebar: View {
                     Label(tag.tag, systemImage: "tag").badge(tag.count).tag(OrganizeScope.tag(tag.tag))
                         .contextMenu {
                             Button("Remove Tag Everywhere…") { removing = tag.tag }
-                                .disabled(organize.isRunning)
+                                .disabled(organize.isBusy)
                         }
                 }
             }

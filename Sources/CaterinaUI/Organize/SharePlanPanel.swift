@@ -97,11 +97,11 @@ struct SharePlanPanel: View {
     private var buttons: some View {
         HStack {
             Button("Remove Tray from Chosen Groups…") { confirming = .remove }
-                .disabled(share.chosen.isEmpty || share.organize.isRunning)
+                .disabled(share.chosen.isEmpty || share.organize.isBusy)
             Spacer()
             Button("Close", action: onDone).keyboardShortcut(.cancelAction)
             Button("Share…") { confirming = .share }
-                .disabled((share.plan?.assignments.isEmpty ?? true) || share.organize.isRunning)
+                .disabled((share.plan?.assignments.isEmpty ?? true) || share.organize.isBusy)
         }
     }
 

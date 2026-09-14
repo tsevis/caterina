@@ -237,7 +237,7 @@ struct PeopleForm: View {
                         Button("Put My Photos of \(found.username) in the Tray") {
                             Task { loaded = await organize.addPhotosOf(found) }
                         }
-                        .disabled(organize.isRunning)
+                        .disabled(organize.isBusy)
                         if let loaded { Text("\(loaded.formatted()) found").foregroundStyle(Theme.inkSecondary) }
                     }
                     Text("To untag them from every photo: fill the tray this way, choose Untag, then Apply.")
