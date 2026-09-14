@@ -31,6 +31,7 @@ struct TrayPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            SafetyBanners(organize: organize)
             Divider()
             if organize.tray.isEmpty {
                 ContentUnavailableView {
@@ -42,6 +43,7 @@ struct TrayPanel: View {
                         Text("**Remove a tag from every photo:** right-click it under Tags in the sidebar.")
                         // One literal: joined with +, the ** would show as text.
                         Text("**Untag a person:** choose Change › People, Find them, put your photos of them in the tray, choose Untag, then Apply.")
+                        BackupTip()
                     }
                     .multilineTextAlignment(.leading)
                 }
@@ -61,7 +63,7 @@ struct TrayPanel: View {
                         Divider()
                         Text("Groups").font(.subheadline.weight(.semibold))
                         Button("Share to Groups…", action: shareToGroups)
-                        .disabled(organize.isRunning)
+                        .disabled(organize.isBusy)
                     }
                     .padding(14)
                 }
@@ -85,7 +87,7 @@ struct TrayPanel: View {
             Text(organize.tray.count.formatted()).monospacedDigit().foregroundStyle(Theme.inkSecondary)
             Spacer()
             Button("Clear") { organize.clearTray() }
-                .disabled(organize.tray.isEmpty || organize.isRunning)
+                .disabled(organize.tray.isEmpty || organize.isBusy)
             DeleteTrayButton(organize: organize)
         }
         .padding(.horizontal, 14)
@@ -130,7 +132,7 @@ struct ApplyBar: View {
     @State private var isConfirming = false
 
     /// Past this many photos, Apply asks first.
-    static let confirmAbove = 20
+    nonisolated static let confirmAbove = 20
 
     var body: some View {
         // Once per drawing: it walks every photo in the tray.
@@ -145,9 +147,9 @@ struct ApplyBar: View {
             HStack {
                 Spacer()
                 Button("Apply to Tray") {
-                    if let estimate, estimate.photos > Self.confirmAbove { isConfirming = true } else { apply() }
+                    if let estimate, Self.needsConfirmation(estimate) { isConfirming = true } else { apply() }
                 }
-                .disabled(organize.isRunning || (estimate?.photos ?? 0) == 0)
+                .disabled(organize.isBusy || (estimate?.photos ?? 0) == 0)
             }
         }
         .font(.callout)
@@ -157,8 +159,27 @@ struct ApplyBar: View {
             Button("Change \(estimate?.photos.formatted() ?? "") Photos") { apply() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("\(draft.batchTitle). \(estimate?.summary ?? ""). You can undo it from Activity.")
+            if let estimate {
+                Text(Self.confirmationMessage(title: draft.batchTitle, estimate: estimate,
+                                              isDelete: draft.action == .delete))
+            }
         }
+    }
+
+    /// Past the count, or whenever Undo cannot take all of it back.
+    static func needsConfirmation(_ estimate: EditEstimate) -> Bool {
+        estimate.photos > confirmAbove || !estimate.unrestorable.isEmpty
+    }
+
+    static func confirmationMessage(title: String, estimate: EditEstimate, isDelete: Bool) -> String {
+        let consequence = if isDelete {
+            DeleteTrayButton.consequence
+        } else if estimate.unrestorable.isEmpty {
+            "You can undo it from Activity (⌥⌘Z)."
+        } else {
+            "Undo cannot restore the \(estimate.unrestorable.joined(separator: ", ")): Flickr does not say what it was."
+        }
+        return "\(title). \(estimate.summary). \(consequence) \(BackupTip.short)"
     }
 
     private func apply() {
@@ -203,16 +224,22 @@ struct DeleteTrayButton: View {
 
     var body: some View {
         Button(role: .destructive) { isConfirming = true } label: { Image(systemName: "trash") }
-            .disabled(organize.tray.isEmpty || organize.isRunning)
+            .disabled(organize.tray.isEmpty || organize.isBusy)
             .help("Delete the photos in the tray from Flickr")
             .confirmationDialog("Delete \(OrganizeModel.count(organize.tray.count)) from Flickr?",
                                 isPresented: $isConfirming) {
                 Button("Delete \(OrganizeModel.count(organize.tray.count))", role: .destructive) {
-                    Task { await organize.deleteTray() }
+                    organize.deleteTray()
                 }
             } message: {
-                Text("This cannot be undone, here or on flickr.com. Their views, faves, comments and places "
-                     + "in albums and groups go with them. Flickr asks you to allow deleting first.")
+                Text("\(Self.consequence) Their views, faves, comments and places in albums and groups go with them. "
+                     + "Flickr asks you to allow deleting first. \(BackupTip.short)")
             }
+    }
+
+    static var consequence: String {
+        let seconds = Int(OrganizeModel.defaultDeleteGrace.components.seconds)
+        return "Nothing is sent for \(seconds) seconds, and you can take it back until then. "
+            + "After that it cannot be undone, here or on flickr.com."
     }
 }

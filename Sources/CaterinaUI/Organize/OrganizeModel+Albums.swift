@@ -130,8 +130,8 @@ extension OrganizeModel {
             problem = "Sign in to Flickr to change your albums."
             return
         }
-        guard !isRunning else {
-            problem = "Wait for the edit that is running to finish."
+        guard !isBusy else {
+            problem = busyMessage
             return
         }
         do {

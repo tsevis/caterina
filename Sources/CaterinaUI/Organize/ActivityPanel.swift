@@ -16,6 +16,7 @@ struct ActivityPanel: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             RunBanner(organize: organize)
+            SafetyBanners(organize: organize)
             Divider()
             if organize.activity.isEmpty {
                 ContentUnavailableView("No edits yet", systemImage: "clock.arrow.circlepath",
@@ -85,10 +86,10 @@ struct ActivityRow: View {
                 Text(row.batch.title).lineLimit(2)
                 Spacer()
                 if row.canResume {
-                    Button("Resume") { Task { await organize.resume(row.batch.id) } }.disabled(organize.isRunning)
+                    Button("Resume") { Task { await organize.resume(row.batch.id) } }.disabled(organize.isBusy)
                 }
                 if row.canUndo {
-                    Button("Undo") { Task { await organize.undo(row.batch.id) } }.disabled(organize.isRunning)
+                    Button("Undo") { Task { await organize.undo(row.batch.id) } }.disabled(organize.isBusy)
                 }
             }
             Text(detail).font(.caption).monospacedDigit().foregroundStyle(Theme.inkSecondary)

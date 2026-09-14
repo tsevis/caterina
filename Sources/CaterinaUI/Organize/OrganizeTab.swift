@@ -46,6 +46,7 @@ struct OrganizeTab: View {
                     permissionRequest = PermissionRequest(permission: permission, batchID: batchID)
                 }
             }
+            .modifier(UndoRequestDialog(organize: organize))
             .sheet(item: $groupShare) { share in
                 GroupShareSheet(share: share) { groupShare = nil; panel = .activity }
             }

@@ -35,6 +35,7 @@ struct CaterinaApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             AppTabCommands(model: model)
+            FlickrUndoCommands(model: model)
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .appInfo) {
                 Button("About Caterina") { about.show() }

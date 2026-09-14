@@ -80,12 +80,20 @@ public final class OrganizeModel {
 
     public internal(set) var run: RunPhase = .idle
     public internal(set) var activity: [BatchActivity] = []
+    /// A delete confirmed but not sent yet; it can still be taken back.
+    public internal(set) var pendingDelete: PendingDelete?
+    /// The batch just finished, offered for Undo until dismissed.
+    var lastEditID: String?
+    /// The edit Undo from the menu is asking about.
+    public internal(set) var undoRequest: BatchActivity?
 
     let store: LibraryStore
     let flickr: any OrganizeFlickr
     let budget: CallBudget
     let accountID: @Sendable () -> String?
     var runTask: Task<Void, Never>?
+    let deleteGrace: Duration
+    var deleteTask: Task<Void, Never>?
     @ObservationIgnored var estimateCache: EstimateCache?
     /// Where to return when the search field is cleared.
     var scopeBeforeSearch: OrganizeScope?
@@ -93,8 +101,10 @@ public final class OrganizeModel {
     var generation = 0
 
     public init(store: LibraryStore, flickr: any OrganizeFlickr, budget: CallBudget = .standard,
-                accountID: @escaping @Sendable () -> String? = { nil }) {
+                accountID: @escaping @Sendable () -> String? = { nil },
+                deleteGrace: Duration = OrganizeModel.defaultDeleteGrace) {
         self.store = store
+        self.deleteGrace = deleteGrace
         self.flickr = flickr
         self.budget = budget
         self.accountID = accountID

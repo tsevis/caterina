@@ -14,7 +14,7 @@ extension OrganizeModel {
     }
 
     public func perform(_ action: PhotoAction, title: String) async {
-        guard action != .delete else { return await deleteTray() }
+        guard action != .delete else { return deleteTray() }
         await runActions(action, title: title)
     }
 
@@ -28,11 +28,6 @@ extension OrganizeModel {
         }
     }
 
-    /// Every photo in the tray, off Flickr for good. Asks Flickr for delete
-    /// permission when the sign-in lacks it; never part of another edit.
-    public func deleteTray() async {
-        await runActions(.delete, title: "Delete \(Self.count(tray.count))")
-    }
 
     /// A photo from Browse, usually someone else's, into one of your galleries.
     public func addToGallery(photoID: String, galleryID: String, galleryTitle: String, comment: String) async {
@@ -44,14 +39,14 @@ extension OrganizeModel {
         await runActions(action, on: tray, title: title)
     }
 
-    private func runActions(_ action: PhotoAction, on photoIDs: [String], title: String) async {
+    func runActions(_ action: PhotoAction, on photoIDs: [String], title: String) async {
         guard !photoIDs.isEmpty else { return }
         guard let owner = accountID() else {
             problem = "Sign in to Flickr to change your photos."
             return
         }
-        guard !isRunning else {
-            problem = "Wait for the edit that is running to finish."
+        guard !isBusy else {
+            problem = busyMessage
             return
         }
         do {

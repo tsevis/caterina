@@ -57,6 +57,17 @@ import FlickrKit
         _ = try render(VStack { ActivityRow(organize: organize, row: row); ActivityRow(organize: organize, row: refused) }
             .padding(14), "activity", size: CGSize(width: 380, height: 200))
     }
+
+    @Test func aWaitingDeleteAndTheLastEditShowTheirWayBack() async throws {
+        let organize = try organize()
+        await organize.apply(.setTitle("A"), title: "Set title to “A”")
+        _ = try render(SafetyBanners(organize: organize), "last-edit", size: CGSize(width: 380, height: 60))
+        organize.deleteTray()
+        #expect(organize.pendingDelete != nil)
+        _ = try render(VStack { SafetyBanners(organize: organize); BackupTip() }.padding(14), "pending-delete",
+                       size: CGSize(width: 380, height: 180))
+        organize.cancelPendingDelete()
+    }
 }
 
 @MainActor
