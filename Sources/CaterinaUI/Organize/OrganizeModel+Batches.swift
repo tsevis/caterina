@@ -101,6 +101,7 @@ extension OrganizeModel {
                 switch kind {
                 case .photos: try await BatchRunner(writer: flickr, store: store).run(batchID, progress: progress)
                 case .albums: try await AlbumRunner(flickr: flickr, store: store, ownerID: owner).run(batchID, progress: progress)
+                case .groups: try await GroupShareRunner(flickr: flickr, store: store).run(batchID, progress: progress)
                 }
                 self.run = .idle
             } catch FlickrError.permissionNeeded(let permission) {

@@ -52,6 +52,18 @@ public struct BatchActivity: Sendable, Equatable, Identifiable {
             let failures = entries.filter { $0.state == .failed }
                 .map { Failure(photoID: "\($0.position)", title: $0.snapshot?.title ?? "", message: $0.message ?? "") }
             return (failures, entries.contains { $0.state == .applied || $0.done > 0 })
+        case .groups:
+            let entries = try store.groupEntries(in: batch.id)
+            let failures = entries.compactMap { entry -> Failure? in
+                switch entry.outcome {
+                case let .refused(reason):
+                    Failure(photoID: "\(entry.position)", title: "\(entry.pair.photoID) → \(entry.pair.groupID)",
+                            message: reason.explanation)
+                default: nil
+                }
+            }
+            let changed = entries.contains { ($0.outcome?.placedByThisBatch ?? false) || ($0.outcome?.removedByThisBatch ?? false) }
+            return (failures, changed)
         }
     }
 }

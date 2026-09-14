@@ -28,6 +28,7 @@ extension LibraryStore {
     public func undoBatch(for batchID: String, now: Date = Date()) throws -> EditBatch {
         let original = try batch(batchID)
         if original.kind == .albums { return try undoAlbumBatch(original, now: now) }
+        if original.kind == .groups { return try undoGroupBatch(original, now: now) }
         let changes = try entries(in: batchID)
             .filter { $0.state == .applied || $0.state == .partial }
             .reversed()
@@ -48,9 +49,10 @@ extension LibraryStore {
             let counts = try Row.fetchAll(db, sql: """
                 SELECT state, COUNT(*) AS n FROM (
                     SELECT state FROM editEntry WHERE batchID = ?
-                    UNION ALL SELECT state FROM albumEntry WHERE batchID = ?)
+                    UNION ALL SELECT state FROM albumEntry WHERE batchID = ?
+                    UNION ALL SELECT state FROM groupEntry WHERE batchID = ?)
                 GROUP BY state
-                """, arguments: [batchID, batchID])
+                """, arguments: [batchID, batchID, batchID])
             let count = { (state: EditEntry.State) -> Int in
                 counts.first { ($0["state"] as String) == state.rawValue }?["n"] ?? 0
             }
@@ -137,11 +139,13 @@ extension LibraryStore {
             .map(entry)
         let albumCalls = try Row.fetchAll(db, sql: "SELECT * FROM albumEntry WHERE batchID = ?", arguments: [id])
             .map(albumEntry).filter { $0.state == .pending }.reduce(0) { $0 + $1.estimatedCalls }
+        let groupCalls = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM groupEntry WHERE batchID = ? AND state = 'pending'",
+                                          arguments: [id]) ?? 0
         return EditBatch(id: id, kind: kind, title: row["title"],
                          createdAt: Date(timeIntervalSince1970: row["createdAt"]),
                          undoes: row["undoes"], accountID: row["accountID"],
                          // One read per photo, to lay the change over Flickr's copy.
-                         calls: albumCalls + changes.filter { $0.state == .pending }
+                         calls: groupCalls + albumCalls + changes.filter { $0.state == .pending }
                             .reduce(0) { $0 + $1.change.readCalls + $1.change.writes.count })
     }
 

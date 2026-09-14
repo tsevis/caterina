@@ -162,6 +162,29 @@ enum LibrarySchema {
                 t.primaryKey(["batchID", "position"])
             }
         }
+        migrator.registerMigration("v11-groups") { db in
+            try db.create(table: "groupEntry") { t in
+                t.column("batchID", .text).notNull().references("editBatch", onDelete: .cascade)
+                t.column("position", .integer).notNull()
+                t.column("photoID", .text).notNull()
+                t.column("groupID", .text).notNull()
+                // "add" or "remove".
+                t.column("action", .text).notNull()
+                // 'pending', 'applied' or 'failed', with the outcome as JSON once sent.
+                t.column("state", .text).notNull()
+                t.column("outcome", .text)
+                t.primaryKey(["batchID", "position"])
+            }
+            try db.create(table: "groupSet") { t in
+                t.primaryKey("name", .text)
+                t.column("groupIDs", .text).notNull()
+            }
+            try db.create(table: "groupProfile") { t in
+                t.primaryKey("id", .text)
+                t.column("profile", .text).notNull()
+                t.column("readAt", .double).notNull()
+            }
+        }
         return migrator
     }
 

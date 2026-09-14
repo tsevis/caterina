@@ -73,6 +73,13 @@ import Testing
         #expect(GroupShareOutcome.Refusal.contentNotAllowed.closes == nil)
     }
 
+    @Test func removalRepliesMapToOutcomes() {
+        #expect(GroupShareOutcome(removingFailedWith: .api(code: 2, message: "Photo not in pool", transient: false))
+                == .notInPool)
+        #expect(GroupShareOutcome(removingFailedWith: .api(code: 3, message: "x", transient: false)) == .refused(.other))
+        #expect(GroupShareOutcome.removed.removedByThisBatch)
+    }
+
     @Test func poolWritesAreRepeatable() {
         let add = GroupWrites.add(photoID: "1", groupID: "g")
         #expect(add.method == "flickr.groups.pools.add")

@@ -96,6 +96,9 @@ public enum GroupShareOutcome: Sendable, Equatable, Hashable, Codable {
     case refused(Refusal)
     /// Not sent: the group or the photo was closed by an earlier refusal.
     case skipped(Refusal)
+    /// Taken out of the pool (or its queue).
+    case removed
+    case notInPool
 
     public enum Refusal: String, Sendable, Equatable, Hashable, Codable {
         case photoNotFound, groupNotFound, photoInTooManyPools, groupLimitReached, contentNotAllowed
@@ -146,6 +149,22 @@ public enum GroupShareOutcome: Sendable, Equatable, Hashable, Codable {
         }
     }
 
+    /// Removing from a pool: "not in pool" is already what was wanted.
+    public init(removingFailedWith error: FlickrError) {
+        if case .api(2, _, _) = error { self = .notInPool } else { self = .refused(.other) }
+    }
+
     /// In the pool or its queue because of this batch: what undo takes out.
     public var placedByThisBatch: Bool { self == .added || self == .pendingModeration }
+
+    /// Out of the pool because of this batch: what undo puts back.
+    public var removedByThisBatch: Bool { self == .removed }
+
+    /// Did what was asked, or found it already so.
+    public var isSuccess: Bool {
+        switch self {
+        case .refused, .skipped: false
+        default: true
+        }
+    }
 }

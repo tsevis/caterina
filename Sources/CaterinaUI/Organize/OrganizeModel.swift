@@ -13,7 +13,7 @@ extension FlickrClient: AlbumContents {}
 
 /// Flickr, as Organize needs it.
 public typealias OrganizeFlickr = PhotoWriter & LivePhotoReader & PhotoListSource & AlbumService & AlbumLister
-    & AlbumContents
+    & AlbumContents & GroupPoolWriter
 
 /// The Organize tab: find photos, gather them in a tray, change them in a
 /// batch, and take the batch back.
