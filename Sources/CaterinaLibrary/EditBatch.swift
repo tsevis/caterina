@@ -27,6 +27,8 @@ public struct EditBatch: Sendable, Equatable, Identifiable {
         case albums
         /// One entry per photo and group (`GroupEntry`).
         case groups
+        /// One entry per photo for a rotation, a person, or deleting (`ActionEntry`).
+        case actions
     }
 
     public let id: String

@@ -134,3 +134,39 @@ import Testing
         #expect(write.arguments == ["photo_id": "1", "date_taken": "2024-06-01 21:14:05", "date_taken_granularity": "0"])
     }
 }
+
+/// The date a photo appears to have been uploaded, which Organizr can change.
+@Suite struct PostedDateTests {
+    private let photo = LibraryPhoto(id: "1", uploaded: Date(timeIntervalSince1970: 1_700_000_000))
+
+    @Test func postedIsShiftedOrSetAndWrittenAsUnixTime() throws {
+        let shifted = PhotoEdit.shiftPosted(seconds: -3600).applied(to: photo)
+        #expect(shifted.uploaded == Date(timeIntervalSince1970: 1_699_996_400))
+        let write = try #require(PhotoChange(before: photo, after: shifted).writes.first)
+        #expect(write.method == "flickr.photos.setDates")
+        #expect(write.arguments == ["photo_id": "1", "date_posted": "1699996400"])
+
+        let set = PhotoEdit.setPosted(Date(timeIntervalSince1970: 1_600_000_000)).applied(to: photo)
+        #expect(set.uploaded == Date(timeIntervalSince1970: 1_600_000_000))
+    }
+
+    /// Both dates changing go in one call.
+    @Test func takenAndPostedShareOneCall() throws {
+        let taken = LibraryPhoto(id: "1", uploaded: photo.uploaded, taken: "2020-01-01 00:00:00")
+        let after = PhotoEdit.shiftPosted(seconds: 60).applied(to: PhotoEdit.shiftTaken(seconds: 60).applied(to: taken))
+        let writes = PhotoChange(before: taken, after: after).writes
+        #expect(writes.count == 1)
+        #expect(writes.first?.arguments["date_posted"] == "1700000060")
+        #expect(writes.first?.arguments["date_taken"] == "2020-01-01 00:01:00")
+    }
+
+    @Test func aPostedDateChangedOnFlickrIsAConflict() {
+        let change = PhotoChange(before: photo, after: PhotoEdit.shiftPosted(seconds: 60).applied(to: photo))
+        let moved = PhotoEdit.shiftPosted(seconds: 999).applied(to: photo)
+        guard case let .conflict(reason) = change.rebased(onto: moved) else {
+            Issue.record("expected a conflict")
+            return
+        }
+        #expect(reason.contains("date posted"))
+    }
+}

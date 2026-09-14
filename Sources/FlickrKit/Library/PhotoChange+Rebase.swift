@@ -26,6 +26,7 @@ extension PhotoChange {
             rebased.license = try field("licence", \.license, live)
             rebased.visibility = try field("who can see", \.visibility, live)
             rebased.taken = try field("date taken", \.taken, live)
+            rebased.uploaded = try field("date posted", \.uploaded, live)
             rebased.location = try location(live)
             rebased.permissions = try unreported("who can comment and add tags", \.permissions, live)
             rebased.safety = try unreported("safety level", \.safety, live)
@@ -99,6 +100,7 @@ extension LibraryPhoto {
         merged.license = other.license
         merged.visibility = other.visibility
         merged.taken = other.taken
+        merged.uploaded = other.uploaded
         merged.location = other.location
         merged.permissions = other.permissions
         merged.safety = other.safety

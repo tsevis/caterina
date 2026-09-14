@@ -46,6 +46,9 @@ public enum PhotoEdit: Sendable, Equatable {
     case setContentType(UploadMetadata.ContentType)
     case setHiddenFromSearch(Bool)
     case setGeoPermissions(LibraryPhoto.GeoPermissions)
+    /// The date it shows as uploaded.
+    case shiftPosted(seconds: Int)
+    case setPosted(Date)
 
     public func applied(to photo: LibraryPhoto, context: Context = .single) -> LibraryPhoto {
         var edited = photo
@@ -70,6 +73,8 @@ public enum PhotoEdit: Sendable, Equatable {
         case let .setContentType(contentType): edited.contentType = contentType
         case let .setHiddenFromSearch(hidden): edited.hiddenFromSearch = hidden
         case let .setGeoPermissions(permissions): edited.geoPermissions = permissions
+        case let .shiftPosted(seconds): edited.uploaded = photo.uploaded?.addingTimeInterval(TimeInterval(seconds))
+        case let .setPosted(date): edited.uploaded = date
         }
         return edited
     }

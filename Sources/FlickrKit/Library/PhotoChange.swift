@@ -63,9 +63,17 @@ public struct PhotoChange: Sendable, Equatable {
     static func flag(_ on: Bool) -> String { on ? "1" : "0" }
 
     /// Flickr cannot be told a date is unknown, so going back to one is skipped.
+    /// Taken and posted share `setDates`; each goes only when it changed.
     private var taken: FlickrWrite? {
-        guard before.taken != after.taken, let taken = after.taken else { return nil }
-        return write("flickr.photos.setDates", ["date_taken": taken, "date_taken_granularity": "0"])
+        var arguments: [String: String] = [:]
+        if before.taken != after.taken, let taken = after.taken {
+            arguments["date_taken"] = taken
+            arguments["date_taken_granularity"] = "0"
+        }
+        if before.uploaded != after.uploaded, let posted = after.uploaded {
+            arguments["date_posted"] = String(Int(posted.timeIntervalSince1970))
+        }
+        return arguments.isEmpty ? nil : write("flickr.photos.setDates", arguments)
     }
 
     private var license: FlickrWrite? {

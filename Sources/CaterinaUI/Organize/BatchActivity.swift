@@ -81,6 +81,12 @@ public struct BatchActivity: Sendable, Equatable, Identifiable {
             }
             let changed = entries.contains { ($0.outcome?.placedByThisBatch ?? false) || ($0.outcome?.removedByThisBatch ?? false) }
             return (failures, changed)
+        case .actions:
+            let entries = try store.actionEntries(in: batch.id)
+            let failures = entries.filter { $0.state == .failed }
+                .map { Failure(photoID: $0.photoID, title: $0.photoID, message: $0.message ?? "") }
+            // Deleting has nothing to undo.
+            return (failures, try store.canUndo(batch.id))
         }
     }
 }

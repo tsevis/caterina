@@ -185,6 +185,17 @@ enum LibrarySchema {
                 t.column("readAt", .double).notNull()
             }
         }
+        migrator.registerMigration("v12-photo-actions") { db in
+            try db.create(table: "actionEntry") { t in
+                t.column("batchID", .text).notNull().references("editBatch", onDelete: .cascade)
+                t.column("position", .integer).notNull()
+                t.column("photoID", .text).notNull()
+                t.column("action", .text).notNull()
+                t.column("state", .text).notNull()
+                t.column("message", .text)
+                t.primaryKey(["batchID", "position"])
+            }
+        }
         return migrator
     }
 
