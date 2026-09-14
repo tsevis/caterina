@@ -164,3 +164,27 @@ import FlickrKit
         #expect(model.collections.first?.children.first?.albums.map(\.title) == ["Athens"])
     }
 }
+
+@MainActor
+@Suite struct SavedViewTests {
+    /// A view saved by name acts like a smart album: it opens with today's
+    /// photos, not the ones it had when saved.
+    @Test func aViewIsSavedByNameAndOpensAgain() async throws {
+        let store = try LibraryStore.inMemory()
+        try store.save([LibraryPhoto(id: "1", title: "Dusk")], generation: 1)
+        let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store))
+        await model.open(.search("dusk"))
+        model.saveView(named: "Dusk shots")
+        model.saveView(named: "Untagged", scope: .untagged)
+        #expect(model.savedViews.map(\.name) == ["Dusk shots", "Untagged"])
+
+        try store.save([LibraryPhoto(id: "2", title: "More dusk")], generation: 1)
+        await model.open(.all)
+        await model.open(try #require(model.savedViews.first).scope)
+        #expect(Set(model.photos.map(\.id)) == ["1", "2"])
+
+        model.deleteView(named: "Untagged")
+        let reopened = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store))
+        #expect(reopened.savedViews.map(\.name) == ["Dusk shots"])
+    }
+}

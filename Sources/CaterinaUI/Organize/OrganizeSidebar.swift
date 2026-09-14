@@ -29,6 +29,7 @@ struct OrganizeSidebar: View {
             Section("Library") {
                 ForEach(OrganizeScope.smartViews, id: \.self) { row($0) }
             }
+            SavedViewsSection(organize: organize)
             AlbumSidebarSection(organize: organize)
             Section("Who can see") {
                 ForEach(Audience.allCases, id: \.self) { row(.audience($0)) }
@@ -107,6 +108,38 @@ struct CollectionRow: View {
             }
         } label: {
             Label(collection.title, systemImage: "square.stack.3d.up")
+        }
+    }
+}
+
+/// Views saved by name; the current view can be saved from here.
+struct SavedViewsSection: View {
+    let organize: OrganizeModel
+    @State private var isNaming = false
+    @State private var name = ""
+
+    var body: some View {
+        Section {
+            ForEach(organize.savedViews) { view in
+                Label(view.name, systemImage: "sparkles.rectangle.stack")
+                    .tag(view.scope)
+                    .contextMenu {
+                        Button("Delete Saved View", role: .destructive) { organize.deleteView(named: view.name) }
+                    }
+            }
+        } header: {
+            HStack {
+                Text("Saved views")
+                Spacer()
+                Button { isNaming = true } label: { Image(systemName: "plus") }
+                    .buttonStyle(.borderless)
+                    .help("Save “\(organize.scope.title)” as a view that keeps matching new photos")
+            }
+        }
+        .alert("Save this view", isPresented: $isNaming) {
+            TextField("Name", text: $name)
+            Button("Save") { organize.saveView(named: name); name = "" }
+            Button("Cancel", role: .cancel) {}
         }
     }
 }

@@ -205,6 +205,12 @@ enum LibrarySchema {
             // Photos an album edit found already as asked, which undo must leave alone.
             try db.alter(table: "albumEntry") { t in t.add(column: "unchanged", .text) }
         }
+        migrator.registerMigration("v14-settings") { db in
+            try db.create(table: "setting") { t in
+                t.primaryKey("key", .text)
+                t.column("value", .blob).notNull()
+            }
+        }
         return migrator
     }
 

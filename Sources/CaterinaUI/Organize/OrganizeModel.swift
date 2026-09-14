@@ -59,6 +59,7 @@ public final class OrganizeModel {
     public internal(set) var problem: String?
     public internal(set) var albums: [Album] = []
     public internal(set) var collections: [PhotoCollection] = []
+    public internal(set) var savedViews: [SavedView] = []
     /// The open album's photo ids, in album order.
     var albumOrder: [String] = []
 
@@ -96,6 +97,7 @@ public final class OrganizeModel {
         reloadPhotos()
         refreshIndexes()
         refreshActivity()
+        savedViews = readSavedViews()
     }
 
     // MARK: - Views

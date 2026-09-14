@@ -4,7 +4,7 @@ import CaterinaLibrary
 import FlickrKit
 
 /// Where Organize is looking: the smart views in its sidebar.
-public enum OrganizeScope: Sendable, Hashable {
+public enum OrganizeScope: Sendable, Hashable, Codable {
     case all
     case notInAlbum
     case untagged
@@ -96,4 +96,13 @@ public enum OrganizeScope: Sendable, Hashable {
         case .search: "magnifyingglass"
         }
     }
+}
+
+extension Audience: Codable {}
+
+/// A view kept by name: it opens with the photos that match it now.
+public struct SavedView: Sendable, Equatable, Identifiable, Codable {
+    public var id: String { name }
+    public let name: String
+    public let scope: OrganizeScope
 }
