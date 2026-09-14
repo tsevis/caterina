@@ -76,3 +76,17 @@ import FlickrKit
         #expect(state.generation == 3)
     }
 }
+
+/// The timeline by the month photos were posted, as well as taken.
+@Suite struct UploadedTimelineTests {
+    @Test func monthsPostedAreCountedAndFiltered() throws {
+        let store = try LibraryStore.inMemory()
+        // 2024-06-01 and 2024-06-30 (GMT), 2024-05-15.
+        try store.save([LibraryPhoto(id: "1", uploaded: Date(timeIntervalSince1970: 1_717_243_200)),
+                        LibraryPhoto(id: "2", uploaded: Date(timeIntervalSince1970: 1_719_748_800)),
+                        LibraryPhoto(id: "3", uploaded: Date(timeIntervalSince1970: 1_715_774_400)),
+                        LibraryPhoto(id: "4")], generation: 1)
+        #expect(try store.uploadedMonthCounts() == [MonthCount(month: "2024-06", count: 2), MonthCount(month: "2024-05", count: 1)])
+        #expect(try store.photos(.uploadedIn("2024-06")).map(\.id).sorted() == ["1", "2"])
+    }
+}

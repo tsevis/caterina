@@ -8,6 +8,7 @@ struct OrganizeSidebar: View {
     let organize: OrganizeModel
     @State private var tagFilter = ""
     @State private var searchText = ""
+    @State private var timelineByPosted = false
 
     private var selection: Binding<OrganizeScope?> {
         Binding(get: { organize.scope }, set: { scope in
@@ -36,12 +37,18 @@ struct OrganizeSidebar: View {
                 ForEach(License.allCases) { row(.licence($0)) }
             }
             Section("Timeline") {
+                Picker("", selection: $timelineByPosted) {
+                    Text("Taken").tag(false)
+                    Text("Posted").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
                 ForEach(years, id: \.year) { year in
                     DisclosureGroup {
                         ForEach(year.months) { month in
                             Label(month.title, systemImage: "calendar")
                                 .badge(month.count)
-                                .tag(OrganizeScope.month(month.month))
+                                .tag(timelineByPosted ? OrganizeScope.postedMonth(month.month) : .month(month.month))
                         }
                     } label: {
                         Text(year.year).badge(year.months.reduce(0) { $0 + $1.count })
@@ -75,7 +82,7 @@ struct OrganizeSidebar: View {
     }
 
     private var years: [(year: String, months: [MonthCount])] {
-        let grouped = Dictionary(grouping: organize.months, by: \.year)
+        let grouped = Dictionary(grouping: timelineByPosted ? organize.postedMonths : organize.months, by: \.year)
         return grouped.keys.sorted(by: >).map { ($0, (grouped[$0] ?? []).sorted { $0.month > $1.month }) }
     }
 

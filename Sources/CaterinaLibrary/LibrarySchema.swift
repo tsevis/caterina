@@ -274,6 +274,8 @@ enum LibrarySchema {
             }
         case .videos:
             return ("media = 'video'", [])
+        case let .uploadedIn(month):
+            return ("strftime('%Y-%m', uploaded, 'unixepoch') = ?", [month])
         case .notInAlbum:
             return ("id IN (SELECT photoID FROM notInAlbum)", [])
         case let .matching(text):

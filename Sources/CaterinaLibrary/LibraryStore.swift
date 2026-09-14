@@ -113,6 +113,16 @@ public final class LibraryStore: Sendable {
         }
     }
 
+    /// Months photos were posted in (GMT), newest first.
+    public func uploadedMonthCounts() throws -> [MonthCount] {
+        try database.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT strftime('%Y-%m', uploaded, 'unixepoch') AS month, COUNT(*) AS n FROM photo
+                WHERE uploaded IS NOT NULL GROUP BY month ORDER BY month DESC
+                """).map { MonthCount(month: $0["month"], count: $0["n"]) }
+        }
+    }
+
     /// Photos by id, in the order given; ids not in the copy are left out.
     public func photos(ids: [String]) throws -> [LibraryPhoto] {
         guard !ids.isEmpty else { return [] }

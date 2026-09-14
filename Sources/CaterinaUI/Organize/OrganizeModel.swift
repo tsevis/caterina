@@ -54,6 +54,7 @@ public final class OrganizeModel {
     public private(set) var notInAlbumReadAt: Date?
     public private(set) var tags: [TagCount] = []
     public private(set) var months: [MonthCount] = []
+    public private(set) var postedMonths: [MonthCount] = []
     public private(set) var counts: [OrganizeScope: Int] = [:]
     public internal(set) var problem: String?
     public internal(set) var albums: [Album] = []
@@ -178,6 +179,7 @@ public final class OrganizeModel {
         do {
             tags = try store.tagCounts()
             months = try store.monthCounts()
+            postedMonths = try store.uploadedMonthCounts()
             let views = OrganizeScope.smartViews + Audience.allCases.map(OrganizeScope.audience)
                 + License.allCases.map(OrganizeScope.licence)
             counts = Dictionary(uniqueKeysWithValues: try views.map { ($0, try store.count($0.filter)) })

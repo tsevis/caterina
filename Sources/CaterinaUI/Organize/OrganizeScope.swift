@@ -14,8 +14,10 @@ public enum OrganizeScope: Sendable, Hashable {
     case videos
     case audience(Audience)
     case licence(License)
-    /// `yyyy-MM`.
+    /// `yyyy-MM`, taken.
     case month(String)
+    /// `yyyy-MM`, posted.
+    case postedMonth(String)
     case tag(String)
     /// Read from Flickr, in album order.
     case album(id: String, title: String)
@@ -44,12 +46,17 @@ public enum OrganizeScope: Sendable, Hashable {
         case let .audience(audience): .seenBy(audience)
         case let .licence(licence): .licensed(licence)
         case let .month(month): .takenIn(month)
+        case let .postedMonth(month): .uploadedIn(month)
         case let .tag(tag): .tagged(tag)
         }
     }
 
     var order: LibraryOrder {
-        self == .recentlyUpdated ? .recentlyUpdated : .newestTaken
+        switch self {
+        case .recentlyUpdated: .recentlyUpdated
+        case .postedMonth: .newestUploaded
+        default: .newestTaken
+        }
     }
 
     public var title: String {
@@ -64,6 +71,7 @@ public enum OrganizeScope: Sendable, Hashable {
         case let .audience(audience): audience.title
         case let .licence(licence): licence.label
         case let .month(month): MonthCount(month: month, count: 0).title
+        case let .postedMonth(month): "Posted in \(MonthCount(month: month, count: 0).title)"
         case let .tag(tag): tag
         case let .album(_, title): title
         case let .search(text): "“\(text)”"
@@ -82,6 +90,7 @@ public enum OrganizeScope: Sendable, Hashable {
         case .audience: "eye"
         case .licence: "c.circle"
         case .month: "calendar"
+        case .postedMonth: "calendar.badge.clock"
         case .tag: "tag"
         case .album: "rectangle.stack"
         case .search: "magnifyingglass"

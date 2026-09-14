@@ -14,6 +14,8 @@ public enum LibraryFilter: Sendable, Equatable, Hashable {
     case matching(String)
     /// Taken in a year (`2024`) or a month (`2024-06`).
     case takenIn(String)
+    /// Posted in a month (`2024-06`, GMT).
+    case uploadedIn(String)
     case licensed(License)
     case seenBy(Audience)
     case videos
