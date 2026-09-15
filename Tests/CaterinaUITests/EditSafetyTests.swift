@@ -45,8 +45,9 @@ import FlickrKit
         let (model, flickr) = try setUp(grace: .milliseconds(30))
         model.deleteTray()
         try await waitUntil("the delete to be sent") { await flickr.sent.count == 2 }
-        try await waitUntil("the delete to finish") { !model.isRunning && model.pendingDelete == nil }
-        #expect(model.tray.isEmpty)
+        // The run goes idle a moment before the tray is tidied: wait for the tray itself.
+        try await waitUntil("the deleted photos to leave the tray") { model.tray.isEmpty }
+        #expect(model.pendingDelete == nil)
     }
 
     /// The photos meant are the ones in the tray when Delete was confirmed.

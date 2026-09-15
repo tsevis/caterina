@@ -500,9 +500,12 @@ final class AccountBox: @unchecked Sendable {
 
     private func library(_ count: Int) throws -> LibraryStore {
         let store = try LibraryStore.inMemory()
-        try store.save((1...count).map { LibraryPhoto(id: "\($0)", title: "P\($0)", tags: $0 % 2 == 0 ? ["sea", "Blue"] : ["blue"],
-                                                      taken: String(format: "2024-01-01 %02d:%02d:%02d", ($0 / 3600) % 24, ($0 / 60) % 60, $0 % 60)) },
-                       generation: 1)
+        let photos = (1...count).map { index -> LibraryPhoto in
+            let tags: [String] = index % 2 == 0 ? ["sea", "Blue"] : ["blue"]
+            let taken = String(format: "2024-01-01 %02d:%02d:%02d", (index / 3600) % 24, (index / 60) % 60, index % 60)
+            return LibraryPhoto(id: "\(index)", title: "P\(index)", tags: tags, taken: taken)
+        }
+        try store.save(photos, generation: 1)
         return store
     }
 
