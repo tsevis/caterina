@@ -30,8 +30,8 @@ targets:
       base:
         PRODUCT_NAME: Caterina
         PRODUCT_BUNDLE_IDENTIFIER: com.tsevis.Caterina
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: "2"
         INFOPLIST_FILE: Caterina/Info.plist
         # Drawn by Scripts/make-icon.py: the contact sheet the splash shows and
         # the app makes. Ten sizes, and the small ones are a different drawing

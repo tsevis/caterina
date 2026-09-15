@@ -5,7 +5,8 @@ and browse — named for **Caterina Fake**, who co-founded Flickr in 2004.
 
 It rebuilds Flickr's web Organizr as batch edits on your Mac: find photos in
 smart views, gather them in a tray, see what an edit will cost in calls and
-time before it runs, and **undo any change except deletion**.
+time before it runs, and **undo any change**. Deleting, which Flickr cannot
+take back, waits a minute first.
 
 <img src="documents/screenshots/organize.jpg" width="100%" alt="The Organize tab showing the Public view: a grid of mosaic portraits, the sidebar with smart views and albums, and the empty tray on the right explaining how to remove a tag or a person in bulk. The status bar at the bottom starts with the Tsevis studio mark and reads 924 photos, synced just now.">
 
@@ -24,8 +25,8 @@ interrupted batch resumes and a finished one can be undone.
   titles and descriptions with patterns, tags (add, remove, replace, rename,
   or remove one everywhere), who can see and comment, safety and content
   type, licence, dates taken and posted, location on a map, rotation, people,
-  albums, groups and galleries. Delete stands apart, behind its own question
-  and Flickr's own permission.
+  albums, groups and galleries. Delete stands apart, behind its own question,
+  a 60-second countdown and Flickr's own permission.
 * **Browse** — rankings, a timeline, a map, albums, groups and every number
   Flickr keeps for a photo, with daily stats kept past Flickr's 28 days.
 
@@ -141,8 +142,24 @@ Each of these was a defect in the reference application, and each has a test.
 ## Organize: batch edits with undo
 
 Organize is Flickr's Organizr rebuilt: find photos in smart views, gather them
-in a tray, see the calls and time an edit will take, run it, and undo it from
-Activity. The rules that are not obvious:
+in a tray, see the calls and time an edit will take, run it, and undo it.
+One wrong selection is never the end:
+
+* **The edit that just finished offers Undo** in the tray and in Activity, and
+  Edit › Undo on Flickr (⌥⌘Z) takes back the newest one after asking. Not ⌘Z:
+  that stays with the text fields, where undoing a typo must not rewrite
+  hundreds of photos.
+* **Deleting waits 60 seconds.** Flickr has no trash, so nothing is sent until
+  the countdown ends; Keep Photos takes it back, and quitting sends nothing.
+* **What undo cannot fully restore always asks first**, whatever the count, and
+  names it: Flickr does not report a photo's earlier safety level, content
+  type or search visibility.
+* **Back up first.** Download saves your originals; Your Flickr Data on
+  flickr.com exports titles, tags and albums.
+
+<p align="center"><img src="documents/screenshots/undo.png" width="60%" alt="Three panels from Organize. A banner reads Rotate 240 photos is done, with an Undo button. A red countdown reads Deleting 240 photos in 60 seconds, with Keep Photos and Delete Now buttons. A Content type edit shows 240 photos, 480 calls, about 8 minutes, and an orange warning that undo cannot restore the content type because Flickr does not say what it was."></p>
+
+The rules that are not obvious:
 
 * **Each photo is read from Flickr just before it is changed.** The local copy
   holds clean tags ("newyork") and can be behind; the change is laid over the
@@ -154,7 +171,7 @@ Activity. The rules that are not obvious:
 * **Every change except deleting can be undone**, including album edits and
   group sharing; undo is planned from what Flickr had just before.
 * **Deleting is separate**: its own button, its own question naming the count,
-  and Flickr's own delete permission.
+  a countdown before anything is sent, and Flickr's own delete permission.
 
 ## What it writes, and what it keeps
 
