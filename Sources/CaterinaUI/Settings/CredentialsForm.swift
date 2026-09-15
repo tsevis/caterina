@@ -36,6 +36,10 @@ struct CredentialsForm: View {
                 Link("Create a key at flickr.com",
                      destination: URL(string: "https://www.flickr.com/services/apps/create/")!)
                     .font(.callout)
+                Text(FlickrTerms.notice)
+                    .font(.caption)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Form {

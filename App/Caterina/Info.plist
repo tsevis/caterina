@@ -23,7 +23,7 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.photography</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Photographs © their photographers. An independent application, not affiliated with Flickr.</string>
+	<string>Photographs © their photographers. This product uses the Flickr API but is not endorsed or certified by SmugMug, Inc.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<!--

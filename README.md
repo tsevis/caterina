@@ -200,7 +200,11 @@ file, which needs a domain; until then, this is the trade-off.
 ## Licence and credit
 
 Photographs, titles and licence information come from the Flickr API and belong
-to the photographers who made them. This is an independent application, not
-affiliated with or endorsed by Flickr.
+to the photographers who made them. Caterina is free and independent.
+
+**This product uses the Flickr API but is not endorsed or certified by SmugMug, Inc.**
+
+**Privacy:** Caterina collects nothing about you — no analytics, no telemetry, no
+crash reports. It talks to Flickr and to nothing else.
 
 Created by Charis Tsevis, with the help of Claude Code.

@@ -251,24 +251,32 @@ public struct AboutView: View {
     Named for Caterina Fake, who co-founded Flickr in 2004. It downloads from \
     Flickr at the size you pick, uploads with titles, tags and albums already \
     set, organizes your library in batches (tags, albums, groups, who can see \
-    what) with every change but deletion undoable, and browses the numbers \
-    behind your own photographs.
+    what) with every change undoable and a delete that waits a minute, and \
+    browses the numbers behind your own photographs.
 
     The photographs are not yours. The licence shown beside a photo is the one \
     Flickr publishes for it: All Rights Reserved means exactly that, and a \
     Creative Commons licence still asks for attribution. This fetches files. It \
     does not grant permission, and it is not made by or affiliated with Flickr.
+
+    \(FlickrTerms.notice)
     """
 
     static let legal = """
     Photographs, titles and licence information come from the Flickr API, \
-    © the photographers who made them. Flickr is a trademark of its owner; this \
-    is an independent application and is not endorsed by or affiliated with it.
+    © the photographers who made them. Flickr is a trademark of SmugMug, Inc.; \
+    this is an independent, free application. \(FlickrTerms.notice)
+
+    \(FlickrTerms.privacy)
 
     Sign-in uses Flickr's own OAuth pages in a system browser window. Your API \
     key, secret and access token are kept in the macOS Keychain and are never \
     written to a file or sent anywhere but Flickr.
 
-    Built with Swift and SwiftUI. No third-party libraries are linked.
+    Built with Swift and SwiftUI. The library copy is stored with GRDB \
+    (MIT licence, © Gwendal Roué); no other third-party library is linked.
+
+    GRDB.swift
+    \(ThirdPartyLicences.grdb)
     """
 }
