@@ -7,7 +7,7 @@ PROJECT   := App/Caterina.xcodeproj
 SCHEME    := Caterina
 DERIVED   := .build/xcode
 APP       := $(DERIVED)/Build/Products/Release/Caterina.app
-SIGN      := ../sign-and-notarize.sh
+SIGN      := Scripts/sign-and-notarize.sh
 ENTS      := App/Caterina/Caterina.entitlements
 
 .PHONY: all build test coverage lint project app run sign sign-only clean
