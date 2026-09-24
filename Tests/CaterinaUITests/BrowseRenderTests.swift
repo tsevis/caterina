@@ -73,6 +73,7 @@ import FlickrKit
         renderer.scale = 2
         let image = try #require(renderer.nsImage)
         let bitmap = try #require(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+        try FileManager.default.createDirectory(at: BrowseRenderTests.output, withIntermediateDirectories: true)
         try #require(bitmap.representation(using: .png, properties: [:]))
             .write(to: BrowseRenderTests.output.appendingPathComponent("tags-and-tiles.png"))
         #expect(image.size.height > 300)
