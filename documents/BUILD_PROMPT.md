@@ -1,7 +1,7 @@
 # Build prompt — FlickrDownloader (native macOS port of FDownloadr)
 
 Paste this whole file as the opening prompt of a fresh Claude Code session with
-working directory `/Users/tsevis/AI/ClaudeCode/FlickrDownloader`.
+working directory `~/AI/ClaudeCode/FlickrDownloader`.
 
 ---
 
@@ -11,7 +11,7 @@ A native Swift / SwiftUI macOS app that bulk-downloads photos from Flickr.
 
 It is a **ground-up redesign**, not a transliteration. The reference
 implementation is a working PyQt6 app at
-`/Users/tsevis/AI/ClaudeCode/FDownloadr`. Read it for *behaviour and hard-won
+`~/AI/ClaudeCode/FDownloadr`. Read it for *behaviour and hard-won
 domain knowledge* — its module docstrings record real defects and why the
 current shape exists — but do not copy its widget structure or its dark
 hand-rolled stylesheet. The Mac app follows the macOS HIG and uses system
@@ -202,8 +202,8 @@ them. TDD: write the failing test, run it, confirm it fails, then implement.
 
 ## Build, sign, ship
 
-- Use the shared script `/Users/tsevis/AI/ClaudeCode/sign-and-notarize.sh`.
-  It signs with `Developer ID Application: CHARALAMPOS TSEVIS (TN899J6HRF)`,
+- Use the shared script `~/AI/ClaudeCode/sign-and-notarize.sh`.
+  It signs with `Developer ID Application: CHARALAMPOS TSEVIS (<TEAM_ID>)`,
   notarizes via the `crewlistr-notary` profile, and produces a stapled DMG.
   Do **not** pass `--python`; this is a native bundle.
 - Provide `Info.plist` with a real bundle id, version, and
@@ -234,15 +234,15 @@ let a test open a window on the desktop.
 Every Tsevis Mac app opens with the same splash/about window. FlickrDownloader
 must match it. **Read the canonical implementation before writing yours:**
 
-- **Canonical:** `/Users/tsevis/AI/ClaudeCode/HipparchusMac/App/HipparchusApp/AboutView.swift`
+- **Canonical:** `~/AI/ClaudeCode/HipparchusMac/App/HipparchusApp/AboutView.swift`
   — 301 lines, the cleanest version, and its comments explain *why* each choice
   was made. Copy its structure.
-- **Variant:** `/Users/tsevis/AI/ClaudeCode/nino/Sources/NinoUI/AboutView.swift`
+- **Variant:** `~/AI/ClaudeCode/nino/Sources/NinoUI/AboutView.swift`
   — same layout; measures logo height from the PNG's actual inked area rather
   than the artboard, which is worth stealing if the logo has uneven margins.
-- **Same design in another toolkit:** `/Users/tsevis/AI/ClaudeCode/philon/src/Splash.tsx`
+- **Same design in another toolkit:** `~/AI/ClaudeCode/philon/src/Splash.tsx`
   — useful for the intended *look* if you want a second reference.
-- **Design tokens:** `/Users/tsevis/AI/ClaudeCode/crewlisterpromac/Sources/CrewListrProMac/UI/Design/Theme.swift`
+- **Design tokens:** `~/AI/ClaudeCode/crewlisterpromac/Sources/CrewListrProMac/UI/Design/Theme.swift`
   — the dynamic light/dark colour pattern to adopt.
 
 ### Window mechanics (verbatim from the canonical source)
@@ -374,4 +374,4 @@ app's accent — this is not an official Flickr client and must not imply it is.
   SPM as used by CrewListr. Prefer XcodeGen: it keeps the app shell generated
   and the libraries in `Sources/`, which matches the `FlickrKit` split above.
 - **Swift Testing** (`import Testing`), as Nino uses. Not XCTest.
-- Team `TN899J6HRF`, Developer ID manual signing, hardened runtime on.
+- Team `<TEAM_ID>`, Developer ID manual signing, hardened runtime on.

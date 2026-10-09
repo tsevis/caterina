@@ -12,7 +12,7 @@ AboutView.swift`, `nino/App/project.yml`, `nino/Package.swift`,
 
 Toolchain on this machine, verified: Swift 6.2.4 (Xcode 26.3), xcodegen at
 `/opt/homebrew/bin/xcodegen`, no swiftlint. Deployment target macOS 15.0,
-language mode 6, team TN899J6HRF.
+language mode 6, team <TEAM_ID>.
 
 ## 1. Shape
 

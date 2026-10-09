@@ -16,12 +16,16 @@
 #   --no-dmg     sign and notarize the .app only; skip DMG packaging
 #   --sign-only  sign and package, but stop before submitting to Apple
 #
+# Environment:
+#   APPLE_TEAM_ID  your Apple Developer team ID (required; it is part of the
+#                  Developer ID signing identity name)
+#
 # The source .app is never modified. A signed copy is written to
 # <app-dir>/signed/ alongside the notarized, stapled DMG.
 
 set -euo pipefail
 
-readonly SIGN_ID="Developer ID Application: CHARALAMPOS TSEVIS (TN899J6HRF)"
+# SIGN_ID is built in the preflight checks below, from APPLE_TEAM_ID.
 readonly NOTARY_PROFILE="crewlistr-notary"
 readonly NOTARY_TIMEOUT="30m"
 
@@ -64,6 +68,10 @@ if [ -n "$ENTITLEMENTS_FILE" ]; then
 fi
 
 # ------------------------------------------------------- preflight checks
+
+[ -n "${APPLE_TEAM_ID:-}" ] \
+  || die "APPLE_TEAM_ID is not set: export your Apple Developer team ID first"
+readonly SIGN_ID="Developer ID Application: CHARALAMPOS TSEVIS (${APPLE_TEAM_ID})"
 
 security find-identity -v -p codesigning 2>/dev/null | grep -qF "$SIGN_ID" \
   || die "signing identity not found in keychain: $SIGN_ID"
