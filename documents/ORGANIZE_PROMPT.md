@@ -1,7 +1,7 @@
 # Caterina — build the Organize tab (Phase 3)
 
 Paste everything below the line as the opening message of a fresh Claude Code
-session with working directory `/Users/tsevis/AI/ClaudeCode/FlickrDownloader`.
+session with working directory `~/AI/ClaudeCode/FlickrDownloader`.
 
 ---
 

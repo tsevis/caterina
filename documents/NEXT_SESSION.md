@@ -1,7 +1,7 @@
 # Caterina (formerly FlickrDownloader) — continuation prompt
 
 Paste everything below as the opening message of a fresh Claude Code session
-with working directory `/Users/tsevis/AI/ClaudeCode/FlickrDownloader`.
+with working directory `~/AI/ClaudeCode/FlickrDownloader`.
 
 ---
 
@@ -10,8 +10,8 @@ app that bulk-downloads photos from Flickr. It is built, tested, signed,
 notarised and installed in `/Applications`. Your job is to finish the parts
 that could not be verified, not to rebuild what works.
 
-Working directory: `/Users/tsevis/AI/ClaudeCode/FlickrDownloader`
-Reference implementation (PyQt6, read-only): `/Users/tsevis/AI/ClaudeCode/FDownloadr`
+Working directory: `~/AI/ClaudeCode/FlickrDownloader`
+Reference implementation (PyQt6, read-only): `~/AI/ClaudeCode/FDownloadr`
 
 ## Caterina — the direction since 2026-09-13
 
