@@ -49,13 +49,12 @@ public final class OrganizeModel {
         case paused(batchID: String, message: String)
     }
 
-    nonisolated static let pageSize = 600
-
     // MARK: Finding
 
     public private(set) var scope: OrganizeScope = .all
+    /// What the person picked in the Sort menu; nil until they do.
+    var chosenOrder: LibraryOrder?
     public internal(set) var photos: [LibraryPhoto] = []
-    public internal(set) var canLoadMore = false
     public private(set) var isReadingNotInAlbum = false
     public private(set) var notInAlbumReadAt: Date?
     public private(set) var tags: [TagCount] = []
@@ -117,6 +116,7 @@ public final class OrganizeModel {
         } catch {
             problem = "Could not read the library copy: \(Self.message(error))"
         }
+        chosenOrder = readChosenOrder()
         reloadPhotos()
         refreshIndexes()
         refreshActivity()
@@ -146,17 +146,6 @@ public final class OrganizeModel {
         await readNotInAlbum(generation: generation)
     }
 
-    public func loadMore() {
-        guard !isRunning else { return }
-        do {
-            let more = try store.photos(scope.filter, order: scope.order, limit: Self.pageSize, offset: photos.count)
-            photos += more
-            canLoadMore = more.count == Self.pageSize
-        } catch {
-            problem = "Could not read the library copy: \(Self.message(error))"
-        }
-    }
-
     public func count(of scope: OrganizeScope) -> Int? { counts[scope] }
 
     /// The library copy changed underneath: a sync finished.
@@ -182,17 +171,15 @@ public final class OrganizeModel {
         }
     }
 
-    /// As many photos as were showing, so a batch or sync does not throw
-    /// away what Load More brought in.
+    /// Everything in the view, all at once. The grid is lazy, so only the tiles
+    /// on screen are drawn.
     func reloadPhotos() {
-        let shown = max(Self.pageSize, photos.count)
         if scope.albumID != nil {
             showAlbumPhotos()
             return
         }
         do {
-            photos = try store.photos(scope.filter, order: scope.order, limit: shown, offset: 0)
-            canLoadMore = photos.count == shown
+            photos = try store.photos(scope.filter, order: order)
             selection = selection.keeping(to: photos.map(\.id))
         } catch {
             photos = []
@@ -217,6 +204,12 @@ public final class OrganizeModel {
 
     public func click(_ id: String, modifiers: ClickModifiers) {
         selection = selection.clicking(id, modifiers: modifiers, in: photos.map(\.id))
+    }
+
+    /// A click in the grid: on its own it ticks or unticks, because choosing
+    /// photos should not depend on knowing about ⌘. ⇧ still takes a range.
+    public func tap(_ id: String, modifiers: ClickModifiers) {
+        click(id, modifiers: modifiers.isEmpty ? [.command] : modifiers)
     }
 
     public func sweep(_ covered: Set<String>) {

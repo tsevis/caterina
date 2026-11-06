@@ -31,6 +31,19 @@ import FlickrKit
         }, profiles: known ?? profiles)
     }
 
+    // MARK: - Choosing photos
+
+    /// Choosing photos needs no modifier key: a click ticks, another unticks.
+    @Test func aPlainClickTicksAPhotoAndAnotherUnticksIt() async throws {
+        let (organize, _) = try await organize()
+        organize.clearSelection()
+        organize.tap("p1", modifiers: [])
+        organize.tap("p2", modifiers: [])
+        #expect(organize.selection.ids == ["p1", "p2"])
+        organize.tap("p1", modifiers: [])
+        #expect(organize.selection.ids == ["p2"])
+    }
+
     // MARK: - Reaching it
 
     @Test func aRightClickOutsideTheSelectionMeansThatOnePhoto() async throws {

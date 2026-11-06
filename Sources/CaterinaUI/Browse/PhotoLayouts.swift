@@ -132,7 +132,11 @@ struct PhotoTiles: View {
 struct BrowseTile: View {
     let item: BrowseItem
     let isSelected: Bool
+    /// Points, to ask Flickr for no more than can be shown.
+    var tileSize = Double.infinity
     @State private var image: NSImage?
+
+    private var address: String? { TileImage.address(of: item.photo, tileSize: tileSize) }
 
     var body: some View {
         Color.clear
@@ -158,9 +162,12 @@ struct BrowseTile: View {
             .accessibilityLabel(item.photo.title.isEmpty ? "Untitled" : item.photo.title)
             .accessibilityValue(item.figure)
             .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
-            .task(id: item.photo.id) {
-                guard let address = item.photo.mediumURL ?? item.photo.thumbnailURL else { return }
-                image = await ThumbnailStore.shared.image(for: address)
+            .task(id: address) {
+                guard let address else { return }
+                // A tile scrolled away cancels this and gets nothing back, which
+                // must not blank a picture it already has.
+                let loaded = await ThumbnailStore.shared.image(for: address)
+                if let loaded { image = loaded }
             }
     }
 }

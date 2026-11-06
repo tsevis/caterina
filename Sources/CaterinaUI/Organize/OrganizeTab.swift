@@ -87,7 +87,7 @@ struct OrganizeTab: View {
             Button {
                 organize.pendingGroupSubjects = organize.groupSubjectsForToolbar
             } label: {
-                Label("Add to Groups", systemImage: "person.3")
+                Label("Add to Groups", systemImage: "person.3").labelStyle(.titleAndIcon)
             }
             .disabled((organize.selection.isEmpty && organize.tray.isEmpty) || organize.isBusy)
             .keyboardShortcut("g", modifiers: [.command, .shift])
@@ -138,11 +138,8 @@ struct OrganizeContent: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Text(organize.scope.title).font(.title3.weight(.semibold)).lineLimit(1)
-                Text(organize.photos.count.formatted() + (organize.canLoadMore ? "+" : ""))
+                Text(organize.photos.count.formatted())
                     .monospacedDigit().foregroundStyle(Theme.inkSecondary)
-                if !organize.selection.isEmpty {
-                    Text("· \(organize.selection.count.formatted()) selected").foregroundStyle(Theme.inkSecondary)
-                }
                 Button(organize.selection.isEmpty ? "Select All" : "Select None") {
                     organize.selection.isEmpty ? organize.selectAll() : organize.clearSelection()
                 }
@@ -153,9 +150,10 @@ struct OrganizeContent: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(organize.viewCount == 0)
-                .help("Every photo in this view, including those not loaded yet")
+                .help("Every photo in this view")
                 if case let .tag(tag) = organize.scope { RemoveTagEverywhereButton(organize: organize, tag: tag) }
                 Spacer()
+                if organize.canSort { OrganizeSortMenu(organize: organize) }
                 if organize.scope.albumID != nil { AlbumActions(organize: organize) }
                 if organize.scope == .notInAlbum { NotInAlbumStatus(organize: organize) }
                 if let problem = organize.problem {
@@ -170,6 +168,8 @@ struct OrganizeContent: View {
                 ContentUnavailableView("No photos here", systemImage: organize.scope.systemImage,
                                        description: Text(emptyReason))
             } else {
+                OrganizeChoiceBar(organize: organize)
+                Divider()
                 OrganizeGrid(organize: organize)
             }
         }

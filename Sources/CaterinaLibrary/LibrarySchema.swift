@@ -307,8 +307,11 @@ enum LibrarySchema {
         case .newestTaken: "taken IS NULL, taken DESC, id"
         case .oldestTaken: "taken IS NULL, taken ASC, id"
         case .newestUploaded: "uploaded IS NULL, uploaded DESC, id"
+        case .oldestUploaded: "uploaded IS NULL, uploaded ASC, id"
         case .mostViewed: "views DESC, id"
         case .recentlyUpdated: "lastUpdated IS NULL, lastUpdated DESC, id"
+        // Untitled last: a run of blanks at the top would hide the alphabet.
+        case .title: "title = '', title COLLATE NOCASE, id"
         }
     }
 

@@ -412,14 +412,15 @@ actor FakeOrganizeFlickr: OrganizeFlickr {
         #expect(model.photos.map(\.id) == ["2"])
     }
 
-    /// After a batch, the grid keeps as many photos as were showing.
-    @Test func aReloadKeepsWhatWasLoaded() async throws {
-        let store = try library(OrganizeModel.pageSize + 5)
+    /// A view shows everything in it at once, and Select All means all of it.
+    @Test func everyPhotoInAViewShowsAtOnce() async throws {
+        let store = try library(1_250)
         let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store))
-        model.loadMore()
-        #expect(model.photos.count == OrganizeModel.pageSize + 5)
+        #expect(model.photos.count == 1_250)
+        model.selectAll()
+        #expect(model.selection.count == 1_250)
         model.libraryChanged()
-        #expect(model.photos.count == OrganizeModel.pageSize + 5)
+        #expect(model.photos.count == 1_250)
     }
 }
 
@@ -510,7 +511,7 @@ final class AccountBox: @unchecked Sendable {
     }
 
     @Test func theWholeViewGoesInTheTrayNotJustWhatIsLoaded() async throws {
-        let store = try library(OrganizeModel.pageSize + 150)
+        let store = try library(750)
         let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { "me" })
         await model.open(.tag("sea"))
         #expect(model.viewCount == 375)
@@ -525,10 +526,10 @@ final class AccountBox: @unchecked Sendable {
     }
 
     @Test func theWholeAllPhotosViewTooInItsOrder() async throws {
-        let store = try library(OrganizeModel.pageSize + 5)
+        let store = try library(605)
         let model = OrganizeModel(store: store, flickr: FakeOrganizeFlickr(store: store), accountID: { "me" })
         await model.addEntireViewToTray()
-        #expect(model.tray.count == OrganizeModel.pageSize + 5)
+        #expect(model.tray.count == 605)
         #expect(model.tray == model.photos.map(\.id) + model.tray.dropFirst(model.photos.count))
     }
 
@@ -545,7 +546,7 @@ final class AccountBox: @unchecked Sendable {
     /// Removing a tag everywhere touches only photos that carry it, in any
     /// spelling, leaves the tray alone, and says the cost first.
     @Test func aTagIsRemovedFromEveryPhotoThatHasIt() async throws {
-        let store = try library(OrganizeModel.pageSize + 150)
+        let store = try library(750)
         let flickr = FakeOrganizeFlickr(store: store)
         let model = OrganizeModel(store: store, flickr: flickr, accountID: { "me" })
         let kept = try #require(model.photos.first?.id)
