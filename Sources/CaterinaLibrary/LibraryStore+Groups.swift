@@ -75,6 +75,19 @@ extension LibraryStore {
 
     // MARK: - Group sets
 
+    /// The groups this account last chose to add photos to, most recent first.
+    /// An undone batch was a mistake, and an undo was not a choice of group.
+    public func recentGroupIDs(accountID: String, limit: Int) throws -> [String] {
+        try read { db in
+            try String.fetchAll(db, sql: """
+                SELECT e.groupID FROM groupEntry e JOIN editBatch b ON b.id = e.batchID
+                WHERE b.accountID = ? AND e.action = 'add' AND e.state = 'applied' AND b.undoes IS NULL
+                  AND NOT EXISTS (SELECT 1 FROM editBatch u WHERE u.undoes = b.id)
+                GROUP BY e.groupID ORDER BY MAX(b.createdAt) DESC LIMIT ?
+                """, arguments: [accountID, limit])
+        }
+    }
+
     public func saveGroupSet(named name: String, groupIDs: [String]) throws {
         let ids = String(decoding: try JSONEncoder().encode(groupIDs), as: UTF8.self)
         try write { db in

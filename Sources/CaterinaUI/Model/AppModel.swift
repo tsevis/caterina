@@ -413,11 +413,11 @@ public final class AppModel {
     /// error message with it, so a failed sign-in was silent. The view dismisses
     /// itself when it is actually finished.
     public func saveAPIKey(key: String, secret: String) throws {
-        var next = stored ?? StoredCredentials(apiKey: "", apiSecret: "")
-        next.apiKey = key.trimmed
-        next.apiSecret = secret.trimmed
+        let current = stored ?? StoredCredentials(apiKey: "", apiSecret: "")
+        let next = current.withAPIKey(key.trimmed, secret: secret.trimmed)
         try vault.save(next)
         stored = next
+        if current.isSignedIn && !next.isSignedIn { forgetAccount() }
         refreshClient()
     }
 
@@ -448,11 +448,15 @@ public final class AppModel {
             try vault.save(next)
             self.stored = next
         }
+        forgetAccount()
+        refreshClient()
+    }
+
+    private func forgetAccount() {
         account = nil
         accountID.set(nil)
         browse.reset()
         organize?.accountChanged()
-        refreshClient()
         // **Cancel first.** Pressing Reload on You and then signing out left a
         // request in flight whose reply repopulated the grid with the account's
         // photos *after* the account was gone. `begin` cancels the task and

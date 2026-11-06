@@ -23,6 +23,9 @@ public enum FlickrError: Error, Equatable, Sendable {
     /// The signed-in account has not allowed this yet. The fix is a trip to
     /// Flickr's approval page, not a retry.
     case permissionNeeded(FlickrPermission)
+    /// HTTP 401: Flickr would not accept this token, for the reason it gave.
+    /// Nothing was done, so whatever was being sent is safe to send again.
+    case signInRejected(String)
 
     /// Flickr codes that mean "try again", not "you asked for something wrong".
     ///
@@ -31,11 +34,28 @@ public enum FlickrError: Error, Equatable, Sendable {
     /// later.
     public static let transientCodes: Set<Int> = [105, 106, 111, 112, 201]
 
+    /// Whether a new token can cure this `oauth_problem`. Anything else would
+    /// bring the approval page straight back, however often it was approved.
+    public static func isTokenProblem(_ problem: String) -> Bool {
+        problem.hasPrefix("token_")
+    }
+
+    /// Only a token problem is cured by signing in again, so only that says so.
+    private static func rejection(_ problem: String) -> String {
+        if isTokenProblem(problem) {
+            return "Flickr did not accept this sign-in (\(problem)). Sign in again in Settings."
+        }
+        if problem == "timestamp_refused" {
+            return "Flickr refused the request because this Mac's clock looks wrong. Check the date and time."
+        }
+        return problem.isEmpty ? "Flickr refused the request (HTTP 401)." : "Flickr refused the request (\(problem))."
+    }
+
     public var isTransient: Bool {
         switch self {
         case let .api(_, _, transient): return transient
         case .transport, .busy: return true
-        case .malformedResponse, .invalidInput, .notFound, .permissionNeeded: return false
+        case .malformedResponse, .invalidInput, .notFound, .permissionNeeded, .signInRejected: return false
         }
     }
 
@@ -49,6 +69,7 @@ public enum FlickrError: Error, Equatable, Sendable {
         case let .notFound(detail): return detail
         case let .busy(detail): return detail
         case let .permissionNeeded(permission): return permission.reason
+        case let .signInRejected(problem): return Self.rejection(problem)
         }
     }
 }

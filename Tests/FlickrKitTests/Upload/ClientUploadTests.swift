@@ -90,3 +90,84 @@ final class Fractions: @unchecked Sendable {
     var values: [Double] { lock.withLock { stored } }
     func add(_ value: Double) { lock.withLock { stored.append(value) } }
 }
+
+/// A 401 means Flickr refused the token before taking anything: never busy,
+/// never a retry, and the photo is safe to send again once it is approved.
+@Suite struct RejectedTokenTests {
+
+    private func client(_ transport: ScriptedTransport) -> FlickrClient {
+        FlickrClient(credentials: Fixtures.credentials, permission: .write, transport: transport,
+                     budget: .unspaced, sleep: SleepRecorder().sleep)
+    }
+
+    @Test func anHTTP401ReadsAsARejectedSignInNamingTheProblem() {
+        let error = URLSessionTransport.failure(status: 401, body: Data("oauth_problem=token_rejected".utf8))
+        #expect(error == .signInRejected("token_rejected"))
+        #expect(error.isTransient == false)
+    }
+
+    @Test func otherStatusesStayTransient() {
+        #expect(URLSessionTransport.failure(status: 502, body: Data()).isTransient)
+    }
+
+    @Test func anUploadRefusedWith401AsksForApprovalInsteadOfRetrying() async throws {
+        let transport = ScriptedTransport([.failure(.signInRejected("token_rejected"))])
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("caterina-rejected-\(UUID().uuidString).jpg")
+        try Data([0xFF]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        await #expect(throws: FlickrError.permissionNeeded(.write)) {
+            _ = try await client(transport).upload(file: file, metadata: UploadMetadata())
+        }
+        #expect(await transport.callCount == 1)
+    }
+
+    /// Approving issues a new token, which cannot cure a bad signature: the
+    /// sheet would come back after every approval, and the reason would be lost.
+    @Test func aBadSignatureOnAnUploadKeepsItsReasonInsteadOfAskingForApproval() async throws {
+        let transport = ScriptedTransport([.failure(.signInRejected("signature_invalid"))])
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("caterina-signature-\(UUID().uuidString).jpg")
+        try Data([0xFF]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        await #expect(throws: FlickrError.signInRejected("signature_invalid")) {
+            _ = try await client(transport).upload(file: file, metadata: UploadMetadata())
+        }
+    }
+
+    @Test func aBadSignatureOnAWriteKeepsItsReasonToo() async throws {
+        let transport = ScriptedTransport([.failure(.signInRejected("signature_invalid"))])
+        let write = FlickrWrite(method: "flickr.photos.setTags", arguments: ["photo_id": "1", "tags": "a"],
+                                repeatable: true)
+        await #expect(throws: FlickrError.signInRejected("signature_invalid")) {
+            _ = try await client(transport).perform(write)
+        }
+    }
+
+    /// Files already sent, token revoked while waiting: this has to reach the
+    /// same approval sheet, or the batch sits paused with nothing to press.
+    @Test func checkingTicketsWithARejectedTokenAsksForApproval() async throws {
+        let transport = ScriptedTransport([.failure(.signInRejected("token_rejected"))])
+        await #expect(throws: FlickrError.permissionNeeded(.write)) {
+            _ = try await client(transport).checkTickets(["1"])
+        }
+    }
+
+    /// Only a token problem is cured by signing in again.
+    @Test func theMessageNamesTheCureThatFits() {
+        #expect(FlickrError.signInRejected("token_rejected").message.contains("Sign in again"))
+        #expect(FlickrError.signInRejected("timestamp_refused").message.contains("clock"))
+    }
+
+    @Test func aWriteRefusedWith401AsksForApprovalToo() async throws {
+        let transport = ScriptedTransport([.failure(.signInRejected("token_rejected"))])
+        let write = FlickrWrite(method: "flickr.photos.setTags", arguments: ["photo_id": "1", "tags": "a"],
+                                repeatable: true)
+        await #expect(throws: FlickrError.permissionNeeded(write.permission)) {
+            _ = try await client(transport).perform(write)
+        }
+        #expect(await transport.callCount == 1)
+    }
+}

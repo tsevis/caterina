@@ -3,17 +3,19 @@ import SwiftUI
 import CaterinaLibrary
 import FlickrKit
 
-/// Send the tray to many groups: find them, choose how, see what will
-/// happen in each, then share.
+/// Add photos to groups: tick the groups, see what will happen in each, press
+/// the button. Your usual groups come first and rules load by themselves.
 struct GroupShareSheet: View {
     @Bindable var share: GroupShareModel
-    let onDone: () -> Void
+    let onClose: () -> Void
+    let onAdded: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Share to Groups").font(.title2.weight(.semibold))
-                Text("\(share.organize.tray.count.formatted()) photos in the tray").foregroundStyle(Theme.inkSecondary)
+                Text("Add to Groups").font(.title2.weight(.semibold))
+                Text(OrganizeModel.count(share.subjects.count)).foregroundStyle(Theme.inkSecondary)
+                SubjectStrip(subjects: share.subjects).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] }
                 Spacer()
                 if share.isWorking { ProgressView().controlSize(.small) }
                 if let problem = share.problem {
@@ -24,11 +26,34 @@ struct GroupShareSheet: View {
             Divider()
             HSplitView {
                 GroupFinder(share: share).frame(minWidth: 380)
-                SharePlanPanel(share: share, onDone: onDone).frame(minWidth: 380)
+                SharePlanPanel(share: share, onAdded: onAdded, onClose: onClose).frame(minWidth: 380)
             }
         }
         .frame(minWidth: 860, idealWidth: 980, minHeight: 600, idealHeight: 680)
-        .task { await share.load() }
+        .task {
+            await share.load()
+            await share.readRulesQuietly()
+        }
+    }
+}
+
+/// The photos going, so nobody adds the wrong ones. Just-uploaded photos have
+/// no thumbnail yet, and the count beside this says how many.
+private struct SubjectStrip: View {
+    private static let shown = 8
+    let subjects: [ShareSubject]
+
+    var body: some View {
+        let pictured = subjects.filter { $0.thumbnailURL != nil }
+        HStack(spacing: 4) {
+            ForEach(pictured.prefix(Self.shown)) { subject in
+                RowThumbnail(address: subject.thumbnailURL, size: 36).help(subject.title)
+            }
+            if pictured.count > Self.shown {
+                Text("+\((pictured.count - Self.shown).formatted())")
+                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
+            }
+        }
     }
 }
 
@@ -37,12 +62,14 @@ struct GroupFinder: View {
     @Bindable var share: GroupShareModel
     @State private var isNamingSet = false
     @State private var setName = ""
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 TextField("Search your \(share.groups.count.formatted()) groups", text: $share.query)
                     .textFieldStyle(.roundedBorder)
+                    .focused($isSearchFocused)
                 Picker("Sort", selection: $share.sort) {
                     ForEach(GroupShareModel.Sort.allCases) { Text($0.title).tag($0) }
                 }
@@ -61,23 +88,21 @@ struct GroupFinder: View {
                 Spacer()
                 setsMenu
             }
-            if share.readCost > 0 {
-                HStack {
-                    Text(share.filters.contains(where: { $0 != .admin })
-                         ? "Filters need each group's rules." : "Limits and rules are not read yet.")
-                        .foregroundStyle(Theme.inkSecondary)
-                    Button("Read Rules (\(share.readCost.formatted()) calls)") { Task { await share.readRules() } }
-                        .disabled(share.isWorking)
-                }
-                .font(.callout)
-            }
+            rulesStatus
             List {
                 ForEach(share.visibleGroups) { group in
                     GroupRow(group: group, profile: share.profiles[group.id],
-                             isChosen: share.chosen.contains(group.id)) { share.toggle(group.id) }
+                             isChosen: share.chosen.contains(group.id), isRecent: share.isRecent(group.id),
+                             isCheckingRules: share.rulesLeftToRead > 0) { share.toggle(group.id) }
                 }
             }
             .listStyle(.inset)
+            .overlay {
+                if share.visibleGroups.isEmpty && !share.isWorking {
+                    ContentUnavailableView("No groups to show", systemImage: "magnifyingglass",
+                                           description: Text("Try another word, or turn off a filter."))
+                }
+            }
             HStack {
                 Button("Choose All Shown") { share.chooseVisible() }.disabled(share.visibleGroups.isEmpty)
                 Button("Clear") { share.clearChosen() }.disabled(share.chosen.isEmpty)
@@ -87,10 +112,34 @@ struct GroupFinder: View {
             .font(.callout)
         }
         .padding(14)
+        .onAppear { isSearchFocused = true }
         .alert("Save these groups as a set", isPresented: $isNamingSet) {
             TextField("Name", text: $setName)
             Button("Save") { share.saveSet(named: setName); setName = "" }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// Quiet while it works; a button only if it stopped short.
+    @ViewBuilder
+    private var rulesStatus: some View {
+        if share.rulesLeftToRead > 0 {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.mini)
+                Text("Checking each group's limits… \(share.rulesLeftToRead.formatted()) left")
+                    .foregroundStyle(Theme.inkSecondary)
+            }
+            .font(.callout)
+        } else if share.readCost > 0 && !share.isWorking {
+            HStack {
+                Text("Limits unknown for \(share.readCost.formatted()) \(share.readCost == 1 ? "group" : "groups").")
+                    .foregroundStyle(Theme.inkSecondary)
+                Button("Try Again") {
+                    share.clearProblem()
+                    Task { await share.readRulesQuietly() }
+                }
+            }
+            .font(.callout)
         }
     }
 
@@ -116,6 +165,8 @@ struct GroupRow: View {
     let group: AccountGroup
     let profile: GroupProfile?
     let isChosen: Bool
+    var isRecent = false
+    var isCheckingRules = false
     let toggle: () -> Void
 
     var body: some View {
@@ -138,6 +189,7 @@ struct GroupRow: View {
     @ViewBuilder
     private var badges: some View {
         HStack(spacing: 4) {
+            if isRecent { badge("You added photos here recently", "clock") }
             if group.isAdmin { badge("You run it", "person.crop.circle.badge.checkmark") }
             if let profile {
                 if profile.isModerated { badge("A moderator approves new photos", "hourglass") }
@@ -147,7 +199,7 @@ struct GroupRow: View {
                     .padding(.horizontal, 5).padding(.vertical, 1)
                     .background(Theme.well, in: Capsule())
             } else {
-                Text("Rules not read").font(.caption).foregroundStyle(Theme.inkSecondary)
+                Text(isCheckingRules ? "Checking…" : "Limits unknown").font(.caption).foregroundStyle(Theme.inkSecondary)
             }
         }
     }

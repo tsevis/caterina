@@ -221,26 +221,35 @@ public actor FlickrClient {
         guard credentials.token != nil else { throw FlickrError.permissionNeeded(.write) }
         guard permission >= .write else { throw FlickrError.permissionNeeded(.write) }
         let credentials = self.credentials
-        let data = try await withRetries(priority: .upload, retryingLostConnections: false,
-                                         validate: { _ = try UploadResponse.ticket(from: $0) }) { transport in
-            let upload = try UploadRequest.make(file: file, metadata: metadata, credentials: credentials)
-            defer { try? FileManager.default.removeItem(at: upload.body) }
-            return try await transport.upload(upload.request, fromFile: upload.body) { sent, total in
-                if total > 0 { progress(Double(sent) / Double(total)) }
+        do {
+            let data = try await withRetries(priority: .upload, retryingLostConnections: false,
+                                             validate: { _ = try UploadResponse.ticket(from: $0) }) { transport in
+                let upload = try UploadRequest.make(file: file, metadata: metadata, credentials: credentials)
+                defer { try? FileManager.default.removeItem(at: upload.body) }
+                return try await transport.upload(upload.request, fromFile: upload.body) { sent, total in
+                    if total > 0 { progress(Double(sent) / Double(total)) }
+                }
             }
+            return try UploadResponse.ticket(from: data)
+        } catch let FlickrError.signInRejected(problem) where FlickrError.isTokenProblem(problem) {
+            // The approval page issues a token that works; nothing was sent.
+            throw FlickrError.permissionNeeded(.write)
         }
-        return try UploadResponse.ticket(from: data)
     }
 
     /// Where each upload has got to, several tickets per call.
     public func checkTickets(_ tickets: [String]) async throws -> [String: TicketStatus] {
-        let data = try await send([
-            OAuthParameter(name: "method", value: "flickr.photos.upload.checkTickets"),
-            OAuthParameter(name: "tickets", value: tickets.joined(separator: ",")),
-            OAuthParameter(name: "format", value: "json"),
-            OAuthParameter(name: "nojsoncallback", value: "1"),
-        ], priority: .upload)
-        return try UploadResponse.tickets(from: data)
+        do {
+            let data = try await send([
+                OAuthParameter(name: "method", value: "flickr.photos.upload.checkTickets"),
+                OAuthParameter(name: "tickets", value: tickets.joined(separator: ",")),
+                OAuthParameter(name: "format", value: "json"),
+                OAuthParameter(name: "nojsoncallback", value: "1"),
+            ], priority: .upload)
+            return try UploadResponse.tickets(from: data)
+        } catch let FlickrError.signInRejected(problem) where FlickrError.isTokenProblem(problem) {
+            throw FlickrError.permissionNeeded(.write)
+        }
     }
 
     // MARK: - Writing
@@ -269,6 +278,8 @@ public actor FlickrClient {
             }
         } catch FlickrError.api(code: Self.insufficientPermissions, _, _) {
             // Revoked on flickr.com since this token was issued.
+            throw FlickrError.permissionNeeded(write.permission)
+        } catch let FlickrError.signInRejected(problem) where FlickrError.isTokenProblem(problem) {
             throw FlickrError.permissionNeeded(write.permission)
         }
     }

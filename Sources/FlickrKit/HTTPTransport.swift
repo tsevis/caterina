@@ -62,13 +62,22 @@ public struct URLSessionTransport: HTTPTransport {
         try await send(URLRequest(url: url))
     }
 
+    /// A non-2xx reply. A 401 is an answer about the token, not a lost
+    /// connection: retrying cannot help, and it must not leave an upload asking
+    /// whether the photo arrived.
+    static func failure(status: Int, body: Data) -> FlickrError {
+        guard status == 401 else { return .transport("Flickr answered HTTP \(status).") }
+        let fields = OAuthFlow.formEncoded(String(decoding: body, as: UTF8.self))
+        return .signInRejected(fields["oauth_problem"] ?? "")
+    }
+
     public func upload(_ request: URLRequest, fromFile file: URL,
                        progress: @escaping @Sendable (Int64, Int64) -> Void) async throws -> Data {
         do {
             let (data, response) = try await uploadSession.upload(
                 for: request, fromFile: file, delegate: UploadProgress(report: progress))
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                throw FlickrError.transport("Flickr answered HTTP \(http.statusCode).")
+                throw Self.failure(status: http.statusCode, body: data)
             }
             return data
         } catch let error as FlickrError {
@@ -82,7 +91,7 @@ public struct URLSessionTransport: HTTPTransport {
         do {
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                throw FlickrError.transport("Flickr answered HTTP \(http.statusCode).")
+                throw Self.failure(status: http.statusCode, body: data)
             }
             return data
         } catch let error as FlickrError {

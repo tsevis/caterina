@@ -140,6 +140,13 @@ public struct StoredCredentials: Sendable, Equatable, Codable {
                           permission: account.permission)
     }
 
+    /// With this key and secret. A token only works with the key it was issued
+    /// to, so a different key signs out rather than failing every call later.
+    public func withAPIKey(_ key: String, secret: String) -> StoredCredentials {
+        guard key != apiKey || secret != apiSecret else { return self }
+        return StoredCredentials(apiKey: key, apiSecret: secret)
+    }
+
     public func signedOut() -> StoredCredentials {
         StoredCredentials(apiKey: apiKey, apiSecret: apiSecret)
     }

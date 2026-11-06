@@ -201,6 +201,22 @@ import FlickrKit
         #expect(model.workspace[.you].status == .idle)
         #expect(!model.isSignedIn)
     }
+
+    /// A new key signs out, and has to clear as much as signing out does.
+    @Test func changingTheKeyClearsTheOldAccountsPhotos() async throws {
+        let store = MemoryStore(seeded: true)
+        try store.set("tok", for: "oauth-token")
+        let model = AppModel(vault: CredentialsVault(store: store),
+                             transport: FakeTransport(body: Fixtures.page(ids: ["1"])))
+        model.submit(.you)
+        try await settle(model, .you)
+        #expect(!model.workspace[.you].photos.isEmpty)
+
+        try model.saveAPIKey(key: "another-key", secret: "another-secret")
+
+        #expect(model.workspace[.you].photos.isEmpty)
+        #expect(!model.isSignedIn)
+    }
 }
 
 // MARK: - Doubles

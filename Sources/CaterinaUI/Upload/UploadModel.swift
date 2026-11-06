@@ -175,6 +175,13 @@ public final class UploadModel {
         phase = .editing
     }
 
+    /// What Flickr has finished processing, ready to go to groups.
+    public var uploadedSubjects: [ShareSubject] {
+        items.compactMap { item in
+            item.photoID.map { ShareSubject(uploaded: item.file, photoID: $0, title: item.metadata.title) }
+        }
+    }
+
     // MARK: - Private
 
     var batchAlbum: UploadBatch.AlbumChoice {

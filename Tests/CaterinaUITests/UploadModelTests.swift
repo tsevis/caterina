@@ -291,3 +291,18 @@ actor SlowUploader: PhotoUploader {
         #expect(image.size.height > 120)
     }
 }
+
+extension UploadModelTests {
+    @Test func onlyPhotosFlickrFinishedProcessingCanGoToGroups() async throws {
+        let folder = try folder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = try model(FakeUploader())
+        #expect(model.uploadedSubjects.isEmpty)
+
+        await model.add([folder])
+        await model.send()
+
+        #expect(model.uploadedSubjects.count == 3)
+        #expect(Set(model.uploadedSubjects.map(\.id)).count == 3)
+    }
+}

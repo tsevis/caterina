@@ -75,6 +75,10 @@ public final class OrganizeModel {
     /// Photo ids, in the order they went in. Kept across views.
     public internal(set) var tray: [String] = []
     public private(set) var trayPhotos: [LibraryPhoto] = []
+    /// Photos someone just asked to add to groups; the tab opens the sheet.
+    public var pendingGroupSubjects: [ShareSubject]?
+    /// Set when work started on another tab, so its report is what opens here.
+    public var prefersActivityPanel = false
 
     // MARK: Changing
 
@@ -225,6 +229,25 @@ public final class OrganizeModel {
 
     public func selectAll() { selection = selection.selectingAll(in: photos.map(\.id)) }
     public func clearSelection() { selection = selection.clearing() }
+
+    // MARK: - Groups
+
+    /// Right-clicking a photo in the selection means the selection; anywhere
+    /// else means that one photo. The selection and the tray stay as they were.
+    public func askToAddToGroups(clicked id: String) {
+        pendingGroupSubjects = selection.ids.contains(id)
+            ? selectedSubjects
+            : photos.filter { $0.id == id }.map { ShareSubject($0) }
+    }
+
+    /// The selection if there is one, otherwise the tray.
+    public var groupSubjectsForToolbar: [ShareSubject] {
+        selection.isEmpty ? trayPhotos.map { ShareSubject($0) } : selectedSubjects
+    }
+
+    private var selectedSubjects: [ShareSubject] {
+        photos.filter { selection.ids.contains($0.id) }.map { ShareSubject($0) }
+    }
 
     // MARK: - Tray
 

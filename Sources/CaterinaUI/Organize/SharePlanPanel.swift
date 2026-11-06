@@ -3,53 +3,40 @@ import SwiftUI
 import CaterinaLibrary
 import FlickrKit
 
-/// How to share, the preview per group, and the buttons.
+/// What will happen in each chosen group, and the button that does it. How
+/// photos are dealt out is there for those who want it, folded away.
 struct SharePlanPanel: View {
     @Bindable var share: GroupShareModel
-    let onDone: () -> Void
-    @State private var confirming: Confirmation?
-
-    private enum Confirmation: Identifiable {
-        case share, remove
-        var id: Self { self }
-    }
+    let onAdded: () -> Void
+    let onClose: () -> Void
+    @State private var isShowingOptions = false
+    @State private var isConfirmingRemoval = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("How to share").font(.headline)
-            Picker("", selection: $share.strategy) {
-                ForEach(GroupShareModel.Strategy.allCases) { strategy in
-                    VStack(alignment: .leading) {
-                        Text(strategy.title)
-                        Text(strategy.explanation).font(.caption).foregroundStyle(Theme.inkSecondary)
-                    }
-                    .tag(strategy)
-                }
-            }
-            .pickerStyle(.radioGroup)
-            .labelsHidden()
-            options
-            Divider()
             preview
             Spacer(minLength: 0)
+            DisclosureGroup("More Options", isExpanded: $isShowingOptions) { options }
+            Divider()
             buttons
         }
         .padding(14)
         .onChange(of: share.chosen) { _, _ in share.schedulePreview() }
-        .confirmationDialog(confirmTitle, isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
-                            presenting: confirming) { action in
-            switch action {
-            case .share: Button("Share") { run { await share.share() } }
-            case .remove: Button("Remove", role: .destructive) { run { await share.removeTrayFromChosen() } }
-            }
-        } message: { action in
-            Text(action == .share ? "Each group's report appears in Activity. You can undo it there."
-                                  : "Photos not in a group cost a call each and are reported as not there.")
+        .onChange(of: share.strategy) { _, _ in share.schedulePreview() }
+        .onChange(of: share.groupsPerPhoto) { _, _ in share.schedulePreview() }
+        .onChange(of: share.capPerGroup) { _, _ in share.schedulePreview() }
+        .onChange(of: share.skipsPhotosAlreadyInPools) { _, _ in share.schedulePreview() }
+        .confirmationDialog("Remove these photos from \(share.chosen.count) groups?",
+                            isPresented: $isConfirmingRemoval) {
+            Button("Remove", role: .destructive) { run { await share.removeFromChosen() } }
+        } message: {
+            Text("Photos not in a group cost a call each and are reported as not there.")
         }
     }
 
     private var options: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            StrategyPicker(selection: $share.strategy)
             if share.strategy == .bestFit {
                 Stepper("Up to \(share.groupsPerPhoto) groups per photo", value: $share.groupsPerPhoto, in: 1...20)
             }
@@ -60,22 +47,20 @@ struct SharePlanPanel: View {
                         value: Binding(get: { share.capPerGroup ?? 5 }, set: { share.capPerGroup = $0 }), in: 1...100)
                     .disabled(share.capPerGroup == nil)
             }
-            Toggle("Skip photos already in a group (\(share.organize.tray.count.formatted()) calls to check)",
+            Toggle("Skip photos already in a group (\(share.subjects.count.formatted()) calls to check)",
                    isOn: $share.skipsPhotosAlreadyInPools)
+            Button("Remove These Photos from Chosen Groups…") { isConfirmingRemoval = true }
+                .disabled(share.chosen.isEmpty || share.organize.isBusy)
         }
-        .onChange(of: share.strategy) { _, _ in share.schedulePreview() }
-        .onChange(of: share.groupsPerPhoto) { _, _ in share.schedulePreview() }
-        .onChange(of: share.capPerGroup) { _, _ in share.schedulePreview() }
-        .onChange(of: share.skipsPhotosAlreadyInPools) { _, _ in share.schedulePreview() }
+        .padding(.top, 6)
     }
 
     @ViewBuilder
     private var preview: some View {
         if share.chosen.isEmpty {
-            ContentUnavailableView("Choose groups", systemImage: "person.3",
-                                   description: Text("Search on the left, tick groups, or pick a saved set."))
+            ContentUnavailableView("Tick the groups you want", systemImage: "person.3",
+                                   description: Text("You will see here what goes into each one before anything is sent."))
         } else if let plan = share.plan {
-            Text(share.summary).font(.headline).monospacedDigit()
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(share.chosen, id: \.self) { groupID in
@@ -89,33 +74,54 @@ struct SharePlanPanel: View {
                     }
                 }
             }
+        } else if share.problem != nil {
+            Button("Try Again") { share.schedulePreview() }.disabled(share.isWorking)
         } else {
-            Button("Preview") { share.schedulePreview() }.disabled(share.isWorking)
+            ProgressView("Checking these groups…").frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
+    /// No confirmation to add: the button states exactly what it does and
+    /// Activity can undo it. ⌘↩, not Return, because Return is what ends a
+    /// search, and that must not post photos.
     private var buttons: some View {
         HStack {
-            Button("Remove Tray from Chosen Groups…") { confirming = .remove }
-                .disabled(share.chosen.isEmpty || share.organize.isBusy)
+            Text(share.summary).font(.callout).monospacedDigit().foregroundStyle(Theme.inkSecondary)
             Spacer()
-            Button("Close", action: onDone).keyboardShortcut(.cancelAction)
-            Button("Share…") { confirming = .share }
-                .disabled((share.plan?.assignments.isEmpty ?? true) || share.organize.isBusy)
-        }
-    }
-
-    private var confirmTitle: String {
-        switch confirming {
-        case .share: "Share: \(share.summary)?"
-        case .remove: "Remove the tray from \(share.chosen.count) groups?"
-        case nil: ""
+            Button("Close", action: onClose).keyboardShortcut(.cancelAction)
+            Button(share.actionTitle) {
+                onAdded()
+                Task { await share.share() }
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.return, modifiers: .command)
+            .help("You can undo this in Activity (⌘↩)")
+            .disabled((share.plan?.assignments.isEmpty ?? true) || share.organize.isBusy)
         }
     }
 
     private func run(_ action: @escaping () async -> Void) {
-        onDone()
+        onAdded()
         Task { await action() }
+    }
+}
+
+/// Every photo everywhere, spread out, or best fit.
+private struct StrategyPicker: View {
+    @Binding var selection: GroupShareModel.Strategy
+
+    var body: some View {
+        Picker("", selection: $selection) {
+            ForEach(GroupShareModel.Strategy.allCases) { strategy in
+                VStack(alignment: .leading) {
+                    Text(strategy.title)
+                    Text(strategy.explanation).font(.caption).foregroundStyle(Theme.inkSecondary)
+                }
+                .tag(strategy)
+            }
+        }
+        .pickerStyle(.radioGroup)
+        .labelsHidden()
     }
 }
 
@@ -130,7 +136,7 @@ struct PlanGroupRow: View {
             HStack {
                 Text(name).lineLimit(1)
                 Spacer()
-                Text("\(tally?.sending ?? 0) to send").monospacedDigit()
+                Text("\(tally?.sending ?? 0) will be added").monospacedDigit()
             }
             ForEach(grouped, id: \.reason) { item in
                 Text("\(item.count) skipped: \(item.reason.explanation)")

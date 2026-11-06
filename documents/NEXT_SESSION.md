@@ -125,6 +125,19 @@ unit tests; nothing has been sent to the real account yet.
   ignored), filters, sort, group sets, strategies (everywhere / spread /
   best fit K) with a cap and skip-already-in-pool, per-group preview,
   per-group report, undo. Remove tray from pools.
+* **Add to Groups** (2026-11-06) replaces the tray-only Share flow: right-click
+  in the grid, toolbar or ⇧⌘G (selection, else tray), tray button, or Add to
+  Groups… when an upload finishes. The sheet holds its own `subjects`, not the
+  tray. Rules load behind it at `.background`; groups last added to sort first
+  (`recentGroupIDs`); strategy, cap and removal fold under More Options. Adding
+  has no confirmation because the button states the counts and undo exists.
+  `documents/screenshots/groups.jpg` still shows the old sheet.
+* **HTTP 401 during approval** (2026-11-06): `requestTokenURL` signed with the
+  current token, so asking for write while signed in was refused however correct
+  the key was. It now always drops the token. A 401 is `signInRejected`, not a
+  transient transport error, and writes and uploads turn it into the approval
+  sheet. A changed key or secret signs out. **Not yet confirmed against live
+  Flickr.**
 * **Activity:** one list for all four batch kinds, progress, Stop, Resume,
   Flickr's reason per refusal, Undo. Batches record their account (v9);
   another account cannot resume or undo them.
