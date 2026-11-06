@@ -54,8 +54,10 @@ public enum OrganizeScope: Sendable, Hashable, Codable {
     var order: LibraryOrder {
         switch self {
         case .recentlyUpdated: .recentlyUpdated
-        case .postedMonth: .newestUploaded
-        default: .newestTaken
+        case .month: .newestTaken
+        // Like a photostream. Many new uploads have no date taken, and taken
+        // order would sink them below every dated photo.
+        default: .newestUploaded
         }
     }
 

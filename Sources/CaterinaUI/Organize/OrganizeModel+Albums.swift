@@ -51,7 +51,6 @@ extension OrganizeModel {
     func showAlbumPhotos() {
         do {
             photos = try store.photos(ids: albumOrder)
-            canLoadMore = false
             selection = selection.keeping(to: photos.map(\.id))
         } catch {
             problem = "Could not read the library copy: \(Self.message(error))"

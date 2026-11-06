@@ -4,8 +4,8 @@ import SwiftUI
 import CaterinaLibrary
 import FlickrKit
 
-/// Your photos as tiles, with the selection a Mac grid has: click, ⌘-click,
-/// ⇧-click, ⌘A, arrows, and a marquee swept from the background.
+/// Your photos as tiles. A click ticks or unticks; ⇧-click, ⌘A, arrows and a
+/// marquee swept from the background work as on any Mac grid.
 ///
 /// The sweep follows `PhotoGridView`'s hard-won rules: one coordinate space
 /// above both the tiles and the surface, and the viewport's height as a
@@ -30,6 +30,8 @@ struct OrganizeGrid: View {
                     .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
                     .coordinateSpace(name: Self.space)
                 }
+                // A new order starts from its beginning, not mid-way through.
+                .id(organize.order)
                 .onPreferenceChange(TileFramePreference.self) { frames = $0 }
                 .focusable()
                 .focusEffectDisabled()
@@ -54,20 +56,29 @@ struct OrganizeGrid: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: tileSize), spacing: 8)], spacing: 8) {
                 ForEach(organize.photos) { photo in
                     BrowseTile(item: BrowseItem(photo: photo, figure: organize.tray.contains(photo.id) ? "In tray" : ""),
-                               isSelected: organize.selection.ids.contains(photo.id))
+                               isSelected: organize.selection.ids.contains(photo.id), tileSize: tileSize)
                         .background(frameReader(photo.id))
                         // One tap handler: modifier gestures beside it ran two
                         // handlers per ⌘-click (see PhotoGridView).
-                        .onTapGesture { organize.click(photo.id, modifiers: Self.modifiers()) }
+                        .overlay(alignment: .topTrailing) {
+                            if organize.selection.ids.contains(photo.id) { tick }
+                        }
+                        .onTapGesture { organize.tap(photo.id, modifiers: Self.modifiers()) }
                         .contextMenu { menu(for: photo) }
                         .modifier(AlbumReordering(organize: organize, photoID: photo.id))
                 }
             }
-            if organize.canLoadMore {
-                Button("Load More") { organize.loadMore() }.disabled(organize.isBusy)
-            }
         }
         .padding(12)
+    }
+
+    private var tick: some View {
+        Image(systemName: "checkmark.circle.fill")
+            .font(.title2)
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(.white, Theme.mark)
+            .padding(6)
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder

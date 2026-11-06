@@ -82,8 +82,8 @@ public struct MonthCount: Sendable, Equatable, Hashable, Identifiable {
 }
 
 /// In what order.
-public enum LibraryOrder: Sendable, Equatable, Hashable, CaseIterable {
-    case newestTaken, oldestTaken, newestUploaded, mostViewed, recentlyUpdated
+public enum LibraryOrder: String, Sendable, Equatable, Hashable, CaseIterable {
+    case newestUploaded, oldestUploaded, newestTaken, oldestTaken, mostViewed, recentlyUpdated, title
 }
 
 public struct LibrarySyncState: Sendable, Equatable {

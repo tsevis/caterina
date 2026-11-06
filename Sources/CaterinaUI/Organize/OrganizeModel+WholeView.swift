@@ -21,7 +21,7 @@ extension OrganizeModel {
             ids = albumOrder
         } else {
             do {
-                ids = try store.photos(scope.filter, order: scope.order).map(\.id)
+                ids = try store.photos(scope.filter, order: order).map(\.id)
             } catch {
                 problem = "Could not read the view: \(Self.message(error))"
                 return
