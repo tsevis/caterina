@@ -48,12 +48,24 @@ public enum OAuthFlow {
 
     // MARK: - Step one
 
+    /// **Always without the current token**, signed in or not: asking for more
+    /// permission starts here too. Sending the old token answers HTTP 401
+    /// however correct the key and secret are.
     public static func requestTokenURL(credentials: OAuth1.Credentials,
-                                       callback: String = callbackURL) throws -> URL {
+                                       callback: String = callbackURL,
+                                       nonce: String = OAuth1.nonce(),
+                                       timestamp: Int = Int(Date().timeIntervalSince1970)) throws -> URL {
         try OAuth1.signedURL(
             method: "GET", url: requestTokenEndpoint,
             parameters: [OAuthParameter(name: "oauth_callback", value: callback)],
-            credentials: credentials)
+            credentials: credentials.withoutToken, nonce: nonce, timestamp: timestamp)
+    }
+
+    /// A non-2xx reply to a sign-in step. Flickr names the problem in the
+    /// body, and only that can say whether the key is what is wrong.
+    public static func refusal(status: Int, body: String) -> FlickrError {
+        if let problem = formEncoded(body)["oauth_problem"] { return problemError(problem) }
+        return .invalidInput("Flickr refused the sign-in (HTTP \(status)).")
     }
 
     public static func temporaryToken(from body: String) throws -> TemporaryToken {

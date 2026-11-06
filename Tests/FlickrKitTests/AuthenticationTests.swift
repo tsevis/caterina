@@ -281,3 +281,59 @@ final class InMemorySecretStore: SecretStore, @unchecked Sendable {
         values.removeValue(forKey: key)
     }
 }
+
+/// Asking for more permission while signed in: the request-token leg has to
+/// look like a first sign-in, or Flickr answers 401.
+@Suite struct SigningInAgainTests {
+
+    private let signedIn = OAuth1.Credentials(consumerKey: "key", consumerSecret: "secret",
+                                              token: "old-token", tokenSecret: "old-secret")
+
+    @Test func theRequestTokenCallDoesNotCarryTheOldToken() throws {
+        let query = try #require(try OAuthFlow.requestTokenURL(credentials: signedIn).query)
+        #expect(!query.contains("oauth_token"))
+    }
+
+    /// The signature key is `consumerSecret&tokenSecret`, and Flickr has no
+    /// token secret to check this leg with.
+    @Test func theRequestTokenCallIsNotSignedWithTheOldSecret() throws {
+        let nonce = "n"
+        let time = 1_700_000_000
+        let parameters = [OAuthParameter(name: "oauth_callback", value: OAuthFlow.callbackURL)]
+        let fresh = OAuth1.Credentials(consumerKey: "key", consumerSecret: "secret")
+        let expected = try OAuth1.signedURL(method: "GET", url: OAuthFlow.requestTokenEndpoint,
+                                            parameters: parameters, credentials: fresh,
+                                            nonce: nonce, timestamp: time)
+        let actual = try OAuthFlow.requestTokenURL(credentials: signedIn, nonce: nonce, timestamp: time)
+        #expect(actual == expected)
+    }
+
+    @Test func aNewKeyDropsTheTokenThatBelongedToTheOldOne() {
+        let stored = StoredCredentials(apiKey: "key", apiSecret: "secret", token: "t", tokenSecret: "s",
+                                       nsid: "1@N00", username: "me", permission: .write)
+        #expect(stored.withAPIKey("other", secret: "secret").isSignedIn == false)
+        #expect(stored.withAPIKey("key", secret: "other").isSignedIn == false)
+    }
+
+    /// Settings saves the form on every Sign In and Save, usually unchanged.
+    @Test func savingTheSameKeyKeepsTheSignIn() {
+        let stored = StoredCredentials(apiKey: "key", apiSecret: "secret", token: "t", tokenSecret: "s",
+                                       nsid: "1@N00", username: "me", permission: .write)
+        #expect(stored.withAPIKey("key", secret: "secret") == stored)
+    }
+}
+
+/// What a refusal says. Flickr's reply names the real problem, and the reply
+/// used to be thrown away.
+@Suite struct RefusedSignInTests {
+
+    @Test func aRefusedSignInReportsWhatFlickrSaid() {
+        let error = OAuthFlow.refusal(status: 401, body: "oauth_problem=token_rejected")
+        #expect(error.message.contains("token_rejected"))
+    }
+
+    @Test func aBadSignatureStillPointsAtTheSecret() {
+        let error = OAuthFlow.refusal(status: 401, body: "oauth_problem=signature_invalid")
+        #expect(error.message.contains("API secret"))
+    }
+}

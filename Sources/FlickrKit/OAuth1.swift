@@ -52,6 +52,12 @@ public enum OAuth1 {
             self.tokenSecret = tokenSecret
         }
 
+        /// The application alone, for the call that starts a sign-in. A token
+        /// left in would change the signing key to one Flickr cannot check.
+        public var withoutToken: Credentials {
+            Credentials(consumerKey: consumerKey, consumerSecret: consumerSecret)
+        }
+
         /// The same credentials with a token pair attached.
         public func authenticated(token: String, tokenSecret: String) -> Credentials {
             Credentials(consumerKey: consumerKey, consumerSecret: consumerSecret,

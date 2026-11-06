@@ -58,11 +58,7 @@ public enum FlickrSignIn {
                 throw FlickrError.malformedResponse("Flickr's reply was not readable text.")
             }
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                // A 401 here is almost always the signature, and the signature
-                // is almost always the API secret.
-                throw FlickrError.invalidInput(
-                    "Flickr refused the sign-in (HTTP \(http.statusCode)). "
-                    + "Check the API key and secret in Settings.")
+                throw OAuthFlow.refusal(status: http.statusCode, body: text)
             }
             return text
         } catch let error as FlickrError {
