@@ -62,6 +62,7 @@ struct UploadProgressList: View {
 /// Where the batch has got to, and what to do next.
 struct UploadStatusBar: View {
     let model: AppModel
+    let addToGroups: () -> Void
     @State private var askingPermission: FlickrPermission?
 
     private var uploads: UploadModel { model.uploads }
@@ -114,6 +115,9 @@ struct UploadStatusBar: View {
             Button("Resume") { Task { await uploads.resume() } }
         case .finished:
             Button("Upload More") { uploads.startOver() }
+            if !uploads.uploadedSubjects.isEmpty && model.organize != nil {
+                Button("Add to Groups…", action: addToGroups).buttonStyle(.borderedProminent)
+            }
         default:
             EmptyView()
         }

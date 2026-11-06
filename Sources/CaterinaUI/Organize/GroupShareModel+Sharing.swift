@@ -7,7 +7,7 @@ extension GroupShareModel {
 
     /// Work out what goes where, reading what the plan needs first.
     public func preview() async {
-        guard !chosen.isEmpty, !organize.trayPhotos.isEmpty else {
+        guard !chosen.isEmpty, !subjects.isEmpty else {
             setPlan(nil)
             return
         }
@@ -19,38 +19,45 @@ extension GroupShareModel {
         guard wanted == chosen else { return }
         let groups = chosen.compactMap { profiles[$0] }
         guard groups.count == chosen.count else { return }
-        let photos = organize.trayPhotos.map {
-            SharePhoto(id: $0.id, isVideo: $0.media == .video, hasLocation: $0.location != nil)
-        }
+        let photos = subjects.map(\.photo)
         let options = GroupSharePlanner.Options(strategy: plannerStrategy, capPerGroup: capPerGroup)
         setPlan(GroupSharePlanner.plan(photos: photos, groups: groups,
                                        pools: skipsPhotosAlreadyInPools ? poolsRead : [:], options: options))
     }
 
-    /// "12 shares to 4 groups · 12 calls".
+    /// "12 additions to 4 groups · 12 calls".
     public var summary: String {
         guard let plan else { return "" }
         let groups = Set(plan.assignments.map(\.groupID)).count
-        return "\(plan.assignments.count.formatted()) \(plan.assignments.count == 1 ? "share" : "shares") to "
+        return "\(plan.assignments.count.formatted()) \(plan.assignments.count == 1 ? "addition" : "additions") to "
             + "\(groups.formatted()) \(groups == 1 ? "group" : "groups") · \(plan.calls.formatted()) calls"
+    }
+
+    /// The button: exactly what pressing it does.
+    public var actionTitle: String {
+        guard let plan, !plan.assignments.isEmpty else { return "Add to Groups" }
+        let photos = Set(plan.assignments.map(\.photoID)).count
+        let groups = Set(plan.assignments.map(\.groupID)).count
+        return "Add \(photos.formatted()) \(photos == 1 ? "Photo" : "Photos") to "
+            + "\(groups.formatted()) \(groups == 1 ? "Group" : "Groups")"
     }
 
     public func share() async {
         guard let plan, !plan.assignments.isEmpty else { return }
         let pairs = plan.assignments.map { GroupPair(photoID: $0.photoID, groupID: $0.groupID) }
         let groups = Set(pairs.map(\.groupID)).count
-        await organize.runGroupBatch(title: "Share \(OrganizeModel.count(Set(pairs.map(\.photoID)).count)) "
+        await organize.runGroupBatch(title: "Add \(OrganizeModel.count(Set(pairs.map(\.photoID)).count)) "
                                         + "to \(groups) \(groups == 1 ? "group" : "groups")") { title, store, owner in
             try store.createGroupBatch(title: title, adding: pairs, accountID: owner)
         }
     }
 
-    /// Every tray photo out of every chosen pool; photos not there cost a
-    /// call and are reported as not in the pool.
-    public func removeTrayFromChosen() async {
-        let pairs = chosen.flatMap { group in organize.tray.map { GroupPair(photoID: $0, groupID: group) } }
+    /// Every one of these photos out of every chosen pool; photos not there
+    /// cost a call and are reported as not in the pool.
+    public func removeFromChosen() async {
+        let pairs = chosen.flatMap { group in subjects.map { GroupPair(photoID: $0.id, groupID: group) } }
         guard !pairs.isEmpty else { return }
-        await organize.runGroupBatch(title: "Remove \(OrganizeModel.count(organize.tray.count)) from "
+        await organize.runGroupBatch(title: "Remove \(OrganizeModel.count(subjects.count)) from "
                                         + "\(chosen.count) \(chosen.count == 1 ? "group" : "groups")") { title, store, owner in
             try store.createGroupBatch(title: title, removing: pairs, accountID: owner)
         }

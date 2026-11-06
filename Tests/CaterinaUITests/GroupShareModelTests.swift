@@ -10,7 +10,10 @@ actor FakeGroupDirectory: GroupDirectory {
     let groups: [AccountGroup]
     let profiles: [String: GroupProfile]
     let pools: [String: [String]]
+    /// Replies that override `profiles`, per group, or "*" for every group.
+    var failures: [String: FlickrError] = [:]
     private(set) var profileReads: [String] = []
+    private(set) var profilePriorities: Set<CallPriority> = []
     private(set) var poolReads: [String] = []
 
     init(groups: [AccountGroup], profiles: [GroupProfile], pools: [String: [String]] = [:]) {
@@ -22,9 +25,12 @@ actor FakeGroupDirectory: GroupDirectory {
     func groups(of userID: String) async throws -> [AccountGroup] { groups }
     func groupProfile(id: String, priority: CallPriority) async throws -> GroupProfile {
         profileReads.append(id)
+        profilePriorities.insert(priority)
+        if let failure = failures[id] ?? failures["*"] { throw failure }
         guard let profile = profiles[id] else { throw FlickrError.api(code: 1, message: "Group not found", transient: false) }
         return profile
     }
+    func failing(_ failures: [String: FlickrError]) { self.failures = failures }
     func poolIDs(photoID: String, priority: CallPriority) async throws -> [String] {
         poolReads.append(photoID)
         return pools[photoID] ?? []
@@ -89,11 +95,11 @@ actor FakeGroupDirectory: GroupDirectory {
     @Test func rulesAreReadForVisibleGroupsAndFilterOnThem() async throws {
         let (model, _, directory, _) = try await setUp()
         #expect(model.readCost == 4)
-        await model.readRules()
+        await model.readRulesQuietly()
         #expect(await directory.profileReads.sorted() == ["a", "f", "m", "s"])
         model.filters = [.acceptsVideos, .unmoderated]
         #expect(model.visibleGroups.map(\.id) == ["f", "s"])
-        await model.readRules()
+        await model.readRulesQuietly()
         #expect(await directory.profileReads.count == 4)
         #expect(model.readCost == 0)
     }
@@ -107,7 +113,7 @@ actor FakeGroupDirectory: GroupDirectory {
         let plan = try #require(model.plan)
         #expect(plan.tally["s"] == GroupSharePlan.Tally(sending: 1, skipped: 2))
         #expect(plan.tally["a"] == GroupSharePlan.Tally(sending: 2, skipped: 1))
-        #expect(model.summary == "3 shares to 2 groups · 3 calls")
+        #expect(model.summary == "3 additions to 2 groups · 3 calls")
     }
 
     @Test func spreadAndBestFitAreChoices() async throws {
@@ -157,7 +163,7 @@ actor FakeGroupDirectory: GroupDirectory {
     @Test func theTrayCanBeTakenOutOfChosenPools() async throws {
         let (model, _, _, flickr) = try await setUp()
         model.toggle("m")
-        await model.removeTrayFromChosen()
+        await model.removeFromChosen()
         #expect(await flickr.sent.map(\.method) == Array(repeating: "flickr.groups.pools.remove", count: 3))
     }
 }
@@ -177,7 +183,7 @@ actor FakeGroupDirectory: GroupDirectory {
             AccountGroup(id: "c", name: "Gamma", members: 20, photos: 900, isAdmin: false)], profiles: profiles)
         let model = GroupShareModel(organize: organize, directory: directory)
         await model.load()
-        await model.readRules()
+        await model.readRulesQuietly()
         return model
     }
 

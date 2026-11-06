@@ -62,7 +62,7 @@ struct TrayPanel: View {
                         TrayAlbumSection(organize: organize)
                         Divider()
                         Text("Groups").font(.subheadline.weight(.semibold))
-                        Button("Share to Groups…", action: shareToGroups)
+                        Button("Add Tray to Groups…", action: shareToGroups)
                         .disabled(organize.isBusy)
                     }
                     .padding(14)

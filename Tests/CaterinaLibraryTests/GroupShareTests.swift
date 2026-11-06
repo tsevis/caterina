@@ -214,3 +214,66 @@ actor FakePools: GroupPoolWriter {
         #expect(try store.groupProfiles(ids: ["g"], freshAfter: Date(timeIntervalSince1970: 0)).isEmpty)
     }
 }
+
+/// "Recently used" has to mean photos this account really put in that group.
+@Suite struct RecentGroupsTests {
+
+    private func batch(_ store: LibraryStore, group: String, account: String = "me", at time: TimeInterval,
+                       outcome: GroupShareOutcome = .added) throws {
+        let batch = try store.createGroupBatch(title: "t", adding: [GroupPair(photoID: "1", groupID: group)],
+                                               accountID: account, now: Date(timeIntervalSince1970: time))
+        for entry in try store.groupEntries(in: batch.id) { try store.recordGroup(entry, outcome) }
+    }
+
+    @Test func theMostRecentComesFirst() throws {
+        let store = try LibraryStore.inMemory()
+        try batch(store, group: "old", at: 1)
+        try batch(store, group: "new", at: 2)
+        #expect(try store.recentGroupIDs(accountID: "me", limit: 5) == ["new", "old"])
+    }
+
+    @Test func anotherAccountsGroupsAreNotMine() throws {
+        let store = try LibraryStore.inMemory()
+        try batch(store, group: "theirs", account: "them", at: 1)
+        #expect(try store.recentGroupIDs(accountID: "me", limit: 5).isEmpty)
+    }
+
+    @Test func aGroupThatRefusedThePhotoIsNotRecent() throws {
+        let store = try LibraryStore.inMemory()
+        try batch(store, group: "closed", at: 1, outcome: .refused(.poolDisabled))
+        #expect(try store.recentGroupIDs(accountID: "me", limit: 5).isEmpty)
+    }
+
+    /// Added by mistake and undone: that group must not become the easiest one
+    /// to add to again.
+    @Test func anUndoneAddIsNotRecent() throws {
+        let store = try LibraryStore.inMemory()
+        let pair = GroupPair(photoID: "1", groupID: "wrong")
+        let added = try store.createGroupBatch(title: "t", adding: [pair], accountID: "me",
+                                               now: Date(timeIntervalSince1970: 1))
+        for entry in try store.groupEntries(in: added.id) { try store.recordGroup(entry, .added) }
+        _ = try store.createGroupBatch(title: "undo", removing: [pair], accountID: "me", undoes: added.id,
+                                       now: Date(timeIntervalSince1970: 2))
+        #expect(try store.recentGroupIDs(accountID: "me", limit: 5).isEmpty)
+    }
+
+    /// Undoing a removal adds photos back without anyone choosing that group.
+    @Test func putBackByAnUndoIsNotRecent() throws {
+        let store = try LibraryStore.inMemory()
+        let pair = GroupPair(photoID: "1", groupID: "restored")
+        let removed = try store.createGroupBatch(title: "t", removing: [pair], accountID: "me",
+                                                 now: Date(timeIntervalSince1970: 1))
+        let undo = try store.createGroupBatch(title: "undo", adding: [pair], accountID: "me", undoes: removed.id,
+                                              now: Date(timeIntervalSince1970: 2))
+        for entry in try store.groupEntries(in: undo.id) { try store.recordGroup(entry, .added) }
+        #expect(try store.recentGroupIDs(accountID: "me", limit: 5).isEmpty)
+    }
+
+    @Test func takingPhotosOutOfAGroupDoesNotMakeItRecent() throws {
+        let store = try LibraryStore.inMemory()
+        let batch = try store.createGroupBatch(title: "t", removing: [GroupPair(photoID: "1", groupID: "gone")],
+                                               accountID: "me", now: Date(timeIntervalSince1970: 1))
+        for entry in try store.groupEntries(in: batch.id) { try store.recordGroup(entry, .removed) }
+        #expect(try store.recentGroupIDs(accountID: "me", limit: 5).isEmpty)
+    }
+}

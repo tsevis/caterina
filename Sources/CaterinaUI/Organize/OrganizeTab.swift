@@ -48,7 +48,21 @@ struct OrganizeTab: View {
             }
             .modifier(UndoRequestDialog(organize: organize))
             .sheet(item: $groupShare) { share in
-                GroupShareSheet(share: share) { groupShare = nil; panel = .activity }
+                GroupShareSheet(share: share, onClose: { groupShare = nil }, onAdded: {
+                    groupShare = nil
+                    showActivity()
+                })
+            }
+            .onChange(of: organize.pendingGroupSubjects) { _, subjects in
+                guard let subjects else { return }
+                organize.pendingGroupSubjects = nil
+                guard !subjects.isEmpty else { return }
+                groupShare = GroupShareModel(organize: organize, directory: model.groupDirectory, subjects: subjects)
+            }
+            .onChange(of: organize.prefersActivityPanel, initial: true) { _, prefers in
+                guard prefers else { return }
+                organize.prefersActivityPanel = false
+                showActivity()
             }
             .sheet(item: $permissionRequest) { request in
                 PermissionRequestSheet(model: model, permission: request.permission) {
@@ -62,9 +76,23 @@ struct OrganizeTab: View {
         }
     }
 
+    private func showActivity() {
+        panel = .activity
+        isShowingPanel = true
+    }
+
     @ToolbarContentBuilder
     private func toolbar(_ organize: OrganizeModel) -> some ToolbarContent {
         ToolbarItemGroup {
+            Button {
+                organize.pendingGroupSubjects = organize.groupSubjectsForToolbar
+            } label: {
+                Label("Add to Groups", systemImage: "person.3")
+            }
+            .disabled((organize.selection.isEmpty && organize.tray.isEmpty) || organize.isBusy)
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .help("Add the selected photos, or the tray, to your groups (⇧⌘G)")
+
             Button {
                 organize.addSelectionToTray()
                 panel = .tray

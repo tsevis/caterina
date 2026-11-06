@@ -10,6 +10,7 @@ struct UploadTab: View {
     let model: AppModel
     @State private var isShowingSettings = true
     @State private var isTargeted = false
+    @State private var groupShare: GroupShareModel?
 
     private var uploads: UploadModel { model.uploads }
 
@@ -22,7 +23,15 @@ struct UploadTab: View {
                     return !urls.isEmpty
                 } isTargeted: { isTargeted = $0 }
                 .overlay { if isTargeted { dropHighlight } }
-            UploadStatusBar(model: model)
+            UploadStatusBar(model: model, addToGroups: addUploadedToGroups)
+        }
+        .sheet(item: $groupShare) { share in
+            GroupShareSheet(share: share, onClose: { groupShare = nil }, onAdded: {
+                groupShare = nil
+                // Progress and undo live in Activity.
+                model.organize?.prefersActivityPanel = true
+                model.tab = .organize
+            })
         }
         .inspector(isPresented: $isShowingSettings) {
             UploadSettingsPanel(uploads: uploads)
@@ -60,6 +69,12 @@ struct UploadTab: View {
         } else {
             UploadDraftTable(uploads: uploads)
         }
+    }
+
+    private func addUploadedToGroups() {
+        guard let organize = model.organize else { return }
+        groupShare = GroupShareModel(organize: organize, directory: model.groupDirectory,
+                                     subjects: uploads.uploadedSubjects)
     }
 
     private var dropHighlight: some View {

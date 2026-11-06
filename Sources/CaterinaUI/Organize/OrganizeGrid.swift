@@ -83,6 +83,12 @@ struct OrganizeGrid: View {
         if organize.tray.contains(photo.id) {
             Button("Remove from Tray") { organize.removeFromTray([photo.id]) }
         }
+        Divider()
+        Button(organize.selection.ids.contains(photo.id) && organize.selection.count > 1
+               ? "Add \(organize.selection.count) to Groups…" : "Add to Groups…") {
+            organize.askToAddToGroups(clicked: photo.id)
+        }
+        .disabled(organize.isBusy)
     }
 
     private func move(_ offset: Int) -> KeyPress.Result {

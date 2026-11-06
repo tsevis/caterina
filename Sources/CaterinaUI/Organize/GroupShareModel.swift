@@ -40,10 +40,11 @@ public final class GroupShareModel {
     }
 
     public enum Sort: String, CaseIterable, Identifiable, Sendable {
-        case name, members, poolSize, room
+        case recent, name, members, poolSize, room
         public var id: String { rawValue }
         public var title: String {
             switch self {
+            case .recent: "Recently used"
             case .name: "Name"
             case .members: "Members"
             case .poolSize: "Pool size"
@@ -73,31 +74,43 @@ public final class GroupShareModel {
 
     /// Throttles count down as people post, so rules are read again after this.
     nonisolated static let rulesLifetime: TimeInterval = 3600
+    nonisolated static let recentGroupsKept = 12
+    /// `groups.getInfo`'s "Group not found": about that group, not the account.
+    nonisolated static let groupNotFound = 1
 
     public private(set) var groups: [AccountGroup] = []
     public private(set) var profiles: [String: GroupProfile] = [:]
     public private(set) var sets: [GroupSet] = []
     public var query = ""
     public var filters: Set<Filter> = []
-    public var sort = Sort.name
+    public var sort = Sort.recent
     /// In the order chosen: spread deals in this order.
     public private(set) var chosen: [String] = []
-    public var strategy = Strategy.everywhere { didSet { plan = nil } }
-    public var groupsPerPhoto = 3 { didSet { plan = nil } }
-    public var capPerGroup: Int? { didSet { plan = nil } }
-    public var skipsPhotosAlreadyInPools = false { didSet { plan = nil } }
+    // Only a real change drops the plan: the views start a new preview when a
+    // value changes, so setting the same one would leave no plan and none coming.
+    public var strategy = Strategy.everywhere { didSet { if strategy != oldValue { plan = nil } } }
+    public var groupsPerPhoto = 3 { didSet { if groupsPerPhoto != oldValue { plan = nil } } }
+    public var capPerGroup: Int? { didSet { if capPerGroup != oldValue { plan = nil } } }
+    public var skipsPhotosAlreadyInPools = false { didSet { if skipsPhotosAlreadyInPools != oldValue { plan = nil } } }
     public private(set) var plan: GroupSharePlan?
     public private(set) var isWorking = false
+    /// Rules still being read behind the sheet; nothing waits for them.
+    public private(set) var rulesLeftToRead = 0
     public private(set) var problem: String?
 
     let organize: OrganizeModel
+    /// The photos this sheet was opened with. Fixed: what you saw is what goes.
+    public let subjects: [ShareSubject]
+    private var recentIDs: [String] = []
     private let directory: GroupDirectory
     private let now: @Sendable () -> Date
     private var pools: [String: Set<String>] = [:]
     private var previewTask: Task<Void, Never>?
 
-    public init(organize: OrganizeModel, directory: GroupDirectory, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(organize: OrganizeModel, directory: GroupDirectory, subjects: [ShareSubject]? = nil,
+                now: @escaping @Sendable () -> Date = { Date() }) {
         self.organize = organize
+        self.subjects = subjects ?? organize.trayPhotos.map { ShareSubject($0) }
         self.directory = directory
         self.now = now
     }
@@ -112,6 +125,34 @@ public final class GroupShareModel {
             let fresh = try organize.store.groupProfiles(ids: groups.map(\.id), freshAfter: now().addingTimeInterval(-Self.rulesLifetime))
             profiles = Dictionary(uniqueKeysWithValues: fresh.map { ($0.id, $0) })
             sets = try organize.store.groupSets()
+            recentIDs = try organize.store.recentGroupIDs(accountID: owner, limit: Self.recentGroupsKept)
+        }
+    }
+
+    /// Read every group's rules behind the sheet, in list order, so that nobody
+    /// has to ask for them. A reply about one group skips that group: its row
+    /// stays unknown, and choosing it reports the reason through the preview.
+    /// Anything else would fail for every group, so it stops and says why.
+    public func readRulesQuietly() async {
+        let missing = groups.sorted(by: order).map(\.id).filter { profiles[$0] == nil }
+        rulesLeftToRead = missing.count
+        defer { rulesLeftToRead = 0 }
+        for id in missing {
+            guard !Task.isCancelled else { return }
+            defer { rulesLeftToRead -= 1 }
+            guard profiles[id] == nil else { continue }
+            do {
+                let profile = try await directory.groupProfile(id: id, priority: .background)
+                try organize.store.saveGroupProfiles([profile], readAt: now())
+                profiles[id] = profile
+            } catch FlickrError.api(code: Self.groupNotFound, _, _), FlickrError.malformedResponse {
+                continue
+            } catch is CancellationError {
+                return
+            } catch {
+                if !Task.isCancelled { problem = "Could not check your groups' limits: \(OrganizeModel.message(error))" }
+                return
+            }
         }
     }
 
@@ -123,10 +164,6 @@ public final class GroupShareModel {
 
     /// Calls to read the rules of the visible groups not yet known.
     public var readCost: Int { visibleGroups.count { profiles[$0.id] == nil } }
-
-    public func readRules() async {
-        await readProfiles(visibleGroups.map(\.id))
-    }
 
     private func passesFilters(_ group: AccountGroup) -> Bool {
         filters.allSatisfy { filter in
@@ -144,6 +181,9 @@ public final class GroupShareModel {
     private func order(_ lhs: AccountGroup, _ rhs: AccountGroup) -> Bool {
         let byName = lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         switch sort {
+        case .recent:
+            let rank = { (group: AccountGroup) in self.recentIDs.firstIndex(of: group.id) ?? .max }
+            return rank(lhs) != rank(rhs) ? rank(lhs) < rank(rhs) : byName
         case .name: return byName
         case .members: return lhs.members != rhs.members ? lhs.members > rhs.members : byName
         case .poolSize: return lhs.photos != rhs.photos ? lhs.photos > rhs.photos : byName
@@ -161,18 +201,21 @@ public final class GroupShareModel {
     }
 
     public func chooseVisible() {
-        chosen += visibleGroups.map(\.id).filter { !chosen.contains($0) }
-        plan = nil
+        setChosen(chosen + visibleGroups.map(\.id).filter { !chosen.contains($0) })
     }
 
     public func clearChosen() {
-        chosen = []
-        plan = nil
+        setChosen([])
     }
 
     public func choose(set: GroupSet) {
         let known = Set(groups.map(\.id))
-        chosen = set.groupIDs.filter(known.contains)
+        setChosen(set.groupIDs.filter(known.contains))
+    }
+
+    private func setChosen(_ next: [String]) {
+        guard next != chosen else { return }
+        chosen = next
         plan = nil
     }
 
@@ -211,7 +254,7 @@ public final class GroupShareModel {
     }
 
     func readPools() async -> Bool {
-        let missing = organize.tray.filter { pools[$0] == nil }
+        let missing = subjects.map(\.id).filter { pools[$0] == nil }
         return await working {
             for id in missing {
                 try Task.checkCancellation()
@@ -238,6 +281,8 @@ public final class GroupShareModel {
     }
 
     func clearProblem() { problem = nil }
+
+    public func isRecent(_ groupID: String) -> Bool { recentIDs.contains(groupID) }
 
     /// One preview at a time: a newer choice cancels the one before.
     public func schedulePreview() {
