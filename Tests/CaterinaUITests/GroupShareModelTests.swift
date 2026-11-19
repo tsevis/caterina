@@ -137,6 +137,28 @@ actor FakeGroupDirectory: GroupDirectory {
         #expect(model.plan?.skipped.map(\.reason) == [.alreadyInPool])
     }
 
+    @Test func groupsSayHowManyOfThePhotosTheyAlreadyHold() async throws {
+        let (model, _, directory, _) = try await setUp(pools: ["p1": ["m", "s"], "p2": ["m"]])
+        #expect(model.photosAlreadyIn("m") == nil)
+        await model.readPoolsQuietly()
+        #expect(await directory.poolReads.sorted() == ["p1", "p2", "v1"])
+        #expect(model.photosAlreadyIn("m") == 2)
+        #expect(model.photosAlreadyIn("s") == 1)
+        #expect(model.photosAlreadyIn("a") == 0)
+        model.filters = [.alreadyIn]
+        #expect(model.visibleGroups.map(\.id).sorted() == ["m", "s"])
+    }
+
+    @Test func aBigTrayIsNotReadForItsGroupsUnlessAsked() async throws {
+        let (model, _, directory, _) = try await setUp()
+        let many = (0...GroupShareModel.poolsReadQuietly).map { ShareSubject(LibraryPhoto(id: "x\($0)", title: "")) }
+        let big = GroupShareModel(organize: model.organize, directory: directory, subjects: many)
+        await big.readPoolsQuietly()
+        #expect(await directory.poolReads.isEmpty)
+        await big.readPoolsQuietly(evenIfMany: true)
+        #expect(await directory.poolReads.count == many.count)
+    }
+
     @Test func sharingRunsTheBatchAndReportsPerGroup() async throws {
         let (model, organize, _, flickr) = try await setUp()
         model.toggle("a")
