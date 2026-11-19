@@ -19,10 +19,11 @@ extension FlickrClient: GroupDirectory {}
 public final class GroupShareModel {
 
     public enum Filter: String, CaseIterable, Identifiable, Sendable {
-        case hasRoom, acceptsVideos, unmoderated, admin
+        case hasRoom, acceptsVideos, unmoderated, admin, alreadyIn
         public var id: String { rawValue }
         public var help: String {
             switch self {
+            case .alreadyIn: "Groups that already have at least one of these photos"
             case .hasRoom: "Groups with room left for you now"
             case .acceptsVideos: "Groups that take videos"
             case .unmoderated: "Groups where photos appear without a moderator"
@@ -35,6 +36,7 @@ public final class GroupShareModel {
             case .acceptsVideos: "Videos"
             case .unmoderated: "Unmoderated"
             case .admin: "Yours"
+            case .alreadyIn: "Already In"
             }
         }
     }
@@ -77,6 +79,9 @@ public final class GroupShareModel {
     nonisolated static let recentGroupsKept = 12
     /// `groups.getInfo`'s "Group not found": about that group, not the account.
     nonisolated static let groupNotFound = 1
+    /// Up to this many photos, the groups they are in are read on opening.
+    /// Each photo is one call, so a bigger tray waits to be asked.
+    nonisolated public static let poolsReadQuietly = 50
 
     public private(set) var groups: [AccountGroup] = []
     public private(set) var profiles: [String: GroupProfile] = [:]
@@ -96,6 +101,8 @@ public final class GroupShareModel {
     public private(set) var isWorking = false
     /// Rules still being read behind the sheet; nothing waits for them.
     public private(set) var rulesLeftToRead = 0
+    /// Photos still being read for the groups they are in.
+    public private(set) var poolsLeftToRead = 0
     public private(set) var problem: String?
 
     let organize: OrganizeModel
@@ -156,6 +163,39 @@ public final class GroupShareModel {
         }
     }
 
+    /// Read which groups already hold each photo, so every row can say so.
+    /// A tray bigger than `poolsReadQuietly` is read only `evenIfMany`.
+    public func readPoolsQuietly(evenIfMany: Bool = false) async {
+        guard evenIfMany || subjects.count <= Self.poolsReadQuietly else { return }
+        let missing = subjects.map(\.id).filter { pools[$0] == nil }
+        poolsLeftToRead = missing.count
+        defer { poolsLeftToRead = 0 }
+        for id in missing {
+            guard !Task.isCancelled else { return }
+            defer { poolsLeftToRead -= 1 }
+            guard pools[id] == nil else { continue }
+            do {
+                pools[id] = Set(try await directory.poolIDs(photoID: id, priority: .background))
+            } catch is CancellationError {
+                return
+            } catch {
+                if !Task.isCancelled {
+                    problem = "Could not check which groups already have these photos: \(OrganizeModel.message(error))"
+                }
+                return
+            }
+        }
+    }
+
+    /// How many of these photos the group already holds; nil until any photo's groups are known.
+    public func photosAlreadyIn(_ groupID: String) -> Int? {
+        guard !pools.isEmpty else { return nil }
+        return subjects.count { pools[$0.id]?.contains(groupID) == true }
+    }
+
+    /// Photos whose groups are not known yet.
+    public var poolsUnread: Int { subjects.count { pools[$0.id] == nil } }
+
     // MARK: - Finding
 
     public var visibleGroups: [AccountGroup] {
@@ -168,12 +208,14 @@ public final class GroupShareModel {
     private func passesFilters(_ group: AccountGroup) -> Bool {
         filters.allSatisfy { filter in
             if filter == .admin { return group.isAdmin }
+            if filter == .alreadyIn { return (photosAlreadyIn(group.id) ?? 0) > 0 }
             guard let profile = profiles[group.id] else { return false }
             switch filter {
             case .hasRoom: return profile.throttle.available.map { $0 > 0 } ?? true
             case .acceptsVideos: return profile.restrictions.videos
             case .unmoderated: return !profile.isModerated
             case .admin: return group.isAdmin
+            case .alreadyIn: return (photosAlreadyIn(group.id) ?? 0) > 0
             }
         }
     }

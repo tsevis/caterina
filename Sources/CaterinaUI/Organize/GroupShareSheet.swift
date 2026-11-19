@@ -32,6 +32,7 @@ struct GroupShareSheet: View {
         .frame(minWidth: 860, idealWidth: 980, minHeight: 600, idealHeight: 680)
         .task {
             await share.load()
+            await share.readPoolsQuietly()
             await share.readRulesQuietly()
         }
     }
@@ -88,12 +89,15 @@ struct GroupFinder: View {
                 Spacer()
                 setsMenu
             }
+            poolsStatus
             rulesStatus
             List {
                 ForEach(share.visibleGroups) { group in
                     GroupRow(group: group, profile: share.profiles[group.id],
                              isChosen: share.chosen.contains(group.id), isRecent: share.isRecent(group.id),
-                             isCheckingRules: share.rulesLeftToRead > 0) { share.toggle(group.id) }
+                             isCheckingRules: share.rulesLeftToRead > 0,
+                             alreadyIn: share.photosAlreadyIn(group.id),
+                             photoCount: share.subjects.count) { share.toggle(group.id) }
                 }
             }
             .listStyle(.inset)
@@ -117,6 +121,26 @@ struct GroupFinder: View {
             TextField("Name", text: $setName)
             Button("Save") { share.saveSet(named: setName); setName = "" }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// Reading which groups already hold the photos; a button for a big tray.
+    @ViewBuilder
+    private var poolsStatus: some View {
+        if share.poolsLeftToRead > 0 {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.mini)
+                Text("Checking which groups already have \(share.subjects.count == 1 ? "this photo" : "these photos")… "
+                     + "\(share.poolsLeftToRead.formatted()) left")
+                    .foregroundStyle(Theme.inkSecondary)
+            }
+            .font(.callout)
+        } else if share.poolsUnread > 0 && !share.isWorking {
+            Button("Show Groups That Already Have Them (\(share.poolsUnread.formatted()) calls)") {
+                share.clearProblem()
+                Task { await share.readPoolsQuietly(evenIfMany: true) }
+            }
+            .font(.callout)
         }
     }
 
@@ -167,6 +191,9 @@ struct GroupRow: View {
     let isChosen: Bool
     var isRecent = false
     var isCheckingRules = false
+    /// How many of the photos it already holds; nil when not known.
+    var alreadyIn: Int?
+    var photoCount = 1
     let toggle: () -> Void
 
     var body: some View {
@@ -189,6 +216,7 @@ struct GroupRow: View {
     @ViewBuilder
     private var badges: some View {
         HStack(spacing: 4) {
+            if let alreadyIn, alreadyIn > 0 { alreadyInBadge(alreadyIn) }
             if isRecent { badge("You added photos here recently", "clock") }
             if group.isAdmin { badge("You run it", "person.crop.circle.badge.checkmark") }
             if let profile {
@@ -202,6 +230,16 @@ struct GroupRow: View {
                 Text(isCheckingRules ? "Checking…" : "Limits unknown").font(.caption).foregroundStyle(Theme.inkSecondary)
             }
         }
+    }
+
+    private func alreadyInBadge(_ count: Int) -> some View {
+        let text = count == photoCount ? "Already in" : "\(count) of \(photoCount) in"
+        return Label(text, systemImage: "checkmark.circle.fill")
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.green)
+            .help(count == photoCount
+                  ? (photoCount == 1 ? "This photo is already in this group" : "All these photos are already in this group")
+                  : "\(count) of these \(photoCount) photos are already in this group")
     }
 
     private func badge(_ help: String, _ image: String) -> some View {
