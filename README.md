@@ -20,8 +20,10 @@ interrupted batch resumes and a finished one can be undone.
   you select at the size you pick, with a `Credits.csv` beside it.
 * **Upload** — drop files and folders; titles, captions and keywords in the
   files come along; presets, albums, and a queue that survives quitting.
-* **Organize** — smart views (not in an album, untagged, no location, by
-  audience, licence, month, tag, album), search as you type, and batch edits:
+* **Organize** — every photo of a view at once, sorted by date posted, date
+  taken, views, last update or title; smart views (not in an album, untagged,
+  no location, by audience, licence, month, tag, album), search as you type,
+  a click to tick photos, and batch edits:
   titles and descriptions with patterns, tags (add, remove, replace, rename,
   or remove one everywhere), who can see and comment, safety and content
   type, licence, dates taken and posted, location on a map, rotation, people,
@@ -34,12 +36,17 @@ interrupted batch resumes and a finished one can be undone.
 
 ### Share to groups
 
+Open Add to Groups from anywhere: right-click in the grid, the toolbar,
+⇧⌘G, the tray, or when an upload finishes. The sheet shows the photos it was
+opened with, puts the groups you last added to first, and reads each group's
+limit by itself. Each group says whether it already has the photos — *Already
+in*, or *1 of 2 in* — and the *Already In* filter shows only those groups.
 Search your groups by any word of their names, filter by room left, videos,
-moderation or the groups you run, save choices as group sets, and pick how to
-share: every photo to every group, spread one group per photo, or best fit.
-The preview reads each group's limit and says, per group, what will go and
-why the rest will not; the report afterwards counts what was added, what waits
-for a moderator and what each group refused.
+moderation or the groups you run, and save choices as group sets. One button
+says exactly what it will do; how to share (every photo to every group, one
+group per photo, or best fit) waits under More Options. The report afterwards
+counts what was added, what waits for a moderator and what each group refused,
+and Activity can undo it.
 
 <img src="documents/screenshots/groups.jpg" width="100%" alt="The Share to Groups sheet with a search for illustration: fifteen groups chosen, each showing members, pool size and its limit such as 8 left this month or no limit. On the right, the choice of how to share and a preview of 6,080 shares to 15 groups, listing per group how many will be sent and how many are skipped for being over the group's limit.">
 
