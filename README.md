@@ -36,6 +36,8 @@ interrupted batch resumes and a finished one can be undone.
 
 ### Share to groups
 
+From anywhere in the app: see each group's limits and which groups already
+have your photos, then share every photo, one group per photo, or best fit.
 Open Add to Groups from anywhere: right-click in the grid, the toolbar,
 ⇧⌘G, the tray, or when an upload finishes. The sheet shows the photos it was
 opened with, puts the groups you last added to first, and reads each group's
